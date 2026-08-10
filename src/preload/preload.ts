@@ -1,10 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
-import type { PergamumApi } from "../shared/api";
-
-const FILE_CHANNELS = {
-  openMarkdown: "files:openMarkdown",
-  saveMarkdown: "files:saveMarkdown"
-} as const;
+import { FILE_CHANNELS, type PergamumApi } from "../shared/api";
 
 const pergamumApi: PergamumApi = {
   files: {

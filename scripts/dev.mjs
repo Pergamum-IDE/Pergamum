@@ -16,6 +16,11 @@ execFileSync(localBin("tsc"), ["-p", "tsconfig.main.json"], {
   stdio: "inherit"
 });
 
+execFileSync(localBin("vite"), ["build", "--config", "vite.preload.config.mts"], {
+  cwd: rootDir,
+  stdio: "inherit"
+});
+
 const server = await createServer({
   configFile: path.join(rootDir, "vite.config.mts"),
   mode: "development"
