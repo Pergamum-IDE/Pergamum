@@ -1,0 +1,31 @@
+{
+  "name": "pergamum",
+  "version": "0.1.0",
+  "private": true,
+  "description": "An open-source IDE for novelists.",
+  "main": "dist/main/main.js",
+  "scripts": {
+    "dev": "node scripts/dev.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.main.json && tsc --noEmit -p tsconfig.renderer.json",
+    "build": "npm run typecheck && npm run build:main && npm run build:renderer",
+    "build:main": "tsc -p tsconfig.main.json",
+    "build:renderer": "vite build"
+  },
+  "dependencies": {
+    "@codemirror/lang-markdown": "^6.3.4",
+    "codemirror": "^6.0.2",
+    "markdown-it": "^14.1.0",
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@types/markdown-it": "^14.1.2",
+    "@types/node": "^20.19.11",
+    "@types/react": "^18.3.23",
+    "@types/react-dom": "^18.3.7",
+    "@vitejs/plugin-react": "^4.7.0",
+    "electron": "39.8.10",
+    "typescript": "^5.9.2",
+    "vite": "^6.3.5"
+  }
+}
