@@ -1,0 +1,207 @@
+:root {
+  color: #1f2933;
+  background: #f7f8fa;
+  font-family:
+    Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  font-synthesis: none;
+  text-rendering: optimizeLegibility;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+}
+
+button {
+  height: 32px;
+  border: 1px solid #a9b4c0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #182531;
+  font: inherit;
+  padding: 0 14px;
+}
+
+button:hover {
+  background: #eef3f8;
+}
+
+button:active {
+  background: #dfe8f1;
+}
+
+.appShell {
+  display: flex;
+  flex-direction: column;
+  height: 100vh;
+  min-width: 0;
+  color: #1f2933;
+  background: #f7f8fa;
+}
+
+.toolbar {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 48px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #d3dae2;
+  background: #f2f5f8;
+}
+
+.documentTitle {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  min-width: 0;
+  flex: 1;
+  font-weight: 600;
+}
+
+.documentTitle > span:first-child {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.dirtyIndicator {
+  flex: 0 0 auto;
+  color: #6f4d00;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.workspace {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);
+  flex: 1;
+  min-height: 0;
+}
+
+.pane {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex-direction: column;
+  background: #ffffff;
+}
+
+.pane + .pane {
+  border-left: 1px solid #d3dae2;
+}
+
+.paneHeader {
+  min-height: 34px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #e3e8ee;
+  color: #52616f;
+  background: #fbfcfd;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.editorHost {
+  flex: 1;
+  min-height: 0;
+}
+
+.editorHost .cm-editor {
+  height: 100%;
+  outline: none;
+  font-size: 15px;
+}
+
+.editorHost .cm-focused {
+  outline: none;
+}
+
+.editorHost .cm-scroller {
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  line-height: 1.55;
+}
+
+.preview {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 24px;
+  color: #17212b;
+  line-height: 1.65;
+}
+
+.preview > :first-child {
+  margin-top: 0;
+}
+
+.preview h1 {
+  margin: 0 0 16px;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e3e8ee;
+  font-size: 28px;
+  line-height: 1.2;
+}
+
+.preview h2 {
+  margin: 24px 0 12px;
+  font-size: 22px;
+  line-height: 1.25;
+}
+
+.preview p {
+  margin: 0 0 14px;
+}
+
+.preview code {
+  border-radius: 4px;
+  background: #eef3f8;
+  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  padding: 2px 5px;
+}
+
+.preview pre {
+  overflow: auto;
+  border-radius: 6px;
+  background: #182531;
+  color: #f7f8fa;
+  padding: 14px;
+}
+
+.preview pre code {
+  background: transparent;
+  color: inherit;
+  padding: 0;
+}
+
+.preview blockquote {
+  margin: 0 0 14px;
+  border-left: 3px solid #9bb5d1;
+  color: #52616f;
+  padding-left: 12px;
+}
+
+.statusBar {
+  min-height: 28px;
+  border-top: 1px solid #d3dae2;
+  background: #f2f5f8;
+  color: #52616f;
+  font-size: 12px;
+  padding: 6px 12px;
+}
+
+@media (max-width: 760px) {
+  .workspace {
+    grid-template-columns: 1fr;
+    grid-template-rows: minmax(0, 1fr) minmax(0, 1fr);
+  }
+
+  .pane + .pane {
+    border-left: 0;
+    border-top: 1px solid #d3dae2;
+  }
+}
