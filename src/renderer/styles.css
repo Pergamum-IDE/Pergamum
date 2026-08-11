@@ -202,6 +202,121 @@ button:active {
   font-size: 13px;
 }
 
+.welcomeScreen {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  background: #ffffff;
+  padding: 48px;
+}
+
+.welcomeContent {
+  display: grid;
+  width: min(100%, 860px);
+  grid-template-columns: minmax(240px, 320px) minmax(0, 1fr);
+  gap: 36px;
+  margin: auto;
+}
+
+.welcomePrimary {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 24px;
+}
+
+.welcomePrimary h1 {
+  margin: 0 0 10px;
+  color: #17212b;
+  font-size: 32px;
+  line-height: 1.2;
+}
+
+.welcomePrimary p {
+  margin: 0;
+  color: #52616f;
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.welcomeOpenProject {
+  min-width: 150px;
+}
+
+.welcomeRecent {
+  min-width: 0;
+}
+
+.welcomeRecent h2 {
+  margin: 0 0 10px;
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.welcomeRecentList {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.welcomeRecentItem {
+  display: flex;
+  width: 100%;
+  height: auto;
+  min-height: 44px;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: hidden;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 6px 8px;
+  text-align: left;
+}
+
+.welcomeRecentItem:hover {
+  background: #e9eef4;
+}
+
+.welcomeRecentItem:focus-visible {
+  outline: 2px solid #7aa7d9;
+  outline-offset: -2px;
+}
+
+.welcomeRecentName,
+.welcomeRecentPath {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.welcomeRecentName {
+  color: #25313d;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.welcomeRecentPath {
+  color: #6b7785;
+  font-size: 11px;
+}
+
+.welcomeRecentEmpty {
+  color: #6b7785;
+  font-size: 13px;
+  padding: 6px 0;
+}
+
 .mainArea {
   display: flex;
   flex: 1;
@@ -395,6 +510,20 @@ button:active {
 }
 
 @media (max-width: 760px) {
+  .welcomeScreen {
+    padding: 24px;
+  }
+
+  .welcomeContent {
+    grid-template-columns: 1fr;
+    gap: 28px;
+    margin: 0;
+  }
+
+  .welcomePrimary {
+    gap: 18px;
+  }
+
   .recentProjectsPanel {
     align-items: stretch;
     gap: 6px;
