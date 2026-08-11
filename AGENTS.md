@@ -2,7 +2,7 @@
 
 Pergamum is an open-source IDE for novelists.
 
-Pergamum is not merely a Markdown editor.
+Pergamum is not merely a Markdown editor.  
 It is a project-oriented IDE for novel production.
 
 ## Principles
@@ -16,7 +16,7 @@ It is a project-oriented IDE for novel production.
 - Architecture first, features second.
 - Use Electron security best practices.
 - Renderer must not access Node.js directly.
-- Filesystem access must go through the preload/Main Process boundary.
+- Filesystem access from the Renderer must go through the Preload/Main Process boundary.
 
 ## Stack
 
@@ -43,19 +43,61 @@ Codex must not silently make product or architectural decisions that materially 
 
 Development follows GitHub Flow:
 
-Issue
-→ feature branch
-→ implementation
-→ commit
-→ push
-→ Pull Request
-→ CI
-→ merge
+Issue  
+→ feature branch  
+→ implementation  
+→ commit  
+→ push  
+→ Pull Request  
+→ CI  
+→ merge  
 → Issue close
 
 Feature branch naming:
 
 `feature/<issue-number>-<short-name>`
+
+## Git Workflow
+
+Unless the user explicitly instructs otherwise, all implementation work must be performed on a feature branch.
+
+Before modifying any files:
+
+1. Determine the current Issue number.
+2. Propose the expected feature branch name.
+3. Verify that the current branch matches the expected feature branch.
+
+Example branch:
+
+`feature/<issue-number>-<short-name>`
+
+Example workflow:
+
+```bash
+git switch main
+git pull origin main
+git switch -c feature/<issue-number>-<short-name>
+```
+
+When beginning implementation of an Issue, always remind the user of the expected feature branch before editing any files.
+
+Example:
+
+> Expected feature branch: `feature/8-file-explorer`
+
+If the current branch is not the expected feature branch, stop implementation and ask the user to switch branches before continuing.
+
+If implementation has already started on the wrong branch but has not yet been committed, recommend creating the feature branch immediately:
+
+```bash
+git switch -c feature/<issue-number>-<short-name>
+```
+
+This safely preserves all uncommitted work on the new feature branch.
+
+Never commit implementation work directly to `main` unless the user explicitly requests it.
+
+Never create commits or Pull Requests until implementation is complete and has been reviewed.
 
 ## Before Implementing an Issue
 
@@ -79,7 +121,9 @@ Report the following:
 - Implementation steps
 - Architectural concerns
 
-Implementation begins after Architect review and approval.
+The implementation plan and architectural review should be written in Japanese by default.
+
+Implementation begins only after Architect review and approval.
 
 ## Communication
 
@@ -110,8 +154,8 @@ Prefer the smallest clean implementation that satisfies the current Issue.
 
 Maintain this security boundary:
 
-Renderer
-→ Preload
+Renderer  
+→ Preload  
 → Main Process
 
 Do not weaken the Electron security configuration without explicit Architect approval.
@@ -140,9 +184,9 @@ Avoid turning `App.tsx` into a God component.
 
 `App.tsx` may coordinate application-level state and data flow.
 
-Extract substantial UI components and document-specific behavior when doing so improves responsibility boundaries.
+Extract substantial UI components and document-specific behavior whenever doing so improves separation of responsibilities.
 
-Do not introduce Redux, Zustand, or another global state-management library unless an Issue requires it or the Architect approves it.
+Do not introduce Redux, Zustand, or another global state-management library unless an Issue explicitly requires it or the Architect approves it.
 
 ## Document Architecture
 
@@ -150,17 +194,17 @@ Project state and active document state are separate concepts.
 
 Current architecture:
 
-Project
-→ Documents[]
-→ CurrentDocument
+Project  
+→ Documents[]  
+→ CurrentDocument  
 → Editor
 
 The expected future direction includes multi-tab editing:
 
-Project
-→ Documents[]
-→ OpenDocuments[]
-→ CurrentDocument
+Project  
+→ Documents[]  
+→ OpenDocuments[]  
+→ CurrentDocument  
 → Editor
 
 Do not implement `OpenDocuments[]`, tabs, or other multi-document state until an Issue explicitly requires them.
@@ -175,7 +219,7 @@ It must not own or duplicate editor document content.
 
 It selects a document through the application's existing document-state flow.
 
-Do not introduce a complex filesystem tree model before an Issue actually requires one.
+Do not introduce a complex filesystem tree model before an Issue explicitly requires one.
 
 ## Renderer Direction
 
