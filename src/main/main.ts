@@ -1,11 +1,15 @@
 import { app, BrowserWindow } from "electron";
+import started from "electron-squirrel-startup";
 import path from "node:path";
 import { registerFileIpc } from "./fileIpc";
 import { registerProjectIpc } from "./projectIpc";
 import { registerSettingsIpc } from "./settingsIpc";
 
-const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 let mainWindow: BrowserWindow | null = null;
+
+if (started) {
+  app.quit();
+}
 
 async function createMainWindow(): Promise<void> {
   mainWindow = new BrowserWindow({
@@ -15,7 +19,7 @@ async function createMainWindow(): Promise<void> {
     minHeight: 560,
     title: "Pergamum",
     webPreferences: {
-      preload: path.join(__dirname, "../preload/preload.js"),
+      preload: path.join(__dirname, "preload.js"),
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: true
@@ -26,12 +30,14 @@ async function createMainWindow(): Promise<void> {
     mainWindow = null;
   });
 
-  if (devServerUrl) {
-    await mainWindow.loadURL(devServerUrl);
+  if (MAIN_WINDOW_VITE_DEV_SERVER_URL) {
+    await mainWindow.loadURL(MAIN_WINDOW_VITE_DEV_SERVER_URL);
     return;
   }
 
-  await mainWindow.loadFile(path.join(__dirname, "../renderer/index.html"));
+  await mainWindow.loadFile(
+    path.join(__dirname, `../renderer/${MAIN_WINDOW_VITE_NAME}/index.html`)
+  );
 }
 
 app.whenReady().then(() => {

@@ -4,3 +4,5 @@ dist-electron/
 .vite/
 npm-debug.log*
 *.local
+
+out/
