@@ -18,6 +18,8 @@ import {
 } from "./currentDocument";
 import { FileExplorer } from "./FileExplorer";
 import { MarkdownEditor } from "./MarkdownEditor";
+import { SettingsPanel } from "./SettingsPanel";
+import { useApplicationSettings } from "./useApplicationSettings";
 
 const markdown = new MarkdownIt({
   html: false,
@@ -33,7 +35,14 @@ export function App(): JSX.Element {
   const [currentDocument, setCurrentDocument] = useState<CurrentDocument>(
     createUntitledDocument
   );
+  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [status, setStatus] = useState("Ready");
+  const {
+    settings,
+    isLoading: isSettingsLoading,
+    error: settingsError,
+    saveSettings
+  } = useApplicationSettings();
 
   const content = currentDocumentContent(currentDocument);
   const isDirty = isCurrentDocumentDirty(currentDocument);
@@ -137,6 +146,15 @@ export function App(): JSX.Element {
     }
   }
 
+  async function changeSettings(nextSettings: typeof settings): Promise<void> {
+    try {
+      await saveSettings(nextSettings);
+      setStatus("Settings saved");
+    } catch (error) {
+      setStatus(`Settings save failed: ${errorMessage(error)}`);
+    }
+  }
+
   return (
     <main className="appShell">
       <header className="toolbar">
@@ -156,7 +174,24 @@ export function App(): JSX.Element {
         <button type="button" onClick={saveFile}>
           Save
         </button>
+        <button
+          type="button"
+          onClick={() => setIsSettingsOpen((isOpen) => !isOpen)}
+        >
+          Settings
+        </button>
       </header>
+
+      {isSettingsOpen ? (
+        <SettingsPanel
+          settings={settings}
+          isLoading={isSettingsLoading}
+          error={settingsError}
+          onChangeSettings={(nextSettings) => {
+            void changeSettings(nextSettings);
+          }}
+        />
+      ) : null}
 
       <section className="mainArea">
         {project ? (
@@ -192,7 +227,7 @@ export function App(): JSX.Element {
         </section>
       </section>
 
-      <footer className="statusBar">{status}</footer>
+      {settings.showStatusBar ? <footer className="statusBar">{status}</footer> : null}
     </main>
   );
 }
