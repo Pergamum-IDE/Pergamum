@@ -84,6 +84,12 @@ export function currentProjectRelativePath(
   return document.kind === "project" ? document.relativePath : null;
 }
 
+export function isInitialUntitledDocument(document: CurrentDocument): boolean {
+  return (
+    document.kind === "untitled" && document.content === initialDocumentContent
+  );
+}
+
 export function isCurrentDocumentDirty(document: CurrentDocument): boolean {
   return document.content !== document.savedContent;
 }

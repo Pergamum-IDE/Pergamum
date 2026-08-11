@@ -14,6 +14,7 @@ import {
   currentDocumentTitle,
   currentProjectRelativePath,
   isCurrentDocumentDirty,
+  isInitialUntitledDocument,
   isProjectCurrentDocument,
   markCurrentDocumentSaved,
   standaloneSavePath,
@@ -25,6 +26,7 @@ import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
 import { RecentProjectsPanel } from "./RecentProjectsPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { useApplicationSettings } from "./useApplicationSettings";
+import { WelcomeScreen } from "./WelcomeScreen";
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown error.";
@@ -48,6 +50,8 @@ export function App(): JSX.Element {
 
   const content = currentDocumentContent(currentDocument);
   const isDirty = isCurrentDocumentDirty(currentDocument);
+  const shouldShowWelcome =
+    project === null && isInitialUntitledDocument(currentDocument);
   const previewHtml = useMemo(
     () => markdownPreviewRenderer.render(content),
     [content]
@@ -251,39 +255,51 @@ export function App(): JSX.Element {
         />
       ) : null}
 
-      <section className="mainArea">
-        {project ? (
-          <FileExplorer
-            documents={project.documents}
-            activeRelativePath={currentProjectRelativePath(currentDocument)}
-            onSelectDocument={(relativePath) => {
-              void selectProjectDocument(relativePath);
-            }}
-          />
-        ) : null}
-
-        <section className="workspace" aria-label="Markdown workspace">
-          <section className="pane" aria-label="Markdown editor">
-            <div className="paneHeader">Editor</div>
-            <MarkdownEditor
-              value={content}
-              onChange={(nextContent) => {
-                setCurrentDocument((document) =>
-                  updateCurrentDocumentContent(document, nextContent)
-                );
+      {shouldShowWelcome ? (
+        <WelcomeScreen
+          recentProjects={settings.recentProjects}
+          onOpenProject={() => {
+            void openProject();
+          }}
+          onOpenRecentProject={(projectPath) => {
+            void openRecentProject(projectPath);
+          }}
+        />
+      ) : (
+        <section className="mainArea">
+          {project ? (
+            <FileExplorer
+              documents={project.documents}
+              activeRelativePath={currentProjectRelativePath(currentDocument)}
+              onSelectDocument={(relativePath) => {
+                void selectProjectDocument(relativePath);
               }}
             />
-          </section>
+          ) : null}
 
-          <section className="pane" aria-label="Markdown preview">
-            <div className="paneHeader">Preview</div>
-            <article
-              className="preview"
-              dangerouslySetInnerHTML={{ __html: previewHtml }}
-            />
+          <section className="workspace" aria-label="Markdown workspace">
+            <section className="pane" aria-label="Markdown editor">
+              <div className="paneHeader">Editor</div>
+              <MarkdownEditor
+                value={content}
+                onChange={(nextContent) => {
+                  setCurrentDocument((document) =>
+                    updateCurrentDocumentContent(document, nextContent)
+                  );
+                }}
+              />
+            </section>
+
+            <section className="pane" aria-label="Markdown preview">
+              <div className="paneHeader">Preview</div>
+              <article
+                className="preview"
+                dangerouslySetInnerHTML={{ __html: previewHtml }}
+              />
+            </section>
           </section>
         </section>
-      </section>
+      )}
 
       {settings.showStatusBar ? <footer className="statusBar">{status}</footer> : null}
     </main>
