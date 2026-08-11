@@ -34,6 +34,16 @@ button:active {
   background: #dfe8f1;
 }
 
+select {
+  height: 32px;
+  border: 1px solid #a9b4c0;
+  border-radius: 6px;
+  background: #ffffff;
+  color: #182531;
+  font: inherit;
+  padding: 0 28px 0 10px;
+}
+
 .appShell {
   display: flex;
   flex-direction: column;
@@ -85,6 +95,11 @@ button:active {
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.projectDocumentSelector {
+  width: min(320px, 26vw);
+  min-width: 180px;
 }
 
 .workspace {

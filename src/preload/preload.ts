@@ -15,7 +15,16 @@ const pergamumApi: PergamumApi = {
       })
   },
   projects: {
-    openProject: () => ipcRenderer.invoke(PROJECT_CHANNELS.openProject)
+    openProject: () => ipcRenderer.invoke(PROJECT_CHANNELS.openProject),
+    readProjectDocument: (relativePath) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.readProjectDocument, {
+        relativePath
+      }),
+    saveProjectDocument: (relativePath, content) =>
+      ipcRenderer.invoke(PROJECT_CHANNELS.saveProjectDocument, {
+        relativePath,
+        content
+      })
   }
 };
 

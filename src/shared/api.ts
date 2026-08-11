@@ -4,7 +4,9 @@ export const FILE_CHANNELS = {
 } as const;
 
 export const PROJECT_CHANNELS = {
-  openProject: "projects:openProject"
+  openProject: "projects:openProject",
+  readProjectDocument: "projects:readProjectDocument",
+  saveProjectDocument: "projects:saveProjectDocument"
 } as const;
 
 export interface MarkdownFile {
@@ -26,9 +28,26 @@ export interface PergamumProjectConfig {
 }
 
 export interface ProjectDocument {
-  path: string;
   relativePath: string;
   name: string;
+}
+
+export interface ReadProjectDocumentRequest {
+  relativePath: string;
+}
+
+export interface ProjectDocumentContent {
+  relativePath: string;
+  content: string;
+}
+
+export interface SaveProjectDocumentRequest {
+  relativePath: string;
+  content: string;
+}
+
+export interface SaveProjectDocumentResult {
+  relativePath: string;
 }
 
 export interface PergamumProject {
@@ -48,5 +67,12 @@ export interface PergamumApi {
   };
   projects: {
     openProject: () => Promise<PergamumProject | null>;
+    readProjectDocument: (
+      relativePath: string
+    ) => Promise<ProjectDocumentContent>;
+    saveProjectDocument: (
+      relativePath: string,
+      content: string
+    ) => Promise<SaveProjectDocumentResult>;
   };
 }
