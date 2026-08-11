@@ -6,7 +6,7 @@
 
 ---
 
-# Context
+## Context
 
 Pergamum は Markdown エディタではなく、**Novel IDE** である。
 
@@ -34,9 +34,9 @@ Project Persistence の基本方針をここで定義する。
 
 ---
 
-# Decision
+## Decision
 
-## 1. Manuscript
+### 1. Manuscript
 
 原稿本文は Markdown ファイルとして保存する。
 
@@ -46,7 +46,7 @@ Pergamum は Markdown ファイルを直接編集対象とする。
 
 ---
 
-## 2. Project Configuration
+### 2. Project Configuration
 
 プロジェクト設定は
 
@@ -62,7 +62,7 @@ pergamum.json
 
 ---
 
-## 3. Structured Project Data
+### 3. Structured Project Data
 
 構造化データは
 
@@ -91,7 +91,7 @@ SQLite は Project Database として利用し、アプリケーション内部�
 
 ---
 
-## 4. Binary Assets
+### 4. Binary Assets
 
 画像、PDF、音声などのバイナリアセットはデータベースへ保存しない。
 
@@ -121,7 +121,7 @@ Pergamum は Asset File を管理するのではなく、Asset Metadata を管�
 
 ---
 
-## 5. JSON Snapshots
+### 5. JSON Snapshots
 
 SQLite は Project Database の正本とする。
 
@@ -144,7 +144,7 @@ Snapshot の生成タイミングや配置場所は別 ADR にて定義する。
 
 ---
 
-## 6. Filesystem Responsibilities
+### 6. Filesystem Responsibilities
 
 Project は以下の責務を持つ。
 
@@ -170,7 +170,7 @@ Asset は Filesystem 上で管理する。
 
 ---
 
-## 7. Access Model
+### 7. Access Model
 
 Renderer は Filesystem や SQLite へ直接アクセスしない。
 
@@ -204,7 +204,7 @@ Electron Security Model
 
 ---
 
-# Consequences
+## Consequences
 
 本 ADR により Pergamum は以下の構成を採用する。
 
@@ -228,9 +228,9 @@ Project
 
 ---
 
-# Alternatives Considered
+## Alternatives Considered
 
-## JSON を正本とする
+### JSON を正本とする
 
 却下。
 
@@ -240,7 +240,7 @@ Project
 
 ---
 
-## SQLite に Binary Asset を格納する
+### SQLite に Binary Asset を格納する
 
 却下。
 
@@ -250,7 +250,7 @@ Asset は Filesystem 上に保持する方が自然である。
 
 ---
 
-## Markdown Front Matter に構造化情報を保持する
+### Markdown Front Matter に構造化情報を保持する
 
 却下。
 
@@ -260,7 +260,7 @@ Pergamum は Markdown エディタではなく Novel IDE である。
 
 ---
 
-# Future Work
+## Future Work
 
 本 ADR は永続化アーキテクチャのみを定義する。
 
@@ -274,4 +274,3 @@ Pergamum は Markdown エディタではなく Novel IDE である。
 - Knowledge Base Schema
 - Plugin Data Storage
 - AI Context Storage
-- 
