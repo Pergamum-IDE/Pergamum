@@ -191,6 +191,7 @@ Snapshots are derived deterministic representations. `pergamum.db` remains canon
 - Snapshot generation and restore implementation
 - Snapshot dirty-state tracking and close-time flush
 - Form CRUD and canonical switching
+- User-defined glossary tags for project-specific organization. Tags are author-defined metadata and remain separate from fixed `kind` values, which are semantic classifications understood by Pergamum.
 - Glossary editor UI
 - Manuscript analysis and disambiguation features
 - Additional structured data domains such as Characters, Places, Organizations, Timeline, and Assets metadata
