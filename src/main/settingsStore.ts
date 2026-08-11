@@ -1,29 +1,18 @@
 import { app } from "electron";
 import { promises as fs } from "node:fs";
 import path from "node:path";
-import type {
-  ApplicationSettings,
-  RecentProject,
-  SaveApplicationSettingsRequest
-} from "../shared/api";
-import { defaultLanguage, isLanguage } from "../shared/i18n";
+import {
+  createDefaultApplicationSettings,
+  defaultApplicationSettings,
+  isPreviewRendererId,
+  type ApplicationSettings,
+  type RecentProject,
+  type SaveApplicationSettingsRequest
+} from "../shared/settings";
+import { isLanguage } from "../shared/i18n";
 
 const settingsFileName = "settings.json";
 const maxRecentProjects = 10;
-
-const defaultSettings: ApplicationSettings = {
-  showStatusBar: true,
-  language: defaultLanguage,
-  recentProjects: []
-};
-
-function createDefaultSettings(): ApplicationSettings {
-  return {
-    showStatusBar: defaultSettings.showStatusBar,
-    language: defaultSettings.language,
-    recentProjects: []
-  };
-}
 
 function settingsFilePath(): string {
   return path.join(app.getPath("userData"), settingsFileName);
@@ -82,17 +71,34 @@ function readRecentProjects(value: unknown): RecentProject[] {
   return normalizeRecentProjects(value.filter(isRecentProject));
 }
 
+function readPreviewSettings(value: unknown): ApplicationSettings["preview"] {
+  if (!isObject(value)) {
+    return {
+      renderer: defaultApplicationSettings.preview.renderer
+    };
+  }
+
+  return {
+    renderer: isPreviewRendererId(value.renderer)
+      ? value.renderer
+      : defaultApplicationSettings.preview.renderer
+  };
+}
+
 function readSettingsValue(value: unknown): ApplicationSettings {
   if (!isObject(value)) {
-    return createDefaultSettings();
+    return createDefaultApplicationSettings();
   }
 
   return {
     showStatusBar:
       typeof value.showStatusBar === "boolean"
         ? value.showStatusBar
-        : defaultSettings.showStatusBar,
-    language: isLanguage(value.language) ? value.language : defaultSettings.language,
+        : defaultApplicationSettings.showStatusBar,
+    language: isLanguage(value.language)
+      ? value.language
+      : defaultApplicationSettings.language,
+    preview: readPreviewSettings(value.preview),
     recentProjects: readRecentProjects(value.recentProjects)
   };
 }
@@ -164,6 +170,28 @@ export function parseSaveApplicationSettingsRequest(
   };
 }
 
+function parsePreviewSettingsForWrite(
+  value: unknown
+): ApplicationSettings["preview"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (
+    keys.length !== 1 ||
+    !keys.includes("renderer") ||
+    !isPreviewRendererId(value.renderer)
+  ) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    renderer: value.renderer
+  };
+}
+
 function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
   if (!isObject(value)) {
     throw new Error("Invalid application settings.");
@@ -172,9 +200,10 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
   const keys = Object.keys(value);
 
   if (
-    keys.length !== 3 ||
+    keys.length !== 4 ||
     !keys.includes("showStatusBar") ||
     !keys.includes("language") ||
+    !keys.includes("preview") ||
     !keys.includes("recentProjects") ||
     typeof value.showStatusBar !== "boolean" ||
     !isLanguage(value.language)
@@ -185,6 +214,7 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
   return {
     showStatusBar: value.showStatusBar,
     language: value.language,
+    preview: parsePreviewSettingsForWrite(value.preview),
     recentProjects: parseRecentProjectsForSave(value.recentProjects)
   };
 }
@@ -196,16 +226,16 @@ export async function loadSettings(): Promise<ApplicationSettings> {
     rawSettings = await fs.readFile(settingsFilePath(), "utf8");
   } catch (error) {
     if (nodeErrorCode(error) === "ENOENT") {
-      return createDefaultSettings();
+      return createDefaultApplicationSettings();
     }
 
-    return createDefaultSettings();
+    return createDefaultApplicationSettings();
   }
 
   try {
     return readSettingsValue(JSON.parse(rawSettings));
   } catch {
-    return createDefaultSettings();
+    return createDefaultApplicationSettings();
   }
 }
 
