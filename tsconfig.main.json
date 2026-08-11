@@ -1,10 +1,11 @@
 {
   "compilerOptions": {
     "target": "ES2022",
-    "module": "CommonJS",
-    "moduleResolution": "Node",
+    "module": "Preserve",
+    "moduleResolution": "Bundler",
     "rootDir": "src",
     "outDir": "dist",
+    "noEmit": true,
     "strict": true,
     "esModuleInterop": true,
     "forceConsistentCasingInFileNames": true,
