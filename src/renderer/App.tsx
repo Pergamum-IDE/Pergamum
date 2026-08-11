@@ -1,5 +1,9 @@
 import { useMemo, useState } from "react";
-import type { PergamumProject, ProjectDocument } from "../shared/api";
+import type {
+  PergamumProject,
+  ProjectDocument,
+  SaveApplicationSettingsRequest
+} from "../shared/api";
 import {
   applyStandaloneSaveResult,
   createFileDocument,
@@ -18,6 +22,7 @@ import {
 import { FileExplorer } from "./FileExplorer";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
+import { RecentProjectsPanel } from "./RecentProjectsPanel";
 import { SettingsPanel } from "./SettingsPanel";
 import { useApplicationSettings } from "./useApplicationSettings";
 
@@ -31,11 +36,13 @@ export function App(): JSX.Element {
     createUntitledDocument
   );
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [status, setStatus] = useState("Ready");
   const {
     settings,
     isLoading: isSettingsLoading,
     error: settingsError,
+    reloadSettings,
     saveSettings
   } = useApplicationSettings();
 
@@ -98,6 +105,39 @@ export function App(): JSX.Element {
     setCurrentDocument(createProjectDocument(document, loadedDocument.content));
   }
 
+  async function activateProject(
+    openedProject: PergamumProject
+  ): Promise<string> {
+    setProject(openedProject);
+
+    if (openedProject.documents.length > 0) {
+      const firstDocument = openedProject.documents[0];
+      await loadProjectDocument(firstDocument);
+
+      return `Opened project ${openedProject.name}; current document ${firstDocument.relativePath}`;
+    }
+
+    return `Opened project ${openedProject.name} (${openedProject.documents.length} Markdown files)`;
+  }
+
+  async function reloadSettingsAfterProjectOpen(): Promise<string | null> {
+    try {
+      await reloadSettings();
+      return null;
+    } catch (error) {
+      return `settings reload failed: ${errorMessage(error)}`;
+    }
+  }
+
+  function projectOpenStatus(
+    openedStatus: string,
+    settingsReloadError: string | null
+  ): string {
+    return settingsReloadError
+      ? `${openedStatus}; ${settingsReloadError}`
+      : openedStatus;
+  }
+
   async function openProject(): Promise<void> {
     try {
       const openedProject = await window.pergamum.projects.openProject();
@@ -107,22 +147,25 @@ export function App(): JSX.Element {
         return;
       }
 
-      setProject(openedProject);
-
-      if (openedProject.documents.length > 0) {
-        const firstDocument = openedProject.documents[0];
-        await loadProjectDocument(firstDocument);
-        setStatus(
-          `Opened project ${openedProject.name}; current document ${firstDocument.relativePath}`
-        );
-        return;
-      }
-
-      setStatus(
-        `Opened project ${openedProject.name} (${openedProject.documents.length} Markdown files)`
-      );
+      const settingsReloadError = await reloadSettingsAfterProjectOpen();
+      const openedStatus = await activateProject(openedProject);
+      setStatus(projectOpenStatus(openedStatus, settingsReloadError));
     } catch (error) {
       setStatus(`Project open failed: ${errorMessage(error)}`);
+    }
+  }
+
+  async function openRecentProject(projectPath: string): Promise<void> {
+    try {
+      const openedProject = await window.pergamum.projects.openRecentProject(
+        projectPath
+      );
+      const settingsReloadError = await reloadSettingsAfterProjectOpen();
+      const openedStatus = await activateProject(openedProject);
+      setIsRecentProjectsOpen(false);
+      setStatus(projectOpenStatus(openedStatus, settingsReloadError));
+    } catch (error) {
+      setStatus(`Recent project open failed: ${errorMessage(error)}`);
     }
   }
 
@@ -144,7 +187,9 @@ export function App(): JSX.Element {
     }
   }
 
-  async function changeSettings(nextSettings: typeof settings): Promise<void> {
+  async function changeSettings(
+    nextSettings: SaveApplicationSettingsRequest
+  ): Promise<void> {
     try {
       await saveSettings(nextSettings);
       setStatus("Settings saved");
@@ -178,6 +223,12 @@ export function App(): JSX.Element {
         >
           Settings
         </button>
+        <button
+          type="button"
+          onClick={() => setIsRecentProjectsOpen((isOpen) => !isOpen)}
+        >
+          Recent Projects
+        </button>
       </header>
 
       {isSettingsOpen ? (
@@ -187,6 +238,15 @@ export function App(): JSX.Element {
           error={settingsError}
           onChangeSettings={(nextSettings) => {
             void changeSettings(nextSettings);
+          }}
+        />
+      ) : null}
+
+      {isRecentProjectsOpen ? (
+        <RecentProjectsPanel
+          recentProjects={settings.recentProjects}
+          onOpenProject={(projectPath) => {
+            void openRecentProject(projectPath);
           }}
         />
       ) : null}

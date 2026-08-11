@@ -1,10 +1,13 @@
-import type { ApplicationSettings } from "../shared/api";
+import type {
+  ApplicationSettings,
+  SaveApplicationSettingsRequest
+} from "../shared/api";
 
 interface SettingsPanelProps {
   settings: ApplicationSettings;
   isLoading: boolean;
   error: string | null;
-  onChangeSettings: (settings: ApplicationSettings) => void;
+  onChangeSettings: (settings: SaveApplicationSettingsRequest) => void;
 }
 
 export function SettingsPanel({
@@ -23,7 +26,6 @@ export function SettingsPanel({
           disabled={isLoading}
           onChange={(event) =>
             onChangeSettings({
-              ...settings,
               showStatusBar: event.target.checked
             })
           }

@@ -5,6 +5,7 @@ export const FILE_CHANNELS = {
 
 export const PROJECT_CHANNELS = {
   openProject: "projects:openProject",
+  openRecentProject: "projects:openRecentProject",
   readProjectDocument: "projects:readProjectDocument",
   saveProjectDocument: "projects:saveProjectDocument"
 } as const;
@@ -62,7 +63,21 @@ export interface PergamumProject {
   documents: ProjectDocument[];
 }
 
+export interface OpenRecentProjectRequest {
+  path: string;
+}
+
+export interface RecentProject {
+  path: string;
+  name: string;
+}
+
 export interface ApplicationSettings {
+  showStatusBar: boolean;
+  recentProjects: RecentProject[];
+}
+
+export interface SaveApplicationSettingsRequest {
   showStatusBar: boolean;
 }
 
@@ -76,6 +91,7 @@ export interface PergamumApi {
   };
   projects: {
     openProject: () => Promise<PergamumProject | null>;
+    openRecentProject: (path: string) => Promise<PergamumProject>;
     readProjectDocument: (
       relativePath: string
     ) => Promise<ProjectDocumentContent>;
@@ -87,7 +103,7 @@ export interface PergamumApi {
   settings: {
     getSettings: () => Promise<ApplicationSettings>;
     saveSettings: (
-      settings: ApplicationSettings
+      settings: SaveApplicationSettingsRequest
     ) => Promise<ApplicationSettings>;
   };
 }
