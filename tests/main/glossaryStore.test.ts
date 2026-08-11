@@ -5,10 +5,11 @@ import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
   createGlossaryEntry,
   deleteGlossaryEntry,
-  glossaryEntryFromDatabaseRows,
-  loadGlossary,
-  saveGlossary,
-  updateGlossaryEntry
+  getGlossaryEntryById,
+  glossaryEntryFromDatabaseRow,
+  listGlossaryEntries,
+  updateGlossaryEntry,
+  GlossaryStoreError
 } from "../../src/main/glossaryStore";
 import {
   openProjectDatabase,
@@ -39,136 +40,125 @@ describe("glossary store", () => {
     });
   });
 
-  it("loads an empty glossary from a new project database", async () => {
-    await expect(loadGlossary(database!)).resolves.toEqual({
-      entries: []
-    });
+  it("lists an empty glossary from a new project database", async () => {
+    await expect(listGlossaryEntries(database!)).resolves.toEqual([]);
   });
 
-  it("creates and loads a glossary entry", async () => {
+  it("creates and gets a glossary entry by ID", async () => {
     const entry = await createGlossaryEntry(database!, {
-      name: "エリシア・フォン・アルセリア",
-      aliases: ["エリシア", "第三皇女"],
-      category: "Character",
-      description: "アルセリア王国の第三皇女",
-      notes: "一人称では名乗らない"
+      term: "エリシア・フォン・アルセリア",
+      description: "アルセリア王国の第三皇女"
     });
-    const glossary = await loadGlossary(database!);
 
-    expect(entry.id).toMatch(
-      /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/
+    expect(entry.id).toBeGreaterThan(0);
+    expect(entry.term).toBe("エリシア・フォン・アルセリア");
+    expect(entry.description).toBe("アルセリア王国の第三皇女");
+    expect(Date.parse(entry.createdAt)).not.toBeNaN();
+    expect(Date.parse(entry.updatedAt)).not.toBeNaN();
+
+    await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
+      entry
     );
-    expect(glossary.entries).toEqual([entry]);
+  });
+
+  it("lists glossary entries ordered by term", async () => {
+    const secondEntry = await createGlossaryEntry(database!, {
+      term: "魔導炉",
+      description: "魔力を生成する設備"
+    });
+    const firstEntry = await createGlossaryEntry(database!, {
+      term: "王都アルセリア",
+      description: "王国の首都"
+    });
+
+    await expect(listGlossaryEntries(database!)).resolves.toEqual([
+      firstEntry,
+      secondEntry
+    ]);
   });
 
   it("updates a glossary entry", async () => {
     const entry = await createGlossaryEntry(database!, {
-      name: "魔導炉",
-      aliases: ["炉"]
+      term: "魔導炉",
+      description: "旧式の説明"
     });
-    const updated = await updateGlossaryEntry(database!, {
+    const updatedEntry = await updateGlossaryEntry(database!, {
       id: entry.id,
-      name: "大型魔導炉",
-      aliases: ["魔導炉", "炉心"],
-      category: "Technology"
+      term: "大型魔導炉",
+      description: "魔力を大量生成する設備"
     });
 
-    await expect(loadGlossary(database!)).resolves.toEqual({
-      entries: [updated]
+    expect(updatedEntry).toMatchObject({
+      id: entry.id,
+      term: "大型魔導炉",
+      description: "魔力を大量生成する設備",
+      createdAt: entry.createdAt
     });
+    expect(Date.parse(updatedEntry.updatedAt)).not.toBeNaN();
+
+    await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
+      updatedEntry
+    );
   });
 
-  it("deletes aliases through ON DELETE CASCADE", async () => {
+  it("deletes a glossary entry", async () => {
     const entry = await createGlossaryEntry(database!, {
-      name: "王都アルセリア",
-      aliases: ["王都", "アルセリア"]
+      term: "帝国",
+      description: "北方の大国"
     });
 
     await deleteGlossaryEntry(database!, entry.id);
 
-    const aliasCount = await database!.get<{ count: number }>(
-      "SELECT COUNT(*) AS count FROM glossary_entry_aliases WHERE entry_id = ?",
-      [entry.id]
-    );
-
-    expect(aliasCount?.count).toBe(0);
-    await expect(loadGlossary(database!)).resolves.toEqual({
-      entries: []
-    });
+    await expect(getGlossaryEntryById(database!, entry.id)).resolves.toBeNull();
+    await expect(listGlossaryEntries(database!)).resolves.toEqual([]);
   });
 
-  it("saves a whole glossary", async () => {
-    await saveGlossary(database!, {
-      entries: [
-        {
-          id: "entry-1",
-          name: "帝国",
-          aliases: ["北方帝国"],
-          category: "Organization"
-        },
-        {
-          id: "entry-2",
-          name: "魔導炉",
-          aliases: []
-        }
-      ]
+  it("persists glossary entries after closing and reopening the project database", async () => {
+    const entry = await createGlossaryEntry(database!, {
+      term: "王都アルセリア",
+      description: "王国の首都"
     });
 
-    await expect(loadGlossary(database!)).resolves.toEqual({
-      entries: [
-        {
-          id: "entry-1",
-          name: "帝国",
-          aliases: ["北方帝国"],
-          category: "Organization"
-        },
-        {
-          id: "entry-2",
-          name: "魔導炉",
-          aliases: []
-        }
-      ]
-    });
+    await database!.close();
+    database = await openProjectDatabase(projectRootPath);
+
+    await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
+      entry
+    );
+  });
+
+  it("rejects missing entries on update and delete", async () => {
+    await expect(
+      updateGlossaryEntry(database!, {
+        id: 999,
+        term: "存在しない項目",
+        description: "更新できない"
+      })
+    ).rejects.toBeInstanceOf(GlossaryStoreError);
+
+    await expect(deleteGlossaryEntry(database!, 999)).rejects.toBeInstanceOf(
+      GlossaryStoreError
+    );
   });
 
   it("rejects invalid glossary input", async () => {
     await expect(
       createGlossaryEntry(database!, {
-        name: " ",
-        aliases: []
-      })
-    ).rejects.toBeInstanceOf(GlossaryValidationError);
-
-    await expect(
-      saveGlossary(database!, {
-        entries: [
-          {
-            id: "duplicate",
-            name: "帝国",
-            aliases: []
-          },
-          {
-            id: "duplicate",
-            name: "皇国",
-            aliases: []
-          }
-        ]
+        term: " ",
+        description: "invalid"
       })
     ).rejects.toBeInstanceOf(GlossaryValidationError);
   });
 
   it("rejects invalid database rows during domain conversion", () => {
     expect(() =>
-      glossaryEntryFromDatabaseRows(
-        {
-          id: "entry-1",
-          name: 42,
-          category: null,
-          description: null,
-          notes: null
-        },
-        []
-      )
+      glossaryEntryFromDatabaseRow({
+        id: 1,
+        term: 42,
+        description: "invalid row",
+        created_at: "2026-08-11T12:00:00.000Z",
+        updated_at: "2026-08-11T12:00:00.000Z"
+      })
     ).toThrow(GlossaryValidationError);
   });
 });

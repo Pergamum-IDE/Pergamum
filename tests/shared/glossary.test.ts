@@ -2,99 +2,81 @@ import { describe, expect, it } from "vitest";
 import {
   GlossaryValidationError,
   validateCreateGlossaryEntryInput,
-  validateGlossary,
-  validateGlossaryEntry
+  validateGlossaryEntry,
+  validateGlossaryEntryId,
+  validateUpdateGlossaryEntryInput
 } from "../../src/shared/glossary";
 
 describe("glossary validation", () => {
-  it("accepts a valid glossary", () => {
+  it("accepts a valid glossary entry", () => {
     expect(
-      validateGlossary({
-        entries: [
-          {
-            id: "entry-1",
-            name: "王都アルセリア",
-            aliases: ["王都", "アルセリア"],
-            category: "Place",
-            description: "王国の首都",
-            notes: "第一章から登場"
-          }
-        ]
+      validateGlossaryEntry({
+        id: 1,
+        term: "王都アルセリア",
+        description: "王国の首都",
+        createdAt: "2026-08-11T12:00:00.000Z",
+        updatedAt: "2026-08-11T12:00:00.000Z"
       })
     ).toEqual({
-      entries: [
-        {
-          id: "entry-1",
-          name: "王都アルセリア",
-          aliases: ["王都", "アルセリア"],
-          category: "Place",
-          description: "王国の首都",
-          notes: "第一章から登場"
-        }
-      ]
+      id: 1,
+      term: "王都アルセリア",
+      description: "王国の首都",
+      createdAt: "2026-08-11T12:00:00.000Z",
+      updatedAt: "2026-08-11T12:00:00.000Z"
     });
   });
 
-  it("rejects duplicate entry IDs", () => {
+  it("accepts create and update input", () => {
+    expect(
+      validateCreateGlossaryEntryInput({
+        term: "魔導炉",
+        description: ""
+      })
+    ).toEqual({
+      term: "魔導炉",
+      description: ""
+    });
+
+    expect(
+      validateUpdateGlossaryEntryInput({
+        id: 1,
+        term: "大型魔導炉",
+        description: "魔力を生成する設備"
+      })
+    ).toEqual({
+      id: 1,
+      term: "大型魔導炉",
+      description: "魔力を生成する設備"
+    });
+  });
+
+  it("rejects invalid IDs and terms", () => {
+    expect(() => validateGlossaryEntryId(0)).toThrow(GlossaryValidationError);
+    expect(() => validateGlossaryEntryId("1")).toThrow(GlossaryValidationError);
+
     expect(() =>
-      validateGlossary({
-        entries: [
-          {
-            id: "duplicate",
-            name: "帝国",
-            aliases: []
-          },
-          {
-            id: "duplicate",
-            name: "皇国",
-            aliases: []
-          }
-        ]
+      validateCreateGlossaryEntryInput({
+        term: " ",
+        description: "空白のみの term"
       })
     ).toThrow(GlossaryValidationError);
   });
 
-  it("rejects empty IDs and names", () => {
+  it("rejects invalid field types", () => {
     expect(() =>
-      validateGlossaryEntry({
-        id: "",
-        name: "帝国",
-        aliases: []
-      })
-    ).toThrow(GlossaryValidationError);
-
-    expect(() =>
-      validateGlossaryEntry({
-        id: "entry-1",
-        name: "   ",
-        aliases: []
-      })
-    ).toThrow(GlossaryValidationError);
-  });
-
-  it("rejects invalid known fields", () => {
-    expect(() =>
-      validateGlossaryEntry({
-        id: "entry-1",
-        name: "帝国",
-        aliases: [],
+      validateCreateGlossaryEntryInput({
+        term: "帝国",
         description: 42
       })
     ).toThrow(GlossaryValidationError);
-  });
-
-  it("rejects invalid aliases", () => {
-    expect(() =>
-      validateCreateGlossaryEntryInput({
-        name: "第三皇女",
-        aliases: ["皇女殿下", ""]
-      })
-    ).toThrow(GlossaryValidationError);
 
     expect(() =>
-      validateCreateGlossaryEntryInput({
-        name: "第三皇女",
-        aliases: ["エリシア", " エリシア "]
+      validateGlossaryEntry({
+        id: 1,
+        term: "帝国",
+        description: "北方の大国",
+        createdAt: "not a timestamp",
+        updatedAt: "2026-08-11T12:00:00.000Z"
       })
     ).toThrow(GlossaryValidationError);
   });
