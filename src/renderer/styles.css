@@ -76,6 +76,17 @@ button:active {
   font-weight: 600;
 }
 
+.projectName {
+  flex: 0 1 auto;
+  min-width: 0;
+  overflow: hidden;
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .workspace {
   display: grid;
   grid-template-columns: minmax(0, 1fr) minmax(0, 1fr);

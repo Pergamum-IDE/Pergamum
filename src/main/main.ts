@@ -1,6 +1,7 @@
 import { app, BrowserWindow } from "electron";
 import path from "node:path";
 import { registerFileIpc } from "./fileIpc";
+import { registerProjectIpc } from "./projectIpc";
 
 const devServerUrl = process.env.VITE_DEV_SERVER_URL;
 let mainWindow: BrowserWindow | null = null;
@@ -34,6 +35,7 @@ async function createMainWindow(): Promise<void> {
 
 app.whenReady().then(() => {
   registerFileIpc();
+  registerProjectIpc();
   void createMainWindow();
 
   app.on("activate", () => {

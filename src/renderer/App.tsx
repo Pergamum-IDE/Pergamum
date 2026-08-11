@@ -1,5 +1,6 @@
 import MarkdownIt from "markdown-it";
 import { useMemo, useState } from "react";
+import type { PergamumProject } from "../shared/api";
 import { MarkdownEditor } from "./MarkdownEditor";
 
 const markdown = new MarkdownIt({
@@ -17,10 +18,15 @@ function displayName(filePath: string | null): string {
   return filePath.split(/[\\/]/).pop() ?? filePath;
 }
 
+function errorMessage(error: unknown): string {
+  return error instanceof Error ? error.message : "Unknown error.";
+}
+
 export function App(): JSX.Element {
   const [content, setContent] = useState(initialContent);
   const [savedContent, setSavedContent] = useState(initialContent);
   const [filePath, setFilePath] = useState<string | null>(null);
+  const [project, setProject] = useState<PergamumProject | null>(null);
   const [status, setStatus] = useState("Ready");
 
   const isDirty = content !== savedContent;
@@ -57,13 +63,37 @@ export function App(): JSX.Element {
     setStatus(`Saved ${displayName(result.path)}`);
   }
 
+  async function openProject(): Promise<void> {
+    try {
+      const openedProject = await window.pergamum.projects.openProject();
+
+      if (!openedProject) {
+        setStatus("Open project canceled");
+        return;
+      }
+
+      setProject(openedProject);
+      setStatus(
+        `Opened project ${openedProject.name} (${openedProject.documents.length} Markdown files)`
+      );
+    } catch (error) {
+      setStatus(`Project open failed: ${errorMessage(error)}`);
+    }
+  }
+
   return (
     <main className="appShell">
       <header className="toolbar">
         <div className="documentTitle">
           <span>{displayName(filePath)}</span>
           {isDirty ? <span className="dirtyIndicator">Unsaved</span> : null}
+          {project ? (
+            <span className="projectName">Project: {project.name}</span>
+          ) : null}
         </div>
+        <button type="button" onClick={openProject}>
+          Open Project
+        </button>
         <button type="button" onClick={openFile}>
           Open
         </button>
