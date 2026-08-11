@@ -9,6 +9,11 @@ export const PROJECT_CHANNELS = {
   saveProjectDocument: "projects:saveProjectDocument"
 } as const;
 
+export const SETTINGS_CHANNELS = {
+  getSettings: "settings:getSettings",
+  saveSettings: "settings:saveSettings"
+} as const;
+
 export interface MarkdownFile {
   path: string;
   content: string;
@@ -57,6 +62,10 @@ export interface PergamumProject {
   documents: ProjectDocument[];
 }
 
+export interface ApplicationSettings {
+  showStatusBar: boolean;
+}
+
 export interface PergamumApi {
   files: {
     openMarkdown: () => Promise<MarkdownFile | null>;
@@ -74,5 +83,11 @@ export interface PergamumApi {
       relativePath: string,
       content: string
     ) => Promise<SaveProjectDocumentResult>;
+  };
+  settings: {
+    getSettings: () => Promise<ApplicationSettings>;
+    saveSettings: (
+      settings: ApplicationSettings
+    ) => Promise<ApplicationSettings>;
   };
 }

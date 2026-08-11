@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from "electron";
 import {
   FILE_CHANNELS,
   PROJECT_CHANNELS,
+  SETTINGS_CHANNELS,
   type PergamumApi
 } from "../shared/api";
 
@@ -25,6 +26,11 @@ const pergamumApi: PergamumApi = {
         relativePath,
         content
       })
+  },
+  settings: {
+    getSettings: () => ipcRenderer.invoke(SETTINGS_CHANNELS.getSettings),
+    saveSettings: (settings) =>
+      ipcRenderer.invoke(SETTINGS_CHANNELS.saveSettings, settings)
   }
 };
 

@@ -87,6 +87,44 @@ button:active {
   white-space: nowrap;
 }
 
+.settingsPanel {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+  min-height: 42px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #d3dae2;
+  background: #fbfcfd;
+}
+
+.settingsPanelHeader {
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.settingsToggle {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #25313d;
+  font-size: 13px;
+}
+
+.settingsToggle input {
+  margin: 0;
+}
+
+.settingsError {
+  min-width: 0;
+  overflow: hidden;
+  color: #9a3412;
+  font-size: 12px;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .mainArea {
   display: flex;
   flex: 1;
