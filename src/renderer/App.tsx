@@ -16,8 +16,8 @@ import {
   standaloneSavePath,
   updateCurrentDocumentContent
 } from "./currentDocument";
+import { FileExplorer } from "./FileExplorer";
 import { MarkdownEditor } from "./MarkdownEditor";
-import { ProjectDocumentSelector } from "./ProjectDocumentSelector";
 
 const markdown = new MarkdownIt({
   html: false,
@@ -147,15 +147,6 @@ export function App(): JSX.Element {
             <span className="projectName">Project: {project.name}</span>
           ) : null}
         </div>
-        {project ? (
-          <ProjectDocumentSelector
-            documents={project.documents}
-            currentRelativePath={currentProjectRelativePath(currentDocument)}
-            onSelect={(relativePath) => {
-              void selectProjectDocument(relativePath);
-            }}
-          />
-        ) : null}
         <button type="button" onClick={openProject}>
           Open Project
         </button>
@@ -167,25 +158,37 @@ export function App(): JSX.Element {
         </button>
       </header>
 
-      <section className="workspace" aria-label="Markdown workspace">
-        <section className="pane" aria-label="Markdown editor">
-          <div className="paneHeader">Editor</div>
-          <MarkdownEditor
-            value={content}
-            onChange={(nextContent) => {
-              setCurrentDocument((document) =>
-                updateCurrentDocumentContent(document, nextContent)
-              );
+      <section className="mainArea">
+        {project ? (
+          <FileExplorer
+            documents={project.documents}
+            activeRelativePath={currentProjectRelativePath(currentDocument)}
+            onSelectDocument={(relativePath) => {
+              void selectProjectDocument(relativePath);
             }}
           />
-        </section>
+        ) : null}
 
-        <section className="pane" aria-label="Markdown preview">
-          <div className="paneHeader">Preview</div>
-          <article
-            className="preview"
-            dangerouslySetInnerHTML={{ __html: previewHtml }}
-          />
+        <section className="workspace" aria-label="Markdown workspace">
+          <section className="pane" aria-label="Markdown editor">
+            <div className="paneHeader">Editor</div>
+            <MarkdownEditor
+              value={content}
+              onChange={(nextContent) => {
+                setCurrentDocument((document) =>
+                  updateCurrentDocumentContent(document, nextContent)
+                );
+              }}
+            />
+          </section>
+
+          <section className="pane" aria-label="Markdown preview">
+            <div className="paneHeader">Preview</div>
+            <article
+              className="preview"
+              dangerouslySetInnerHTML={{ __html: previewHtml }}
+            />
+          </section>
         </section>
       </section>
 
