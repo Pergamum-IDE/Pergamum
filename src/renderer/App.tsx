@@ -14,20 +14,36 @@ import {
   applyStandaloneSaveResult,
   createFileDocument,
   createProjectDocument,
-  createUntitledDocument,
-  type CurrentDocument,
   currentDocumentContent,
   currentDocumentTitle,
   currentProjectRelativePath,
   isCurrentDocumentDirty,
-  isInitialUntitledDocument,
   isProjectCurrentDocument,
   markCurrentDocumentSaved,
   standaloneSavePath,
-  updateCurrentDocumentContent
+  updateCurrentDocumentContent,
+  type CurrentDocument
 } from "./currentDocument";
+import { DocumentTabBar } from "./DocumentTabBar";
 import { FileExplorer } from "./FileExplorer";
 import { MarkdownEditor } from "./MarkdownEditor";
+import {
+  activeCurrentDocument,
+  activeOpenDocument,
+  activateOpenDocument,
+  createInitialOpenDocumentsState,
+  createOpenDocumentsStateWithDocument,
+  documentTabs,
+  hasDirtyOpenDocuments,
+  hasOpenDocument,
+  isOnlyInitialUntitledDocument,
+  openOrActivateDocument,
+  projectOpenDocumentId,
+  replaceOpenDocument,
+  updateActiveOpenDocument,
+  type OpenDocumentId,
+  type OpenDocumentsState
+} from "./openDocuments";
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
 import { RecentProjectsPanel } from "./RecentProjectsPanel";
 import { SettingsPanel } from "./SettingsPanel";
@@ -43,11 +59,26 @@ function errorMessage(error: unknown, translate: Translate): string {
   return error instanceof Error ? error.message : translate("error.unknown");
 }
 
+function projectOpenStatus(
+  openedStatus: StatusMessage,
+  settingsReloadError: StatusMessage | null,
+  translate: Translate
+): StatusMessage {
+  return settingsReloadError
+    ? {
+        key: "status.withDetail",
+        values: {
+          status: translate(openedStatus.key, openedStatus.values),
+          detail: translate(settingsReloadError.key, settingsReloadError.values)
+        }
+      }
+    : openedStatus;
+}
+
 export function App(): JSX.Element {
   const [project, setProject] = useState<PergamumProject | null>(null);
-  const [currentDocument, setCurrentDocument] = useState<CurrentDocument>(
-    createUntitledDocument
-  );
+  const [openDocumentsState, setOpenDocumentsState] =
+    useState<OpenDocumentsState>(createInitialOpenDocumentsState);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [status, setStatus] = useState<StatusMessage>({ key: "app.ready" });
@@ -60,6 +91,8 @@ export function App(): JSX.Element {
     saveSettings
   } = useApplicationSettings();
 
+  const activeDocument = activeOpenDocument(openDocumentsState);
+  const currentDocument = activeCurrentDocument(openDocumentsState);
   const content = currentDocumentContent(currentDocument);
   const isDirty = isCurrentDocumentDirty(currentDocument);
   const translate = useMemo(
@@ -68,17 +101,41 @@ export function App(): JSX.Element {
     [displayLanguage]
   );
   const shouldShowWelcome =
-    project === null && isInitialUntitledDocument(currentDocument);
+    project === null && isOnlyInitialUntitledDocument(openDocumentsState);
   const previewHtml = useMemo(
     () => markdownPreviewRenderer.render(content),
     [content]
   );
+  const tabs = useMemo(
+    () => documentTabs(openDocumentsState),
+    [openDocumentsState]
+  );
 
-  async function openFile(): Promise<void> {
-    if (isDirty && !window.confirm(translate("confirm.discardUnsaved"))) {
-      return;
+  function confirmProjectSwitch(): boolean {
+    if (!hasDirtyOpenDocuments(openDocumentsState)) {
+      return true;
     }
 
+    return window.confirm(translate("confirm.discardOpenDocuments"));
+  }
+
+  function setActiveDocumentContent(nextContent: string): void {
+    setOpenDocumentsState((state) =>
+      updateActiveOpenDocument(state, (document) =>
+        updateCurrentDocumentContent(document, nextContent)
+      )
+    );
+  }
+
+  function activateDocument(documentId: OpenDocumentId): void {
+    setOpenDocumentsState((state) => activateOpenDocument(state, documentId));
+  }
+
+  function openDocument(document: CurrentDocument): void {
+    setOpenDocumentsState((state) => openOrActivateDocument(state, document));
+  }
+
+  async function openFile(): Promise<void> {
     const file = await window.pergamum.files.openMarkdown();
 
     if (!file) {
@@ -87,21 +144,43 @@ export function App(): JSX.Element {
     }
 
     const openedDocument = createFileDocument(file);
-    setCurrentDocument(openedDocument);
+
+    openDocument(openedDocument);
     setStatus({
       key: "status.openedFile",
       values: { name: openedDocument.name }
     });
   }
 
+  function replaceSavedDocument(
+    documentId: OpenDocumentId,
+    document: CurrentDocument
+  ): boolean {
+    const replacement = replaceOpenDocument(
+      openDocumentsState,
+      documentId,
+      document
+    );
+
+    setOpenDocumentsState(replacement.state);
+
+    return replacement.didCollide;
+  }
+
   async function saveFile(): Promise<void> {
-    if (isProjectCurrentDocument(currentDocument)) {
+    const documentToSave = activeDocument.document;
+    const documentIdToSave = activeDocument.id;
+
+    if (isProjectCurrentDocument(documentToSave)) {
       const result = await window.pergamum.projects.saveProjectDocument(
-        currentDocument.relativePath,
-        currentDocument.content
+        documentToSave.relativePath,
+        documentToSave.content
       );
 
-      setCurrentDocument(markCurrentDocumentSaved(currentDocument));
+      replaceSavedDocument(
+        documentIdToSave,
+        markCurrentDocumentSaved(documentToSave)
+      );
       setStatus({
         key: "status.savedPath",
         values: { path: result.relativePath }
@@ -110,8 +189,8 @@ export function App(): JSX.Element {
     }
 
     const result = await window.pergamum.files.saveMarkdown(
-      standaloneSavePath(currentDocument),
-      currentDocument.content
+      standaloneSavePath(documentToSave),
+      documentToSave.content
     );
 
     if (!result) {
@@ -119,20 +198,30 @@ export function App(): JSX.Element {
       return;
     }
 
-    const savedDocument = applyStandaloneSaveResult(currentDocument, result);
-    setCurrentDocument(savedDocument);
-    setStatus({
-      key: "status.savedPath",
-      values: { path: savedDocument.name }
-    });
+    const savedDocument = applyStandaloneSaveResult(documentToSave, result);
+    const didCollide = replaceSavedDocument(documentIdToSave, savedDocument);
+
+    setStatus(
+      didCollide
+        ? {
+            key: "status.saveAsTargetAlreadyOpen",
+            values: { path: result.path }
+          }
+        : {
+            key: "status.savedPath",
+            values: { path: savedDocument.name }
+          }
+    );
   }
 
-  async function loadProjectDocument(document: ProjectDocument): Promise<void> {
+  async function readProjectDocument(
+    document: ProjectDocument
+  ): Promise<CurrentDocument> {
     const loadedDocument = await window.pergamum.projects.readProjectDocument(
       document.relativePath
     );
 
-    setCurrentDocument(createProjectDocument(document, loadedDocument.content));
+    return createProjectDocument(document, loadedDocument.content);
   }
 
   async function activateProject(
@@ -142,7 +231,11 @@ export function App(): JSX.Element {
 
     if (openedProject.documents.length > 0) {
       const firstDocument = openedProject.documents[0];
-      await loadProjectDocument(firstDocument);
+      const firstCurrentDocument = await readProjectDocument(firstDocument);
+
+      setOpenDocumentsState(
+        createOpenDocumentsStateWithDocument(firstCurrentDocument)
+      );
 
       return {
         key: "status.openedProjectDocument",
@@ -152,6 +245,8 @@ export function App(): JSX.Element {
         }
       };
     }
+
+    setOpenDocumentsState(createInitialOpenDocumentsState());
 
     return {
       key: "status.openedProject",
@@ -174,25 +269,12 @@ export function App(): JSX.Element {
     }
   }
 
-  function projectOpenStatus(
-    openedStatus: StatusMessage,
-    settingsReloadError: StatusMessage | null
-  ): StatusMessage {
-    return settingsReloadError
-      ? {
-          key: "status.withDetail",
-          values: {
-            status: translate(openedStatus.key, openedStatus.values),
-            detail: translate(
-              settingsReloadError.key,
-              settingsReloadError.values
-            )
-          }
-        }
-      : openedStatus;
-  }
-
   async function openProject(): Promise<void> {
+    if (!confirmProjectSwitch()) {
+      setStatus({ key: "status.openProjectCanceled" });
+      return;
+    }
+
     try {
       const openedProject = await window.pergamum.projects.openProject();
 
@@ -203,7 +285,7 @@ export function App(): JSX.Element {
 
       const settingsReloadError = await reloadSettingsAfterProjectOpen();
       const openedStatus = await activateProject(openedProject);
-      setStatus(projectOpenStatus(openedStatus, settingsReloadError));
+      setStatus(projectOpenStatus(openedStatus, settingsReloadError, translate));
     } catch (error) {
       setStatus({
         key: "status.projectOpenFailed",
@@ -213,6 +295,11 @@ export function App(): JSX.Element {
   }
 
   async function openRecentProject(projectPath: string): Promise<void> {
+    if (!confirmProjectSwitch()) {
+      setStatus({ key: "status.openProjectCanceled" });
+      return;
+    }
+
     try {
       const openedProject = await window.pergamum.projects.openRecentProject(
         projectPath
@@ -220,7 +307,7 @@ export function App(): JSX.Element {
       const settingsReloadError = await reloadSettingsAfterProjectOpen();
       const openedStatus = await activateProject(openedProject);
       setIsRecentProjectsOpen(false);
-      setStatus(projectOpenStatus(openedStatus, settingsReloadError));
+      setStatus(projectOpenStatus(openedStatus, settingsReloadError, translate));
     } catch (error) {
       setStatus({
         key: "status.recentProjectOpenFailed",
@@ -239,8 +326,21 @@ export function App(): JSX.Element {
       return;
     }
 
+    const documentId = projectOpenDocumentId(document.relativePath);
+
+    if (hasOpenDocument(openDocumentsState, documentId)) {
+      activateDocument(documentId);
+      setStatus({
+        key: "status.openedProjectDocumentOnly",
+        values: { relativePath: document.relativePath }
+      });
+      return;
+    }
+
     try {
-      await loadProjectDocument(document);
+      const openedDocument = await readProjectDocument(document);
+
+      openDocument(openedDocument);
       setStatus({
         key: "status.openedProjectDocumentOnly",
         values: { relativePath: document.relativePath }
@@ -340,49 +440,57 @@ export function App(): JSX.Element {
           }}
         />
       ) : (
-        <section className="mainArea">
-          {project ? (
-            <FileExplorer
-              documents={project.documents}
-              activeRelativePath={currentProjectRelativePath(currentDocument)}
-              translate={translate}
-              onSelectDocument={(relativePath) => {
-                void selectProjectDocument(relativePath);
-              }}
-            />
-          ) : null}
-
-          <section
-            className="workspace"
-            aria-label={translate("workspace.markdownWorkspace")}
-          >
-            <section
-              className="pane"
-              aria-label={translate("workspace.markdownEditor")}
-            >
-              <div className="paneHeader">{translate("workspace.editor")}</div>
-              <MarkdownEditor
-                value={content}
-                onChange={(nextContent) => {
-                  setCurrentDocument((document) =>
-                    updateCurrentDocumentContent(document, nextContent)
-                  );
+        <>
+          <DocumentTabBar
+            tabs={tabs}
+            activeDocumentId={openDocumentsState.activeDocumentId}
+            translate={translate}
+            onSelectDocument={activateDocument}
+          />
+          <section className="mainArea">
+            {project ? (
+              <FileExplorer
+                documents={project.documents}
+                activeRelativePath={currentProjectRelativePath(currentDocument)}
+                translate={translate}
+                onSelectDocument={(relativePath) => {
+                  void selectProjectDocument(relativePath);
                 }}
               />
-            </section>
+            ) : null}
 
             <section
-              className="pane"
-              aria-label={translate("workspace.markdownPreview")}
+              className="workspace"
+              aria-label={translate("workspace.markdownWorkspace")}
             >
-              <div className="paneHeader">{translate("workspace.preview")}</div>
-              <article
-                className="preview"
-                dangerouslySetInnerHTML={{ __html: previewHtml }}
-              />
+              <section
+                className="pane"
+                aria-label={translate("workspace.markdownEditor")}
+              >
+                <div className="paneHeader">
+                  {translate("workspace.editor")}
+                </div>
+                <MarkdownEditor
+                  value={content}
+                  onChange={setActiveDocumentContent}
+                />
+              </section>
+
+              <section
+                className="pane"
+                aria-label={translate("workspace.markdownPreview")}
+              >
+                <div className="paneHeader">
+                  {translate("workspace.preview")}
+                </div>
+                <article
+                  className="preview"
+                  dangerouslySetInnerHTML={{ __html: previewHtml }}
+                />
+              </section>
             </section>
           </section>
-        </section>
+        </>
       )}
 
       {settings.showStatusBar ? (

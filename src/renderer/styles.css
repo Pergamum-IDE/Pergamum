@@ -227,6 +227,60 @@ button:active {
   font-size: 13px;
 }
 
+.documentTabBar {
+  display: flex;
+  min-height: 36px;
+  min-width: 0;
+  overflow-x: auto;
+  border-bottom: 1px solid #d3dae2;
+  background: #edf2f7;
+  padding: 0 8px;
+}
+
+.documentTab {
+  display: flex;
+  width: 176px;
+  height: 36px;
+  min-width: 0;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 6px;
+  overflow: hidden;
+  border: 0;
+  border-right: 1px solid #d3dae2;
+  border-radius: 0;
+  background: transparent;
+  color: #52616f;
+  font-size: 13px;
+  padding: 0 10px;
+  text-align: left;
+}
+
+.documentTab:hover {
+  background: #e2eaf2;
+}
+
+.documentTab.isActive,
+.documentTab.isActive:hover {
+  background: #ffffff;
+  color: #17212b;
+}
+
+.documentTabTitle {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.documentTabDirtyIndicator {
+  width: 7px;
+  height: 7px;
+  flex: 0 0 auto;
+  border-radius: 50%;
+  background: #946200;
+}
+
 .welcomeScreen {
   display: flex;
   flex: 1;
