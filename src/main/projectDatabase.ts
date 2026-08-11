@@ -265,26 +265,12 @@ async function readSchemaVersion(
 async function migrateToVersionOne(database: ProjectDatabase): Promise<void> {
   await database.exec(`
     CREATE TABLE IF NOT EXISTS glossary_entries (
-      id TEXT PRIMARY KEY NOT NULL,
-      name TEXT NOT NULL CHECK (length(trim(name)) > 0),
-      category TEXT,
-      description TEXT,
-      notes TEXT
+      id INTEGER PRIMARY KEY,
+      term TEXT NOT NULL CHECK (length(trim(term)) > 0),
+      description TEXT NOT NULL,
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL
     ) STRICT;
-
-    CREATE TABLE IF NOT EXISTS glossary_entry_aliases (
-      entry_id TEXT NOT NULL,
-      alias TEXT NOT NULL CHECK (length(trim(alias)) > 0),
-      position INTEGER NOT NULL CHECK (position >= 0),
-      PRIMARY KEY (entry_id, position),
-      UNIQUE (entry_id, alias),
-      FOREIGN KEY (entry_id)
-        REFERENCES glossary_entries(id)
-        ON DELETE CASCADE
-    ) STRICT;
-
-    CREATE INDEX IF NOT EXISTS glossary_entry_aliases_alias_idx
-      ON glossary_entry_aliases(alias);
   `);
 }
 

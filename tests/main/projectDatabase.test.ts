@@ -52,9 +52,19 @@ describe("project database", () => {
       "SELECT name FROM sqlite_master WHERE type = 'table' AND name = ?",
       ["glossary_entries"]
     );
+    const columns = await database.all<{ name: string; type: string }>(
+      "PRAGMA table_info(glossary_entries)"
+    );
 
     expect(version?.user_version).toBe(currentProjectDatabaseSchemaVersion);
     expect(table?.name).toBe("glossary_entries");
+    expect(columns.map((column) => [column.name, column.type])).toEqual([
+      ["id", "INTEGER"],
+      ["term", "TEXT"],
+      ["description", "TEXT"],
+      ["created_at", "TEXT"],
+      ["updated_at", "TEXT"]
+    ]);
   });
 
   it("enables foreign keys for each opened connection", async () => {
@@ -84,12 +94,38 @@ describe("project database", () => {
     await expect(
       database.transaction(async () => {
         await database?.run(
-          "INSERT INTO glossary_entries (id, name) VALUES (?, ?)",
-          ["rollback-entry", "Rollback Entry"]
+          `
+            INSERT INTO glossary_entries (
+              term,
+              description,
+              created_at,
+              updated_at
+            )
+            VALUES (?, ?, ?, ?)
+          `,
+          [
+            "Rollback Entry",
+            "Transaction test",
+            "2026-08-11T12:00:00.000Z",
+            "2026-08-11T12:00:00.000Z"
+          ]
         );
         await database?.run(
-          "INSERT INTO glossary_entries (id, name) VALUES (?, ?)",
-          ["rollback-entry", "Duplicate Entry"]
+          `
+            INSERT INTO glossary_entries (
+              term,
+              description,
+              created_at,
+              updated_at
+            )
+            VALUES (?, ?, ?, ?)
+          `,
+          [
+            " ",
+            "Invalid entry",
+            "2026-08-11T12:00:00.000Z",
+            "2026-08-11T12:00:00.000Z"
+          ]
         );
       })
     ).rejects.toMatchObject({
@@ -97,8 +133,8 @@ describe("project database", () => {
     });
 
     const row = await database.get<{ count: number }>(
-      "SELECT COUNT(*) AS count FROM glossary_entries WHERE id = ?",
-      ["rollback-entry"]
+      "SELECT COUNT(*) AS count FROM glossary_entries WHERE term = ?",
+      ["Rollback Entry"]
     );
 
     expect(row?.count).toBe(0);

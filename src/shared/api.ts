@@ -17,7 +17,6 @@ export type {
 } from "./settings";
 export type {
   CreateGlossaryEntryInput,
-  Glossary,
   GlossaryEntry,
   UpdateGlossaryEntryInput
 } from "./glossary";
