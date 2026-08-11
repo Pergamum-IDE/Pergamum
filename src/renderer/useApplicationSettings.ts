@@ -1,15 +1,13 @@
 import { useEffect, useState } from "react";
-import type {
-  ApplicationSettings,
-  SaveApplicationSettingsRequest
-} from "../shared/api";
+import {
+  createDefaultApplicationSettings,
+  type ApplicationSettings,
+  type SaveApplicationSettingsRequest
+} from "../shared/settings";
 import { defaultLanguage, type Language } from "../shared/i18n";
 
-export const defaultApplicationSettings: ApplicationSettings = {
-  showStatusBar: true,
-  language: defaultLanguage,
-  recentProjects: []
-};
+export const defaultApplicationSettings: ApplicationSettings =
+  createDefaultApplicationSettings();
 
 interface UseApplicationSettingsResult {
   settings: ApplicationSettings;

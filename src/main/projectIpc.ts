@@ -18,9 +18,8 @@ import {
   type SaveProjectDocumentRequest,
   type SaveProjectDocumentResult
 } from "../shared/api";
+import { readProjectConfig } from "./projectConfigStore";
 import { isRecentProjectPath, recordRecentProject } from "./settingsStore";
-
-const projectConfigFileName = "pergamum.json";
 
 interface CurrentProjectState {
   rootPath: string;
@@ -47,18 +46,6 @@ function projectName(
 ): string {
   const configuredName = config?.name?.trim();
   return configuredName || directoryName(rootPath);
-}
-
-function isConfigObject(value: unknown): value is Record<string, unknown> {
-  return typeof value === "object" && value !== null && !Array.isArray(value);
-}
-
-function nodeErrorCode(error: unknown): string | undefined {
-  if (typeof error === "object" && error !== null && "code" in error) {
-    return String(error.code);
-  }
-
-  return undefined;
 }
 
 function errorDetail(error: unknown): string {
@@ -137,45 +124,6 @@ function resolveProjectDocumentPath(relativePath: string): string {
   }
 
   return resolvedPath;
-}
-
-async function readProjectConfig(
-  rootPath: string
-): Promise<PergamumProjectConfig | null> {
-  const configPath = path.join(rootPath, projectConfigFileName);
-  let rawConfig: string;
-
-  try {
-    rawConfig = await fs.readFile(configPath, "utf8");
-  } catch (error) {
-    if (nodeErrorCode(error) === "ENOENT") {
-      return null;
-    }
-
-    throw new Error(
-      `Could not read ${projectConfigFileName}: ${errorDetail(error)}`
-    );
-  }
-
-  let parsedConfig: unknown;
-
-  try {
-    parsedConfig = JSON.parse(rawConfig);
-  } catch (error) {
-    throw new Error(`Invalid ${projectConfigFileName}: ${errorDetail(error)}`);
-  }
-
-  if (!isConfigObject(parsedConfig)) {
-    throw new Error(`Invalid ${projectConfigFileName}: expected a JSON object.`);
-  }
-
-  const name = parsedConfig.name;
-
-  if (name !== undefined && typeof name !== "string") {
-    throw new Error(`Invalid ${projectConfigFileName}: "name" must be a string.`);
-  }
-
-  return name === undefined ? {} : { name };
 }
 
 async function discoverMarkdownFiles(

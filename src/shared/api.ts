@@ -1,4 +1,20 @@
-import type { Language } from "./i18n";
+import type {
+  ApplicationSettings,
+  ProjectSettings,
+  SaveApplicationSettingsRequest
+} from "./settings";
+
+export type {
+  ApplicationSettings,
+  EffectiveSettings,
+  PreviewRendererId,
+  ProjectSettings,
+  RecentProject,
+  SaveApplicationSettingsRequest,
+  SettingScope,
+  SettingsCatalogEntry,
+  SettingsCatalogKey
+} from "./settings";
 
 export const FILE_CHANNELS = {
   openMarkdown: "files:openMarkdown",
@@ -33,6 +49,7 @@ export interface SaveMarkdownResult {
 
 export interface PergamumProjectConfig {
   name?: string;
+  settings?: ProjectSettings;
 }
 
 export interface ProjectDocument {
@@ -67,22 +84,6 @@ export interface PergamumProject {
 
 export interface OpenRecentProjectRequest {
   path: string;
-}
-
-export interface RecentProject {
-  path: string;
-  name: string;
-}
-
-export interface ApplicationSettings {
-  showStatusBar: boolean;
-  language: Language;
-  recentProjects: RecentProject[];
-}
-
-export interface SaveApplicationSettingsRequest {
-  showStatusBar: boolean;
-  language: Language;
 }
 
 export interface PergamumApi {
