@@ -10,6 +10,7 @@ import {
   type TranslationKey,
   type TranslationValues
 } from "../shared/i18n";
+import { resolveEffectiveSettings } from "../shared/settings";
 import {
   applyStandaloneSaveResult,
   createFileDocument,
@@ -93,6 +94,10 @@ export function App(): JSX.Element {
 
   const activeDocument = activeOpenDocument(openDocumentsState);
   const currentDocument = activeCurrentDocument(openDocumentsState);
+  const effectiveSettings = useMemo(
+    () => resolveEffectiveSettings(settings, project?.config?.settings),
+    [settings, project?.config?.settings]
+  );
   const content = currentDocumentContent(currentDocument);
   const isDirty = isCurrentDocumentDirty(currentDocument);
   const translate = useMemo(
@@ -102,10 +107,12 @@ export function App(): JSX.Element {
   );
   const shouldShowWelcome =
     project === null && isOnlyInitialUntitledDocument(openDocumentsState);
-  const previewHtml = useMemo(
-    () => markdownPreviewRenderer.render(content),
-    [content]
-  );
+  const previewHtml = useMemo(() => {
+    switch (effectiveSettings.preview.renderer) {
+      case "markdown":
+        return markdownPreviewRenderer.render(content);
+    }
+  }, [content, effectiveSettings.preview.renderer]);
   const tabs = useMemo(
     () => documentTabs(openDocumentsState),
     [openDocumentsState]
@@ -493,7 +500,7 @@ export function App(): JSX.Element {
         </>
       )}
 
-      {settings.showStatusBar ? (
+      {effectiveSettings.showStatusBar ? (
         <footer className="statusBar">
           {translate(status.key, status.values)}
         </footer>
