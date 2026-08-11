@@ -15,6 +15,12 @@ export type {
   SettingsCatalogEntry,
   SettingsCatalogKey
 } from "./settings";
+export type {
+  CreateGlossaryEntryInput,
+  Glossary,
+  GlossaryEntry,
+  UpdateGlossaryEntryInput
+} from "./glossary";
 
 export const FILE_CHANNELS = {
   openMarkdown: "files:openMarkdown",
