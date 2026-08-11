@@ -5,6 +5,12 @@ import type {
   SaveApplicationSettingsRequest
 } from "../shared/api";
 import {
+  t,
+  type Translate,
+  type TranslationKey,
+  type TranslationValues
+} from "../shared/i18n";
+import {
   applyStandaloneSaveResult,
   createFileDocument,
   createProjectDocument,
@@ -28,8 +34,13 @@ import { SettingsPanel } from "./SettingsPanel";
 import { useApplicationSettings } from "./useApplicationSettings";
 import { WelcomeScreen } from "./WelcomeScreen";
 
-function errorMessage(error: unknown): string {
-  return error instanceof Error ? error.message : "Unknown error.";
+interface StatusMessage {
+  key: TranslationKey;
+  values?: TranslationValues;
+}
+
+function errorMessage(error: unknown, translate: Translate): string {
+  return error instanceof Error ? error.message : translate("error.unknown");
 }
 
 export function App(): JSX.Element {
@@ -39,9 +50,10 @@ export function App(): JSX.Element {
   );
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
-  const [status, setStatus] = useState("Ready");
+  const [status, setStatus] = useState<StatusMessage>({ key: "app.ready" });
   const {
     settings,
+    displayLanguage,
     isLoading: isSettingsLoading,
     error: settingsError,
     reloadSettings,
@@ -50,6 +62,11 @@ export function App(): JSX.Element {
 
   const content = currentDocumentContent(currentDocument);
   const isDirty = isCurrentDocumentDirty(currentDocument);
+  const translate = useMemo(
+    () => (key: TranslationKey, values?: TranslationValues) =>
+      t(displayLanguage, key, values),
+    [displayLanguage]
+  );
   const shouldShowWelcome =
     project === null && isInitialUntitledDocument(currentDocument);
   const previewHtml = useMemo(
@@ -58,20 +75,23 @@ export function App(): JSX.Element {
   );
 
   async function openFile(): Promise<void> {
-    if (isDirty && !window.confirm("Discard unsaved changes?")) {
+    if (isDirty && !window.confirm(translate("confirm.discardUnsaved"))) {
       return;
     }
 
     const file = await window.pergamum.files.openMarkdown();
 
     if (!file) {
-      setStatus("Open canceled");
+      setStatus({ key: "status.openCanceled" });
       return;
     }
 
     const openedDocument = createFileDocument(file);
     setCurrentDocument(openedDocument);
-    setStatus(`Opened ${openedDocument.name}`);
+    setStatus({
+      key: "status.openedFile",
+      values: { name: openedDocument.name }
+    });
   }
 
   async function saveFile(): Promise<void> {
@@ -82,7 +102,10 @@ export function App(): JSX.Element {
       );
 
       setCurrentDocument(markCurrentDocumentSaved(currentDocument));
-      setStatus(`Saved ${result.relativePath}`);
+      setStatus({
+        key: "status.savedPath",
+        values: { path: result.relativePath }
+      });
       return;
     }
 
@@ -92,13 +115,16 @@ export function App(): JSX.Element {
     );
 
     if (!result) {
-      setStatus("Save canceled");
+      setStatus({ key: "status.saveCanceled" });
       return;
     }
 
     const savedDocument = applyStandaloneSaveResult(currentDocument, result);
     setCurrentDocument(savedDocument);
-    setStatus(`Saved ${savedDocument.name}`);
+    setStatus({
+      key: "status.savedPath",
+      values: { path: savedDocument.name }
+    });
   }
 
   async function loadProjectDocument(document: ProjectDocument): Promise<void> {
@@ -111,34 +137,58 @@ export function App(): JSX.Element {
 
   async function activateProject(
     openedProject: PergamumProject
-  ): Promise<string> {
+  ): Promise<StatusMessage> {
     setProject(openedProject);
 
     if (openedProject.documents.length > 0) {
       const firstDocument = openedProject.documents[0];
       await loadProjectDocument(firstDocument);
 
-      return `Opened project ${openedProject.name}; current document ${firstDocument.relativePath}`;
+      return {
+        key: "status.openedProjectDocument",
+        values: {
+          projectName: openedProject.name,
+          relativePath: firstDocument.relativePath
+        }
+      };
     }
 
-    return `Opened project ${openedProject.name} (${openedProject.documents.length} Markdown files)`;
+    return {
+      key: "status.openedProject",
+      values: {
+        projectName: openedProject.name,
+        count: openedProject.documents.length
+      }
+    };
   }
 
-  async function reloadSettingsAfterProjectOpen(): Promise<string | null> {
+  async function reloadSettingsAfterProjectOpen(): Promise<StatusMessage | null> {
     try {
       await reloadSettings();
       return null;
     } catch (error) {
-      return `settings reload failed: ${errorMessage(error)}`;
+      return {
+        key: "status.settingsReloadFailed",
+        values: { message: errorMessage(error, translate) }
+      };
     }
   }
 
   function projectOpenStatus(
-    openedStatus: string,
-    settingsReloadError: string | null
-  ): string {
+    openedStatus: StatusMessage,
+    settingsReloadError: StatusMessage | null
+  ): StatusMessage {
     return settingsReloadError
-      ? `${openedStatus}; ${settingsReloadError}`
+      ? {
+          key: "status.withDetail",
+          values: {
+            status: translate(openedStatus.key, openedStatus.values),
+            detail: translate(
+              settingsReloadError.key,
+              settingsReloadError.values
+            )
+          }
+        }
       : openedStatus;
   }
 
@@ -147,7 +197,7 @@ export function App(): JSX.Element {
       const openedProject = await window.pergamum.projects.openProject();
 
       if (!openedProject) {
-        setStatus("Open project canceled");
+        setStatus({ key: "status.openProjectCanceled" });
         return;
       }
 
@@ -155,7 +205,10 @@ export function App(): JSX.Element {
       const openedStatus = await activateProject(openedProject);
       setStatus(projectOpenStatus(openedStatus, settingsReloadError));
     } catch (error) {
-      setStatus(`Project open failed: ${errorMessage(error)}`);
+      setStatus({
+        key: "status.projectOpenFailed",
+        values: { message: errorMessage(error, translate) }
+      });
     }
   }
 
@@ -169,7 +222,10 @@ export function App(): JSX.Element {
       setIsRecentProjectsOpen(false);
       setStatus(projectOpenStatus(openedStatus, settingsReloadError));
     } catch (error) {
-      setStatus(`Recent project open failed: ${errorMessage(error)}`);
+      setStatus({
+        key: "status.recentProjectOpenFailed",
+        values: { message: errorMessage(error, translate) }
+      });
     }
   }
 
@@ -179,15 +235,21 @@ export function App(): JSX.Element {
     );
 
     if (!document) {
-      setStatus("Project document not found");
+      setStatus({ key: "status.projectDocumentNotFound" });
       return;
     }
 
     try {
       await loadProjectDocument(document);
-      setStatus(`Opened ${document.relativePath}`);
+      setStatus({
+        key: "status.openedProjectDocumentOnly",
+        values: { relativePath: document.relativePath }
+      });
     } catch (error) {
-      setStatus(`Document open failed: ${errorMessage(error)}`);
+      setStatus({
+        key: "status.documentOpenFailed",
+        values: { message: errorMessage(error, translate) }
+      });
     }
   }
 
@@ -196,9 +258,12 @@ export function App(): JSX.Element {
   ): Promise<void> {
     try {
       await saveSettings(nextSettings);
-      setStatus("Settings saved");
+      setStatus({ key: "status.settingsSaved" });
     } catch (error) {
-      setStatus(`Settings save failed: ${errorMessage(error)}`);
+      setStatus({
+        key: "status.settingsSaveFailed",
+        values: { message: errorMessage(error, translate) }
+      });
     }
   }
 
@@ -207,31 +272,37 @@ export function App(): JSX.Element {
       <header className="toolbar">
         <div className="documentTitle">
           <span>{currentDocumentTitle(currentDocument)}</span>
-          {isDirty ? <span className="dirtyIndicator">Unsaved</span> : null}
+          {isDirty ? (
+            <span className="dirtyIndicator">
+              {translate("document.unsaved")}
+            </span>
+          ) : null}
           {project ? (
-            <span className="projectName">Project: {project.name}</span>
+            <span className="projectName">
+              {translate("project.label", { name: project.name })}
+            </span>
           ) : null}
         </div>
         <button type="button" onClick={openProject}>
-          Open Project
+          {translate("toolbar.openProject")}
         </button>
         <button type="button" onClick={openFile}>
-          Open
+          {translate("common.open")}
         </button>
         <button type="button" onClick={saveFile}>
-          Save
+          {translate("common.save")}
         </button>
         <button
           type="button"
           onClick={() => setIsSettingsOpen((isOpen) => !isOpen)}
         >
-          Settings
+          {translate("toolbar.settings")}
         </button>
         <button
           type="button"
           onClick={() => setIsRecentProjectsOpen((isOpen) => !isOpen)}
         >
-          Recent Projects
+          {translate("toolbar.recentProjects")}
         </button>
       </header>
 
@@ -240,6 +311,7 @@ export function App(): JSX.Element {
           settings={settings}
           isLoading={isSettingsLoading}
           error={settingsError}
+          translate={translate}
           onChangeSettings={(nextSettings) => {
             void changeSettings(nextSettings);
           }}
@@ -249,6 +321,7 @@ export function App(): JSX.Element {
       {isRecentProjectsOpen ? (
         <RecentProjectsPanel
           recentProjects={settings.recentProjects}
+          translate={translate}
           onOpenProject={(projectPath) => {
             void openRecentProject(projectPath);
           }}
@@ -258,6 +331,7 @@ export function App(): JSX.Element {
       {shouldShowWelcome ? (
         <WelcomeScreen
           recentProjects={settings.recentProjects}
+          translate={translate}
           onOpenProject={() => {
             void openProject();
           }}
@@ -271,15 +345,22 @@ export function App(): JSX.Element {
             <FileExplorer
               documents={project.documents}
               activeRelativePath={currentProjectRelativePath(currentDocument)}
+              translate={translate}
               onSelectDocument={(relativePath) => {
                 void selectProjectDocument(relativePath);
               }}
             />
           ) : null}
 
-          <section className="workspace" aria-label="Markdown workspace">
-            <section className="pane" aria-label="Markdown editor">
-              <div className="paneHeader">Editor</div>
+          <section
+            className="workspace"
+            aria-label={translate("workspace.markdownWorkspace")}
+          >
+            <section
+              className="pane"
+              aria-label={translate("workspace.markdownEditor")}
+            >
+              <div className="paneHeader">{translate("workspace.editor")}</div>
               <MarkdownEditor
                 value={content}
                 onChange={(nextContent) => {
@@ -290,8 +371,11 @@ export function App(): JSX.Element {
               />
             </section>
 
-            <section className="pane" aria-label="Markdown preview">
-              <div className="paneHeader">Preview</div>
+            <section
+              className="pane"
+              aria-label={translate("workspace.markdownPreview")}
+            >
+              <div className="paneHeader">{translate("workspace.preview")}</div>
               <article
                 className="preview"
                 dangerouslySetInnerHTML={{ __html: previewHtml }}
@@ -301,7 +385,11 @@ export function App(): JSX.Element {
         </section>
       )}
 
-      {settings.showStatusBar ? <footer className="statusBar">{status}</footer> : null}
+      {settings.showStatusBar ? (
+        <footer className="statusBar">
+          {translate(status.key, status.values)}
+        </footer>
+      ) : null}
     </main>
   );
 }

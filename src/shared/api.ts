@@ -1,3 +1,5 @@
+import type { Language } from "./i18n";
+
 export const FILE_CHANNELS = {
   openMarkdown: "files:openMarkdown",
   saveMarkdown: "files:saveMarkdown"
@@ -74,11 +76,13 @@ export interface RecentProject {
 
 export interface ApplicationSettings {
   showStatusBar: boolean;
+  language: Language;
   recentProjects: RecentProject[];
 }
 
 export interface SaveApplicationSettingsRequest {
   showStatusBar: boolean;
+  language: Language;
 }
 
 export interface PergamumApi {

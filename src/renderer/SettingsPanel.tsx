@@ -2,11 +2,21 @@ import type {
   ApplicationSettings,
   SaveApplicationSettingsRequest
 } from "../shared/api";
+import {
+  supportedLanguages,
+  type Language,
+  type Translate
+} from "../shared/i18n";
+
+function languageLabelKey(language: Language): "language.ja" | "language.en" {
+  return language === "ja" ? "language.ja" : "language.en";
+}
 
 interface SettingsPanelProps {
   settings: ApplicationSettings;
   isLoading: boolean;
   error: string | null;
+  translate: Translate;
   onChangeSettings: (settings: SaveApplicationSettingsRequest) => void;
 }
 
@@ -14,11 +24,12 @@ export function SettingsPanel({
   settings,
   isLoading,
   error,
+  translate,
   onChangeSettings
 }: SettingsPanelProps): JSX.Element {
   return (
-    <section className="settingsPanel" aria-label="Settings">
-      <div className="settingsPanelHeader">Settings</div>
+    <section className="settingsPanel" aria-label={translate("settings.title")}>
+      <div className="settingsPanelHeader">{translate("settings.title")}</div>
       <label className="settingsToggle">
         <input
           type="checkbox"
@@ -26,12 +37,36 @@ export function SettingsPanel({
           disabled={isLoading}
           onChange={(event) =>
             onChangeSettings({
-              showStatusBar: event.target.checked
+              showStatusBar: event.target.checked,
+              language: settings.language
             })
           }
         />
-        <span>Show status bar</span>
+        <span>{translate("settings.showStatusBar")}</span>
       </label>
+      <label className="settingsField">
+        <span>{translate("settings.language")}</span>
+        <select
+          className="settingsSelect"
+          value={settings.language}
+          disabled={isLoading}
+          onChange={(event) =>
+            onChangeSettings({
+              showStatusBar: settings.showStatusBar,
+              language: event.target.value as Language
+            })
+          }
+        >
+          {supportedLanguages.map((language) => (
+            <option key={language} value={language}>
+              {translate(languageLabelKey(language))}
+            </option>
+          ))}
+        </select>
+      </label>
+      <div className="settingsHelp">
+        {translate("settings.languageRestartRequired")}
+      </div>
       {error ? <div className="settingsError">{error}</div> : null}
     </section>
   );
