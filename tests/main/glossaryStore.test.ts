@@ -6,8 +6,9 @@ import {
   createGlossaryEntry,
   deleteGlossaryEntry,
   getGlossaryEntryById,
-  glossaryEntryFromDatabaseRow,
+  glossaryEntryFromDatabaseRows,
   listGlossaryEntries,
+  lookupGlossarySurface,
   updateGlossaryEntry,
   GlossaryStoreError
 } from "../../src/main/glossaryStore";
@@ -15,7 +16,15 @@ import {
   openProjectDatabase,
   type ProjectDatabase
 } from "../../src/main/projectDatabase";
-import { GlossaryValidationError } from "../../src/shared/glossary";
+import {
+  GlossaryValidationError,
+  type GlossaryEntry,
+  type GlossaryForm
+} from "../../src/shared/glossary";
+
+const missingEntryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abc";
+const entryRowId = "018f4b8c-7a2b-7c3d-8e4f-123456789abd";
+const formRowId = "018f4b8c-7a2b-7c3d-8e4f-123456789abe";
 
 describe("glossary store", () => {
   let projectRootPath: string;
@@ -44,30 +53,47 @@ describe("glossary store", () => {
     await expect(listGlossaryEntries(database!)).resolves.toEqual([]);
   });
 
-  it("creates and gets a glossary entry by ID", async () => {
+  it("creates an entry and its canonical form transactionally", async () => {
     const entry = await createGlossaryEntry(database!, {
-      term: "エリシア・フォン・アルセリア",
+      kind: "person",
+      canonicalSurface: "エリシア・フォン・アルセリア",
       description: "アルセリア王国の第三皇女"
     });
 
-    expect(entry.id).toBeGreaterThan(0);
-    expect(entry.term).toBe("エリシア・フォン・アルセリア");
+    expect(entry.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    );
+    expect(entry.kind).toBe("person");
     expect(entry.description).toBe("アルセリア王国の第三皇女");
+    expect(entry.forms).toHaveLength(1);
+    const canonicalForm = canonicalFormOf(entry);
+
+    expect(canonicalForm).toMatchObject({
+      entryId: entry.id,
+      surface: "エリシア・フォン・アルセリア",
+      relation: null,
+      warningPolicy: null,
+      isCanonical: true
+    });
     expect(Date.parse(entry.createdAt)).not.toBeNaN();
     expect(Date.parse(entry.updatedAt)).not.toBeNaN();
+    expect(Date.parse(canonicalForm.createdAt)).not.toBeNaN();
+    expect(Date.parse(canonicalForm.updatedAt)).not.toBeNaN();
 
     await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
       entry
     );
   });
 
-  it("lists glossary entries ordered by term", async () => {
+  it("lists glossary entries ordered by canonical surface", async () => {
     const secondEntry = await createGlossaryEntry(database!, {
-      term: "魔導炉",
+      kind: "item",
+      canonicalSurface: "魔導炉",
       description: "魔力を生成する設備"
     });
     const firstEntry = await createGlossaryEntry(database!, {
-      term: "王都アルセリア",
+      kind: "place",
+      canonicalSurface: "王都アルセリア",
       description: "王国の首都"
     });
 
@@ -77,21 +103,23 @@ describe("glossary store", () => {
     ]);
   });
 
-  it("updates a glossary entry", async () => {
+  it("updates glossary entry fields without changing forms", async () => {
     const entry = await createGlossaryEntry(database!, {
-      term: "魔導炉",
+      kind: "term",
+      canonicalSurface: "魔導炉",
       description: "旧式の説明"
     });
     const updatedEntry = await updateGlossaryEntry(database!, {
       id: entry.id,
-      term: "大型魔導炉",
-      description: "魔力を大量生成する設備"
+      kind: "concept",
+      description: "魔力を大量生成する技術"
     });
 
     expect(updatedEntry).toMatchObject({
       id: entry.id,
-      term: "大型魔導炉",
-      description: "魔力を大量生成する設備",
+      kind: "concept",
+      description: "魔力を大量生成する技術",
+      forms: entry.forms,
       createdAt: entry.createdAt
     });
     expect(Date.parse(updatedEntry.updatedAt)).not.toBeNaN();
@@ -103,7 +131,8 @@ describe("glossary store", () => {
 
   it("deletes a glossary entry", async () => {
     const entry = await createGlossaryEntry(database!, {
-      term: "帝国",
+      kind: "organization",
+      canonicalSurface: "帝国",
       description: "北方の大国"
     });
 
@@ -115,7 +144,8 @@ describe("glossary store", () => {
 
   it("persists glossary entries after closing and reopening the project database", async () => {
     const entry = await createGlossaryEntry(database!, {
-      term: "王都アルセリア",
+      kind: "place",
+      canonicalSurface: "王都アルセリア",
       description: "王国の首都"
     });
 
@@ -130,35 +160,112 @@ describe("glossary store", () => {
   it("rejects missing entries on update and delete", async () => {
     await expect(
       updateGlossaryEntry(database!, {
-        id: 999,
-        term: "存在しない項目",
+        id: missingEntryId,
+        kind: "term",
         description: "更新できない"
       })
     ).rejects.toBeInstanceOf(GlossaryStoreError);
 
-    await expect(deleteGlossaryEntry(database!, 999)).rejects.toBeInstanceOf(
-      GlossaryStoreError
-    );
+    await expect(
+      deleteGlossaryEntry(database!, missingEntryId)
+    ).rejects.toBeInstanceOf(GlossaryStoreError);
   });
 
   it("rejects invalid glossary input", async () => {
     await expect(
       createGlossaryEntry(database!, {
-        term: " ",
+        kind: "term",
+        canonicalSurface: " ",
         description: "invalid"
       })
     ).rejects.toBeInstanceOf(GlossaryValidationError);
   });
 
+  it("allows exact surface lookup with none, unique, and ambiguous results", async () => {
+    await expect(
+      lookupGlossarySurface(database!, {
+        surface: "帝国"
+      })
+    ).resolves.toEqual({
+      status: "none",
+      surface: "帝国"
+    });
+
+    const firstEntry = await createGlossaryEntry(database!, {
+      kind: "organization",
+      canonicalSurface: "帝国",
+      description: "北方の大国"
+    });
+
+    await expect(
+      lookupGlossarySurface(database!, {
+        surface: "帝国"
+      })
+    ).resolves.toEqual({
+      status: "unique",
+      surface: "帝国",
+      match: {
+        entry: firstEntry,
+        form: canonicalFormOf(firstEntry)
+      }
+    });
+
+    const secondEntry = await createGlossaryEntry(database!, {
+      kind: "organization",
+      canonicalSurface: "帝国",
+      description: "南方の大国"
+    });
+    const lookupResult = await lookupGlossarySurface(database!, {
+      surface: "帝国"
+    });
+
+    expect(lookupResult).toEqual({
+      status: "ambiguous",
+      surface: "帝国",
+      matches: [
+        {
+          entry: firstEntry,
+          form: canonicalFormOf(firstEntry)
+        },
+        {
+          entry: secondEntry,
+          form: canonicalFormOf(secondEntry)
+        }
+      ]
+    });
+  });
+
   it("rejects invalid database rows during domain conversion", () => {
     expect(() =>
-      glossaryEntryFromDatabaseRow({
-        id: 1,
-        term: 42,
-        description: "invalid row",
-        created_at: "2026-08-11T12:00:00.000Z",
-        updated_at: "2026-08-11T12:00:00.000Z"
-      })
+      glossaryEntryFromDatabaseRows(
+        {
+          id: entryRowId,
+          kind: "chapter",
+          description: "invalid row",
+          created_at: "2026-08-11T12:00:00.000Z",
+          updated_at: "2026-08-11T12:00:00.000Z"
+        },
+        [
+          {
+            id: formRowId,
+            entry_id: entryRowId,
+            surface: "王都アルセリア",
+            relation: null,
+            warning_policy: null,
+            is_canonical: 1,
+            created_at: "2026-08-11T12:00:00.000Z",
+            updated_at: "2026-08-11T12:00:00.000Z"
+          }
+        ]
+      )
     ).toThrow(GlossaryValidationError);
   });
 });
+
+function canonicalFormOf(entry: GlossaryEntry): GlossaryForm {
+  const canonicalForms = entry.forms.filter((form) => form.isCanonical);
+
+  expect(canonicalForms).toHaveLength(1);
+
+  return canonicalForms[0];
+}

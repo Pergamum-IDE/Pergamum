@@ -1,14 +1,17 @@
 import { ipcMain } from "electron";
 import {
   GLOSSARY_CHANNELS,
-  type GlossaryEntryIdRequest
+  type GlossaryEntryIdRequest,
+  type GlossarySurfaceLookupRequest
 } from "../shared/api";
 import {
   validateCreateGlossaryEntryInput,
   validateGlossaryEntryId,
+  validateGlossarySurfaceLookupInput,
   validateUpdateGlossaryEntryInput,
   type CreateGlossaryEntryInput,
   type GlossaryEntry,
+  type GlossarySurfaceLookupResult,
   type UpdateGlossaryEntryInput
 } from "../shared/glossary";
 import {
@@ -16,6 +19,7 @@ import {
   deleteGlossaryEntry,
   getGlossaryEntryById,
   listGlossaryEntries,
+  lookupGlossarySurface,
   updateGlossaryEntry
 } from "./glossaryStore";
 import {
@@ -30,6 +34,7 @@ export interface GlossaryIpcHandlers {
   create(rawRequest: unknown): Promise<GlossaryEntry>;
   getById(rawRequest: unknown): Promise<GlossaryEntry | null>;
   list(): Promise<GlossaryEntry[]>;
+  lookupSurface(rawRequest: unknown): Promise<GlossarySurfaceLookupResult>;
   update(rawRequest: unknown): Promise<GlossaryEntry>;
   delete(rawRequest: unknown): Promise<void>;
 }
@@ -48,6 +53,12 @@ function parseGlossaryEntryIdRequest(
   return {
     id: validateGlossaryEntryId(value.id)
   };
+}
+
+function parseGlossarySurfaceLookupRequest(
+  value: unknown
+): GlossarySurfaceLookupRequest {
+  return validateGlossarySurfaceLookupInput(value);
 }
 
 async function withCurrentProjectDatabase<T>(
@@ -92,6 +103,14 @@ export function createGlossaryIpcHandlers(
         listGlossaryEntries
       );
     },
+    async lookupSurface(rawRequest) {
+      const request = parseGlossarySurfaceLookupRequest(rawRequest);
+
+      return withCurrentProjectDatabase(
+        getCurrentProjectRootPath,
+        (database) => lookupGlossarySurface(database, request)
+      );
+    },
     async update(rawRequest) {
       const input: UpdateGlossaryEntryInput =
         validateUpdateGlossaryEntryInput(rawRequest);
@@ -122,6 +141,10 @@ export function registerGlossaryIpc(): void {
     handlers.getById(rawRequest)
   );
   ipcMain.handle(GLOSSARY_CHANNELS.list, () => handlers.list());
+  ipcMain.handle(
+    GLOSSARY_CHANNELS.lookupSurface,
+    (_event, rawRequest: unknown) => handlers.lookupSurface(rawRequest)
+  );
   ipcMain.handle(GLOSSARY_CHANNELS.update, (_event, rawRequest: unknown) =>
     handlers.update(rawRequest)
   );

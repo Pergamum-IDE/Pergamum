@@ -6,6 +6,7 @@ import type {
 import type {
   CreateGlossaryEntryInput,
   GlossaryEntry,
+  GlossarySurfaceLookupResult,
   UpdateGlossaryEntryInput
 } from "./glossary";
 
@@ -23,6 +24,14 @@ export type {
 export type {
   CreateGlossaryEntryInput,
   GlossaryEntry,
+  GlossaryEntryId,
+  GlossaryEntryKind,
+  GlossaryForm,
+  GlossaryFormId,
+  GlossaryFormRelation,
+  GlossarySurfaceLookupInput,
+  GlossarySurfaceLookupResult,
+  GlossaryWarningPolicy,
   UpdateGlossaryEntryInput
 } from "./glossary";
 
@@ -47,6 +56,7 @@ export const GLOSSARY_CHANNELS = {
   create: "glossary:create",
   getById: "glossary:getById",
   list: "glossary:list",
+  lookupSurface: "glossary:lookupSurface",
   update: "glossary:update",
   delete: "glossary:delete"
 } as const;
@@ -105,7 +115,11 @@ export interface OpenRecentProjectRequest {
 }
 
 export interface GlossaryEntryIdRequest {
-  id: number;
+  id: string;
+}
+
+export interface GlossarySurfaceLookupRequest {
+  surface: string;
 }
 
 export interface PergamumApi {
@@ -135,9 +149,10 @@ export interface PergamumApi {
   };
   glossary: {
     create: (input: CreateGlossaryEntryInput) => Promise<GlossaryEntry>;
-    getById: (id: number) => Promise<GlossaryEntry | null>;
+    getById: (id: string) => Promise<GlossaryEntry | null>;
     list: () => Promise<GlossaryEntry[]>;
+    lookupSurface: (surface: string) => Promise<GlossarySurfaceLookupResult>;
     update: (input: UpdateGlossaryEntryInput) => Promise<GlossaryEntry>;
-    delete: (id: number) => Promise<void>;
+    delete: (id: string) => Promise<void>;
   };
 }

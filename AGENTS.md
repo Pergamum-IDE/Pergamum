@@ -7,7 +7,10 @@ It is a project-oriented IDE for novel production.
 
 ## Principles
 
-- Markdown is the source of truth.
+- Markdown is the source of truth for manuscript content.
+- `pergamum.db` is the source of truth for structured project data.
+- `pergamum.json` is the source of truth for project configuration.
+- Serialized snapshots are derived deterministic representations, not authoritative data while the database is available.
 - Keep the architecture simple.
 - Prefer readability over cleverness.
 - Do not introduce unnecessary dependencies.
