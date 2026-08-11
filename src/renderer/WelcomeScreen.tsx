@@ -1,39 +1,42 @@
 import type { RecentProject } from "../shared/api";
+import type { Translate } from "../shared/i18n";
 
 interface WelcomeScreenProps {
   recentProjects: RecentProject[];
+  translate: Translate;
   onOpenProject: () => void;
   onOpenRecentProject: (path: string) => void;
 }
 
 export function WelcomeScreen({
   recentProjects,
+  translate,
   onOpenProject,
   onOpenRecentProject
 }: WelcomeScreenProps): JSX.Element {
   return (
-    <section className="welcomeScreen" aria-label="Welcome">
+    <section className="welcomeScreen" aria-label={translate("welcome.title")}>
       <div className="welcomeContent">
-        <section className="welcomePrimary" aria-label="Start">
+        <section className="welcomePrimary" aria-label={translate("welcome.start")}>
           <div>
-            <h1>Pergamum</h1>
-            <p>Open a novel project to start writing.</p>
+            <h1>{translate("welcome.title")}</h1>
+            <p>{translate("welcome.description")}</p>
           </div>
           <button
             type="button"
             className="welcomeOpenProject"
             onClick={onOpenProject}
           >
-            Open Project...
+            {translate("welcome.openProject")}
           </button>
         </section>
 
-        <section className="welcomeRecent" aria-label="Recent projects">
-          <h2>Recent Projects</h2>
+        <section className="welcomeRecent" aria-label={translate("welcome.recentProjects")}>
+          <h2>{translate("welcome.recentProjects")}</h2>
           {recentProjects.length === 0 ? (
-            <div className="welcomeRecentEmpty">No recent projects</div>
+            <div className="welcomeRecentEmpty">{translate("recent.empty")}</div>
           ) : (
-            <nav className="welcomeRecentList" aria-label="Recent projects">
+            <nav className="welcomeRecentList" aria-label={translate("welcome.recentProjects")}>
               {recentProjects.map((recentProject) => (
                 <button
                   key={recentProject.path}

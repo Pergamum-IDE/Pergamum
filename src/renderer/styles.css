@@ -90,6 +90,7 @@ button:active {
 .settingsPanel {
   display: flex;
   align-items: center;
+  flex-wrap: wrap;
   gap: 16px;
   min-height: 42px;
   padding: 8px 12px;
@@ -114,6 +115,30 @@ button:active {
 
 .settingsToggle input {
   margin: 0;
+}
+
+.settingsField {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: #25313d;
+  font-size: 13px;
+}
+
+.settingsSelect {
+  height: 28px;
+  border: 1px solid #a9b4c0;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #182531;
+  font: inherit;
+  padding: 0 8px;
+}
+
+.settingsHelp {
+  min-width: 180px;
+  color: #6b7785;
+  font-size: 12px;
 }
 
 .settingsError {

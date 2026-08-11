@@ -6,18 +6,21 @@ import type {
   RecentProject,
   SaveApplicationSettingsRequest
 } from "../shared/api";
+import { defaultLanguage, isLanguage } from "../shared/i18n";
 
 const settingsFileName = "settings.json";
 const maxRecentProjects = 10;
 
 const defaultSettings: ApplicationSettings = {
   showStatusBar: true,
+  language: defaultLanguage,
   recentProjects: []
 };
 
 function createDefaultSettings(): ApplicationSettings {
   return {
     showStatusBar: defaultSettings.showStatusBar,
+    language: defaultSettings.language,
     recentProjects: []
   };
 }
@@ -89,6 +92,7 @@ function readSettingsValue(value: unknown): ApplicationSettings {
       typeof value.showStatusBar === "boolean"
         ? value.showStatusBar
         : defaultSettings.showStatusBar,
+    language: isLanguage(value.language) ? value.language : defaultSettings.language,
     recentProjects: readRecentProjects(value.recentProjects)
   };
 }
@@ -145,15 +149,18 @@ export function parseSaveApplicationSettingsRequest(
   const keys = Object.keys(value);
 
   if (
-    keys.length !== 1 ||
-    keys[0] !== "showStatusBar" ||
-    typeof value.showStatusBar !== "boolean"
+    keys.length !== 2 ||
+    !keys.includes("showStatusBar") ||
+    !keys.includes("language") ||
+    typeof value.showStatusBar !== "boolean" ||
+    !isLanguage(value.language)
   ) {
     throw new Error("Invalid application settings.");
   }
 
   return {
-    showStatusBar: value.showStatusBar
+    showStatusBar: value.showStatusBar,
+    language: value.language
   };
 }
 
@@ -165,16 +172,19 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
   const keys = Object.keys(value);
 
   if (
-    keys.length !== 2 ||
+    keys.length !== 3 ||
     !keys.includes("showStatusBar") ||
+    !keys.includes("language") ||
     !keys.includes("recentProjects") ||
-    typeof value.showStatusBar !== "boolean"
+    typeof value.showStatusBar !== "boolean" ||
+    !isLanguage(value.language)
   ) {
     throw new Error("Invalid application settings.");
   }
 
   return {
     showStatusBar: value.showStatusBar,
+    language: value.language,
     recentProjects: parseRecentProjectsForSave(value.recentProjects)
   };
 }
@@ -224,7 +234,8 @@ export async function saveApplicationSettings(
 
   return saveSettings({
     ...settings,
-    showStatusBar: settingsRequest.showStatusBar
+    showStatusBar: settingsRequest.showStatusBar,
+    language: settingsRequest.language
   });
 }
 

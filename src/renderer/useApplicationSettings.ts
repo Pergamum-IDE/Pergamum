@@ -3,14 +3,17 @@ import type {
   ApplicationSettings,
   SaveApplicationSettingsRequest
 } from "../shared/api";
+import { defaultLanguage, type Language } from "../shared/i18n";
 
 export const defaultApplicationSettings: ApplicationSettings = {
   showStatusBar: true,
+  language: defaultLanguage,
   recentProjects: []
 };
 
 interface UseApplicationSettingsResult {
   settings: ApplicationSettings;
+  displayLanguage: Language;
   isLoading: boolean;
   error: string | null;
   reloadSettings: () => Promise<void>;
@@ -25,6 +28,8 @@ export function useApplicationSettings(): UseApplicationSettingsResult {
   const [settings, setSettings] = useState<ApplicationSettings>(
     defaultApplicationSettings
   );
+  const [displayLanguage, setDisplayLanguage] =
+    useState<Language>(defaultLanguage);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
@@ -51,6 +56,7 @@ export function useApplicationSettings(): UseApplicationSettingsResult {
         }
 
         setSettings(loadedSettings);
+        setDisplayLanguage(loadedSettings.language);
         setError(null);
       })
       .catch((loadError: unknown) => {
@@ -84,6 +90,7 @@ export function useApplicationSettings(): UseApplicationSettingsResult {
 
   return {
     settings,
+    displayLanguage,
     isLoading,
     error,
     reloadSettings,
