@@ -125,6 +125,83 @@ button:active {
   white-space: nowrap;
 }
 
+.recentProjectsPanel {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  min-height: 52px;
+  padding: 8px 12px;
+  border-bottom: 1px solid #d3dae2;
+  background: #fbfcfd;
+}
+
+.recentProjectsHeader {
+  flex: 0 0 auto;
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.recentProjectsList {
+  display: flex;
+  min-width: 0;
+  gap: 6px;
+  overflow-x: auto;
+}
+
+.recentProjectItem {
+  display: flex;
+  width: 220px;
+  height: auto;
+  min-height: 38px;
+  min-width: 0;
+  flex: 0 0 auto;
+  flex-direction: column;
+  align-items: flex-start;
+  justify-content: center;
+  overflow: hidden;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  padding: 4px 8px;
+  text-align: left;
+}
+
+.recentProjectItem:hover {
+  background: #e9eef4;
+}
+
+.recentProjectItem:focus-visible {
+  outline: 2px solid #7aa7d9;
+  outline-offset: -2px;
+}
+
+.recentProjectName,
+.recentProjectPath {
+  display: block;
+  width: 100%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.recentProjectName {
+  color: #25313d;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.recentProjectPath {
+  color: #6b7785;
+  font-size: 11px;
+}
+
+.recentProjectsEmpty {
+  color: #6b7785;
+  font-size: 13px;
+}
+
 .mainArea {
   display: flex;
   flex: 1;
@@ -318,6 +395,24 @@ button:active {
 }
 
 @media (max-width: 760px) {
+  .recentProjectsPanel {
+    align-items: stretch;
+    gap: 6px;
+    max-height: 180px;
+    flex-direction: column;
+    overflow: auto;
+  }
+
+  .recentProjectsList {
+    flex-direction: column;
+    overflow: visible;
+  }
+
+  .recentProjectItem {
+    width: 100%;
+    flex: 0 0 auto;
+  }
+
   .mainArea {
     flex-direction: column;
   }

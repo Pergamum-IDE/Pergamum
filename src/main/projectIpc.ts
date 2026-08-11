@@ -9,6 +9,7 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
   PROJECT_CHANNELS,
+  type OpenRecentProjectRequest,
   type PergamumProject,
   type PergamumProjectConfig,
   type ProjectDocument,
@@ -17,6 +18,7 @@ import {
   type SaveProjectDocumentRequest,
   type SaveProjectDocumentResult
 } from "../shared/api";
+import { isRecentProjectPath, recordRecentProject } from "./settingsStore";
 
 const projectConfigFileName = "pergamum.json";
 
@@ -93,6 +95,22 @@ function parseSaveProjectDocumentRequest(
   return {
     relativePath: value.relativePath,
     content: value.content
+  };
+}
+
+function parseOpenRecentProjectRequest(
+  value: unknown
+): OpenRecentProjectRequest {
+  if (
+    !isRequestObject(value) ||
+    typeof value.path !== "string" ||
+    value.path.length === 0
+  ) {
+    throw new Error("Invalid recent project open request.");
+  }
+
+  return {
+    path: value.path
   };
 }
 
@@ -200,6 +218,39 @@ async function discoverMarkdownFiles(
   );
 }
 
+async function recordProjectRecently(project: PergamumProject): Promise<void> {
+  try {
+    await recordRecentProject({
+      path: project.rootPath,
+      name: project.name
+    });
+  } catch (error) {
+    console.warn(`Could not record recent project: ${errorDetail(error)}`);
+  }
+}
+
+async function openProjectRoot(rootPath: string): Promise<PergamumProject> {
+  const config = await readProjectConfig(rootPath);
+  const documents = await discoverMarkdownFiles(rootPath);
+  const project: PergamumProject = {
+    rootPath,
+    name: projectName(rootPath, config),
+    config,
+    documents
+  };
+
+  currentProjectState = {
+    rootPath: project.rootPath,
+    documentRelativePaths: new Set(
+      project.documents.map((document) => document.relativePath)
+    )
+  };
+
+  await recordProjectRecently(project);
+
+  return project;
+}
+
 export function registerProjectIpc(): void {
   ipcMain.handle(
     PROJECT_CHANNELS.openProject,
@@ -218,21 +269,24 @@ export function registerProjectIpc(): void {
       }
 
       const rootPath = result.filePaths[0];
-      const config = await readProjectConfig(rootPath);
-      const documents = await discoverMarkdownFiles(rootPath);
-      currentProjectState = {
-        rootPath,
-        documentRelativePaths: new Set(
-          documents.map((document) => document.relativePath)
-        )
-      };
+      return openProjectRoot(rootPath);
+    }
+  );
 
-      return {
-        rootPath,
-        name: projectName(rootPath, config),
-        config,
-        documents
-      };
+  ipcMain.handle(
+    PROJECT_CHANNELS.openRecentProject,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<PergamumProject> => {
+      const request = parseOpenRecentProjectRequest(rawRequest);
+      const isRegisteredRecentProject = await isRecentProjectPath(request.path);
+
+      if (!isRegisteredRecentProject) {
+        throw new Error("Recent project is not registered.");
+      }
+
+      return openProjectRoot(request.path);
     }
   );
 

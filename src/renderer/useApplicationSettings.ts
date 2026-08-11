@@ -1,15 +1,20 @@
 import { useEffect, useState } from "react";
-import type { ApplicationSettings } from "../shared/api";
+import type {
+  ApplicationSettings,
+  SaveApplicationSettingsRequest
+} from "../shared/api";
 
 export const defaultApplicationSettings: ApplicationSettings = {
-  showStatusBar: true
+  showStatusBar: true,
+  recentProjects: []
 };
 
 interface UseApplicationSettingsResult {
   settings: ApplicationSettings;
   isLoading: boolean;
   error: string | null;
-  saveSettings: (settings: ApplicationSettings) => Promise<void>;
+  reloadSettings: () => Promise<void>;
+  saveSettings: (settings: SaveApplicationSettingsRequest) => Promise<void>;
 }
 
 function errorMessage(error: unknown): string {
@@ -22,6 +27,18 @@ export function useApplicationSettings(): UseApplicationSettingsResult {
   );
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+
+  async function reloadSettings(): Promise<void> {
+    try {
+      const loadedSettings = await window.pergamum.settings.getSettings();
+
+      setSettings(loadedSettings);
+      setError(null);
+    } catch (reloadError) {
+      setError(errorMessage(reloadError));
+      throw reloadError;
+    }
+  }
 
   useEffect(() => {
     let isMounted = true;
@@ -55,7 +72,7 @@ export function useApplicationSettings(): UseApplicationSettingsResult {
   }, []);
 
   async function saveSettings(
-    nextSettings: ApplicationSettings
+    nextSettings: SaveApplicationSettingsRequest
   ): Promise<void> {
     const savedSettings = await window.pergamum.settings.saveSettings(
       nextSettings
@@ -69,6 +86,7 @@ export function useApplicationSettings(): UseApplicationSettingsResult {
     settings,
     isLoading,
     error,
+    reloadSettings,
     saveSettings
   };
 }
