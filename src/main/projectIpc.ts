@@ -11,10 +11,21 @@ import {
   PROJECT_CHANNELS,
   type PergamumProject,
   type PergamumProjectConfig,
-  type ProjectDocument
+  type ProjectDocument,
+  type ProjectDocumentContent,
+  type ReadProjectDocumentRequest,
+  type SaveProjectDocumentRequest,
+  type SaveProjectDocumentResult
 } from "../shared/api";
 
 const projectConfigFileName = "pergamum.json";
+
+interface CurrentProjectState {
+  rootPath: string;
+  documentRelativePaths: Set<string>;
+}
+
+let currentProjectState: CurrentProjectState | null = null;
 
 function parentWindow(event: IpcMainInvokeEvent): BrowserWindow | undefined {
   return BrowserWindow.fromWebContents(event.sender) ?? undefined;
@@ -50,6 +61,64 @@ function nodeErrorCode(error: unknown): string | undefined {
 
 function errorDetail(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown error.";
+}
+
+function isRequestObject(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function parseReadProjectDocumentRequest(
+  value: unknown
+): ReadProjectDocumentRequest {
+  if (!isRequestObject(value) || typeof value.relativePath !== "string") {
+    throw new Error("Invalid project document read request.");
+  }
+
+  return {
+    relativePath: value.relativePath
+  };
+}
+
+function parseSaveProjectDocumentRequest(
+  value: unknown
+): SaveProjectDocumentRequest {
+  if (
+    !isRequestObject(value) ||
+    typeof value.relativePath !== "string" ||
+    typeof value.content !== "string"
+  ) {
+    throw new Error("Invalid project document save request.");
+  }
+
+  return {
+    relativePath: value.relativePath,
+    content: value.content
+  };
+}
+
+function resolveProjectDocumentPath(relativePath: string): string {
+  if (!currentProjectState) {
+    throw new Error("No project is currently open.");
+  }
+
+  if (!currentProjectState.documentRelativePaths.has(relativePath)) {
+    throw new Error("Project document is not part of the current project.");
+  }
+
+  const resolvedPath = path.resolve(currentProjectState.rootPath, relativePath);
+  const resolvedRelativePath = path.relative(
+    currentProjectState.rootPath,
+    resolvedPath
+  );
+
+  if (
+    resolvedRelativePath.startsWith("..") ||
+    path.isAbsolute(resolvedRelativePath)
+  ) {
+    throw new Error("Project document path is outside the current project.");
+  }
+
+  return resolvedPath;
 }
 
 async function readProjectConfig(
@@ -114,7 +183,6 @@ async function discoverMarkdownFiles(
       }
 
       documents.push({
-        path: entryPath,
         relativePath: normalizeRelativePath(path.relative(rootPath, entryPath)),
         name: entry.name
       });
@@ -152,12 +220,51 @@ export function registerProjectIpc(): void {
       const rootPath = result.filePaths[0];
       const config = await readProjectConfig(rootPath);
       const documents = await discoverMarkdownFiles(rootPath);
+      currentProjectState = {
+        rootPath,
+        documentRelativePaths: new Set(
+          documents.map((document) => document.relativePath)
+        )
+      };
 
       return {
         rootPath,
         name: projectName(rootPath, config),
         config,
         documents
+      };
+    }
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.readProjectDocument,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<ProjectDocumentContent> => {
+      const request = parseReadProjectDocumentRequest(rawRequest);
+      const documentPath = resolveProjectDocumentPath(request.relativePath);
+      const content = await fs.readFile(documentPath, "utf8");
+
+      return {
+        relativePath: request.relativePath,
+        content
+      };
+    }
+  );
+
+  ipcMain.handle(
+    PROJECT_CHANNELS.saveProjectDocument,
+    async (
+      _event,
+      rawRequest: unknown
+    ): Promise<SaveProjectDocumentResult> => {
+      const request = parseSaveProjectDocumentRequest(rawRequest);
+      const documentPath = resolveProjectDocumentPath(request.relativePath);
+      await fs.writeFile(documentPath, request.content, "utf8");
+
+      return {
+        relativePath: request.relativePath
       };
     }
   );
