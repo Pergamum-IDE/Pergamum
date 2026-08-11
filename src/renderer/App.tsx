@@ -1,4 +1,3 @@
-import MarkdownIt from "markdown-it";
 import { useMemo, useState } from "react";
 import type { PergamumProject, ProjectDocument } from "../shared/api";
 import {
@@ -18,13 +17,9 @@ import {
 } from "./currentDocument";
 import { FileExplorer } from "./FileExplorer";
 import { MarkdownEditor } from "./MarkdownEditor";
+import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
 import { SettingsPanel } from "./SettingsPanel";
 import { useApplicationSettings } from "./useApplicationSettings";
-
-const markdown = new MarkdownIt({
-  html: false,
-  linkify: true
-});
 
 function errorMessage(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown error.";
@@ -46,7 +41,10 @@ export function App(): JSX.Element {
 
   const content = currentDocumentContent(currentDocument);
   const isDirty = isCurrentDocumentDirty(currentDocument);
-  const previewHtml = useMemo(() => markdown.render(content), [content]);
+  const previewHtml = useMemo(
+    () => markdownPreviewRenderer.render(content),
+    [content]
+  );
 
   async function openFile(): Promise<void> {
     if (isDirty && !window.confirm("Discard unsaved changes?")) {
