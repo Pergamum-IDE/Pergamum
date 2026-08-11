@@ -1,21 +1,103 @@
+export const glossaryEntryKinds = [
+  "term",
+  "person",
+  "place",
+  "organization",
+  "item",
+  "concept"
+] as const;
+
+export const glossaryFormRelations = ["variant", "alias"] as const;
+
+export const glossaryWarningPolicies = [
+  "default",
+  "ignore",
+  "warn"
+] as const;
+
+export type GlossaryEntryKind = (typeof glossaryEntryKinds)[number];
+export type GlossaryFormRelation = (typeof glossaryFormRelations)[number];
+export type GlossaryWarningPolicy =
+  (typeof glossaryWarningPolicies)[number];
+
+export type GlossaryEntryId = string;
+export type GlossaryFormId = string;
+
+interface BaseGlossaryForm {
+  id: GlossaryFormId;
+  entryId: GlossaryEntryId;
+  surface: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface GlossaryCanonicalForm extends BaseGlossaryForm {
+  relation: null;
+  warningPolicy: null;
+  isCanonical: true;
+}
+
+export interface GlossaryNonCanonicalForm extends BaseGlossaryForm {
+  relation: GlossaryFormRelation;
+  warningPolicy: GlossaryWarningPolicy;
+  isCanonical: false;
+}
+
+export type GlossaryForm =
+  | GlossaryCanonicalForm
+  | GlossaryNonCanonicalForm;
+
 export interface GlossaryEntry {
-  id: number;
-  term: string;
+  id: GlossaryEntryId;
+  kind: GlossaryEntryKind;
   description: string;
+  forms: GlossaryForm[];
   createdAt: string;
   updatedAt: string;
 }
 
 export interface CreateGlossaryEntryInput {
-  term: string;
+  kind: GlossaryEntryKind;
+  canonicalSurface: string;
   description: string;
 }
 
 export interface UpdateGlossaryEntryInput {
-  id: number;
-  term: string;
+  id: GlossaryEntryId;
+  kind: GlossaryEntryKind;
   description: string;
 }
+
+export interface GlossarySurfaceLookupInput {
+  surface: string;
+}
+
+export interface GlossarySurfaceMatch {
+  entry: GlossaryEntry;
+  form: GlossaryForm;
+}
+
+export interface NoGlossarySurfaceMatch {
+  status: "none";
+  surface: string;
+}
+
+export interface UniqueGlossarySurfaceMatch {
+  status: "unique";
+  surface: string;
+  match: GlossarySurfaceMatch;
+}
+
+export interface AmbiguousGlossarySurfaceMatch {
+  status: "ambiguous";
+  surface: string;
+  matches: GlossarySurfaceMatch[];
+}
+
+export type GlossarySurfaceLookupResult =
+  | NoGlossarySurfaceMatch
+  | UniqueGlossarySurfaceMatch
+  | AmbiguousGlossarySurfaceMatch;
 
 export class GlossaryValidationError extends Error {
   readonly code = "GLOSSARY_VALIDATION_ERROR";
@@ -26,6 +108,9 @@ export class GlossaryValidationError extends Error {
   }
 }
 
+const uuidv7Pattern =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/;
+
 function invalidGlossary(message: string): never {
   throw new GlossaryValidationError(message);
 }
@@ -34,12 +119,21 @@ function isObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
-function validatePositiveInteger(value: unknown, path: string): number {
-  if (typeof value !== "number" || !Number.isInteger(value) || value <= 0) {
-    invalidGlossary(`${path} must be a positive integer.`);
+function validateEnum<T extends string>(
+  value: unknown,
+  allowedValues: readonly T[],
+  path: string
+): T {
+  if (
+    typeof value !== "string" ||
+    !allowedValues.includes(value as T)
+  ) {
+    invalidGlossary(
+      `${path} must be one of: ${allowedValues.join(", ")}.`
+    );
   }
 
-  return value;
+  return value as T;
 }
 
 function validateNonEmptyString(value: unknown, path: string): string {
@@ -58,6 +152,14 @@ function validateString(value: unknown, path: string): string {
   return value;
 }
 
+function validateBoolean(value: unknown, path: string): boolean {
+  if (typeof value !== "boolean") {
+    invalidGlossary(`${path} must be a boolean.`);
+  }
+
+  return value;
+}
+
 function validateTimestamp(value: unknown, path: string): string {
   const timestamp = validateNonEmptyString(value, path);
 
@@ -68,8 +170,100 @@ function validateTimestamp(value: unknown, path: string): string {
   return timestamp;
 }
 
-export function validateGlossaryEntryId(value: unknown, path = "id"): number {
-  return validatePositiveInteger(value, path);
+export function validateUuidv7(value: unknown, path = "id"): string {
+  if (typeof value !== "string" || !uuidv7Pattern.test(value)) {
+    invalidGlossary(`${path} must be a lowercase UUIDv7 string.`);
+  }
+
+  return value;
+}
+
+export function validateGlossaryEntryId(
+  value: unknown,
+  path = "id"
+): GlossaryEntryId {
+  return validateUuidv7(value, path);
+}
+
+export function validateGlossaryFormId(
+  value: unknown,
+  path = "id"
+): GlossaryFormId {
+  return validateUuidv7(value, path);
+}
+
+export function validateGlossaryEntryKind(
+  value: unknown,
+  path = "kind"
+): GlossaryEntryKind {
+  return validateEnum(value, glossaryEntryKinds, path);
+}
+
+export function validateGlossaryFormRelation(
+  value: unknown,
+  path = "relation"
+): GlossaryFormRelation {
+  return validateEnum(value, glossaryFormRelations, path);
+}
+
+export function validateGlossaryWarningPolicy(
+  value: unknown,
+  path = "warningPolicy"
+): GlossaryWarningPolicy {
+  return validateEnum(value, glossaryWarningPolicies, path);
+}
+
+export function validateGlossaryForm(
+  value: unknown,
+  path = "form"
+): GlossaryForm {
+  if (!isObject(value)) {
+    invalidGlossary(`${path} must be an object.`);
+  }
+
+  const isCanonical = validateBoolean(
+    value.isCanonical,
+    `${path}.isCanonical`
+  );
+  const base = {
+    id: validateGlossaryFormId(value.id, `${path}.id`),
+    entryId: validateGlossaryEntryId(value.entryId, `${path}.entryId`),
+    surface: validateNonEmptyString(value.surface, `${path}.surface`),
+    createdAt: validateTimestamp(value.createdAt, `${path}.createdAt`),
+    updatedAt: validateTimestamp(value.updatedAt, `${path}.updatedAt`)
+  };
+
+  if (isCanonical) {
+    if (value.relation !== null) {
+      invalidGlossary(`${path}.relation must be null for canonical forms.`);
+    }
+
+    if (value.warningPolicy !== null) {
+      invalidGlossary(
+        `${path}.warningPolicy must be null for canonical forms.`
+      );
+    }
+
+    return {
+      ...base,
+      relation: null,
+      warningPolicy: null,
+      isCanonical: true
+    };
+  }
+
+  return {
+    ...base,
+    relation: validateGlossaryFormRelation(
+      value.relation,
+      `${path}.relation`
+    ),
+    warningPolicy: validateGlossaryWarningPolicy(
+      value.warningPolicy,
+      `${path}.warningPolicy`
+    ),
+    isCanonical: false
+  };
 }
 
 export function validateGlossaryEntry(
@@ -80,10 +274,36 @@ export function validateGlossaryEntry(
     invalidGlossary(`${path} must be an object.`);
   }
 
+  if (!Array.isArray(value.forms)) {
+    invalidGlossary(`${path}.forms must be an array.`);
+  }
+
+  const id = validateGlossaryEntryId(value.id, `${path}.id`);
+  const forms = value.forms.map((form, index) =>
+    validateGlossaryForm(form, `${path}.forms[${index}]`)
+  );
+
+  if (forms.length === 0) {
+    invalidGlossary(`${path}.forms must contain a canonical form.`);
+  }
+
+  for (const form of forms) {
+    if (form.entryId !== id) {
+      invalidGlossary(`${path}.forms must belong to ${path}.id.`);
+    }
+  }
+
+  const canonicalForms = forms.filter((form) => form.isCanonical);
+
+  if (canonicalForms.length !== 1) {
+    invalidGlossary(`${path}.forms must contain exactly one canonical form.`);
+  }
+
   return {
-    id: validateGlossaryEntryId(value.id, `${path}.id`),
-    term: validateNonEmptyString(value.term, `${path}.term`),
+    id,
+    kind: validateGlossaryEntryKind(value.kind, `${path}.kind`),
     description: validateString(value.description, `${path}.description`),
+    forms,
     createdAt: validateTimestamp(value.createdAt, `${path}.createdAt`),
     updatedAt: validateTimestamp(value.updatedAt, `${path}.updatedAt`)
   };
@@ -97,7 +317,11 @@ export function validateCreateGlossaryEntryInput(
   }
 
   return {
-    term: validateNonEmptyString(value.term, "term"),
+    kind: validateGlossaryEntryKind(value.kind, "kind"),
+    canonicalSurface: validateNonEmptyString(
+      value.canonicalSurface,
+      "canonicalSurface"
+    ),
     description: validateString(value.description, "description")
   };
 }
@@ -111,7 +335,19 @@ export function validateUpdateGlossaryEntryInput(
 
   return {
     id: validateGlossaryEntryId(value.id, "id"),
-    term: validateNonEmptyString(value.term, "term"),
+    kind: validateGlossaryEntryKind(value.kind, "kind"),
     description: validateString(value.description, "description")
+  };
+}
+
+export function validateGlossarySurfaceLookupInput(
+  value: unknown
+): GlossarySurfaceLookupInput {
+  if (!isObject(value)) {
+    invalidGlossary("Glossary surface lookup input must be an object.");
+  }
+
+  return {
+    surface: validateNonEmptyString(value.surface, "surface")
   };
 }

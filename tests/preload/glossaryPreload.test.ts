@@ -23,6 +23,8 @@ vi.mock("electron", () => ({
 
 await import("../../src/preload/preload");
 
+const entryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abc";
+
 describe("glossary preload API", () => {
   it("exposes glossary operations through the Pergamum API", () => {
     expect(electronMock.exposeInMainWorld).toHaveBeenCalledWith(
@@ -32,6 +34,7 @@ describe("glossary preload API", () => {
           create: expect.any(Function),
           getById: expect.any(Function),
           list: expect.any(Function),
+          lookupSurface: expect.any(Function),
           update: expect.any(Function),
           delete: expect.any(Function)
         })
@@ -47,45 +50,54 @@ describe("glossary preload API", () => {
     }
 
     await api.glossary.create({
-      term: "魔導炉",
+      kind: "item",
+      canonicalSurface: "魔導炉",
       description: "魔力を生成する設備"
     });
-    await api.glossary.getById(42);
+    await api.glossary.getById(entryId);
     await api.glossary.list();
+    await api.glossary.lookupSurface("魔導炉");
     await api.glossary.update({
-      id: 42,
-      term: "大型魔導炉",
-      description: "魔力を大量生成する設備"
+      id: entryId,
+      kind: "concept",
+      description: "魔力を大量生成する技術"
     });
-    await api.glossary.delete(42);
+    await api.glossary.delete(entryId);
 
     expect(electronMock.invoke.mock.calls).toEqual([
       [
         GLOSSARY_CHANNELS.create,
         {
-          term: "魔導炉",
+          kind: "item",
+          canonicalSurface: "魔導炉",
           description: "魔力を生成する設備"
         }
       ],
       [
         GLOSSARY_CHANNELS.getById,
         {
-          id: 42
+          id: entryId
         }
       ],
       [GLOSSARY_CHANNELS.list],
       [
+        GLOSSARY_CHANNELS.lookupSurface,
+        {
+          surface: "魔導炉"
+        }
+      ],
+      [
         GLOSSARY_CHANNELS.update,
         {
-          id: 42,
-          term: "大型魔導炉",
-          description: "魔力を大量生成する設備"
+          id: entryId,
+          kind: "concept",
+          description: "魔力を大量生成する技術"
         }
       ],
       [
         GLOSSARY_CHANNELS.delete,
         {
-          id: 42
+          id: entryId
         }
       ]
     ]);

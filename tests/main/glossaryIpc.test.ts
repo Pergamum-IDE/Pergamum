@@ -3,7 +3,11 @@ import os from "node:os";
 import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { GLOSSARY_CHANNELS } from "../../src/shared/api";
-import { GlossaryValidationError } from "../../src/shared/glossary";
+import {
+  GlossaryValidationError,
+  type GlossaryEntry,
+  type GlossaryForm
+} from "../../src/shared/glossary";
 import { GlossaryStoreError } from "../../src/main/glossaryStore";
 import { projectDatabaseFileName } from "../../src/main/projectDatabase";
 
@@ -21,6 +25,8 @@ import {
   createGlossaryIpcHandlers,
   registerGlossaryIpc
 } from "../../src/main/glossaryIpc";
+
+const missingEntryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abc";
 
 describe("glossary IPC", () => {
   let projectRootPath: string;
@@ -46,20 +52,26 @@ describe("glossary IPC", () => {
       GLOSSARY_CHANNELS.create,
       GLOSSARY_CHANNELS.getById,
       GLOSSARY_CHANNELS.list,
+      GLOSSARY_CHANNELS.lookupSurface,
       GLOSSARY_CHANNELS.update,
       GLOSSARY_CHANNELS.delete
     ]);
   });
 
-  it("runs glossary CRUD operations against the current project database", async () => {
+  it("runs glossary operations against the current project database", async () => {
     const handlers = createGlossaryIpcHandlers(() => projectRootPath);
     const createdEntry = await handlers.create({
-      term: "王都アルセリア",
+      kind: "place",
+      canonicalSurface: "王都アルセリア",
       description: "王国の首都"
     });
 
-    expect(createdEntry.id).toBeGreaterThan(0);
-    expect(createdEntry.term).toBe("王都アルセリア");
+    expect(createdEntry.id).toMatch(
+      /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/
+    );
+    const canonicalForm = canonicalFormOf(createdEntry);
+
+    expect(canonicalForm.surface).toBe("王都アルセリア");
     await expect(
       fs.access(path.join(projectRootPath, projectDatabaseFileName))
     ).resolves.toBeUndefined();
@@ -70,17 +82,30 @@ describe("glossary IPC", () => {
       })
     ).resolves.toEqual(createdEntry);
     await expect(handlers.list()).resolves.toEqual([createdEntry]);
+    await expect(
+      handlers.lookupSurface({
+        surface: "王都アルセリア"
+      })
+    ).resolves.toEqual({
+      status: "unique",
+      surface: "王都アルセリア",
+      match: {
+        entry: createdEntry,
+        form: canonicalForm
+      }
+    });
 
     const updatedEntry = await handlers.update({
       id: createdEntry.id,
-      term: "アルセリア王都",
+      kind: "concept",
       description: "改稿後の首都設定"
     });
 
     expect(updatedEntry).toMatchObject({
       id: createdEntry.id,
-      term: "アルセリア王都",
-      description: "改稿後の首都設定"
+      kind: "concept",
+      description: "改稿後の首都設定",
+      forms: createdEntry.forms
     });
 
     await handlers.delete({
@@ -109,7 +134,8 @@ describe("glossary IPC", () => {
 
     await expect(
       handlers.create({
-        term: " ",
+        kind: "term",
+        canonicalSurface: " ",
         description: "invalid"
       })
     ).rejects.toBeInstanceOf(GlossaryValidationError);
@@ -120,8 +146,16 @@ describe("glossary IPC", () => {
 
     await expect(
       handlers.delete({
-        id: 999
+        id: missingEntryId
       })
     ).rejects.toBeInstanceOf(GlossaryStoreError);
   });
 });
+
+function canonicalFormOf(entry: GlossaryEntry): GlossaryForm {
+  const canonicalForms = entry.forms.filter((form) => form.isCanonical);
+
+  expect(canonicalForms).toHaveLength(1);
+
+  return canonicalForms[0];
+}

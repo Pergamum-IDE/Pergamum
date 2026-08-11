@@ -63,6 +63,18 @@ interface Migration {
   migrate(database: ProjectDatabase): Promise<void>;
 }
 
+interface TableColumnRow extends Record<string, unknown> {
+  name: unknown;
+  type: unknown;
+  pk: unknown;
+}
+
+interface IndexListRow extends Record<string, unknown> {
+  name: unknown;
+  unique: unknown;
+  partial: unknown;
+}
+
 function errorDetail(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown error.";
 }
@@ -262,15 +274,73 @@ async function readSchemaVersion(
   return row.user_version;
 }
 
+function uuidv7SqlCheck(columnName: string): string {
+  const hex = "[0-9a-f]";
+  const uuidv7GlobPattern = [
+    hex.repeat(8),
+    hex.repeat(4),
+    `7${hex.repeat(3)}`,
+    `[89ab]${hex.repeat(3)}`,
+    hex.repeat(12)
+  ].join("-");
+
+  return [
+    `${columnName} = lower(${columnName})`,
+    `${columnName} GLOB '${uuidv7GlobPattern}'`
+  ].join(" AND ");
+}
+
 async function migrateToVersionOne(database: ProjectDatabase): Promise<void> {
   await database.exec(`
-    CREATE TABLE IF NOT EXISTS glossary_entries (
-      id INTEGER PRIMARY KEY,
-      term TEXT NOT NULL CHECK (length(trim(term)) > 0),
+    CREATE TABLE glossary_entries (
+      id TEXT PRIMARY KEY CHECK (${uuidv7SqlCheck("id")}),
+      kind TEXT NOT NULL CHECK (
+        kind IN ('term', 'person', 'place', 'organization', 'item', 'concept')
+      ),
       description TEXT NOT NULL,
       created_at TEXT NOT NULL,
       updated_at TEXT NOT NULL
     ) STRICT;
+
+    CREATE TABLE glossary_forms (
+      id TEXT PRIMARY KEY CHECK (${uuidv7SqlCheck("id")}),
+      entry_id TEXT NOT NULL
+        CHECK (${uuidv7SqlCheck("entry_id")})
+        REFERENCES glossary_entries(id) ON DELETE CASCADE,
+      surface TEXT NOT NULL CHECK (length(trim(surface)) > 0),
+      relation TEXT CHECK (
+        relation IS NULL OR relation IN ('variant', 'alias')
+      ),
+      warning_policy TEXT CHECK (
+        warning_policy IS NULL OR warning_policy IN ('default', 'ignore', 'warn')
+      ),
+      is_canonical INTEGER NOT NULL CHECK (is_canonical IN (0, 1)),
+      created_at TEXT NOT NULL,
+      updated_at TEXT NOT NULL,
+      UNIQUE(entry_id, surface),
+      CHECK (
+        (
+          is_canonical = 1
+          AND relation IS NULL
+          AND warning_policy IS NULL
+        )
+        OR
+        (
+          is_canonical = 0
+          AND relation IS NOT NULL
+          AND warning_policy IS NOT NULL
+          AND relation IN ('variant', 'alias')
+          AND warning_policy IN ('default', 'ignore', 'warn')
+        )
+      )
+    ) STRICT;
+
+    CREATE INDEX glossary_forms_surface_idx
+      ON glossary_forms(surface);
+
+    CREATE UNIQUE INDEX glossary_forms_one_canonical_per_entry_idx
+      ON glossary_forms(entry_id)
+      WHERE is_canonical = 1;
   `);
 }
 
@@ -280,6 +350,113 @@ const migrations: readonly Migration[] = [
     migrate: migrateToVersionOne
   }
 ];
+
+function columnDetail(row: TableColumnRow): [string, string, number] {
+  if (
+    typeof row.name !== "string" ||
+    typeof row.type !== "string" ||
+    typeof row.pk !== "number"
+  ) {
+    throw new ProjectDatabaseError(
+      "PROJECT_DATABASE_SCHEMA_ERROR",
+      "Could not read project database table schema."
+    );
+  }
+
+  return [row.name, row.type, row.pk];
+}
+
+async function assertTableSchema(
+  database: ProjectDatabase,
+  tableName: "glossary_entries" | "glossary_forms",
+  expectedColumns: readonly [string, string, number][]
+): Promise<void> {
+  const columns = await database.all<TableColumnRow>(
+    `PRAGMA table_info(${tableName})`
+  );
+  const actualColumns = columns.map(columnDetail);
+
+  if (JSON.stringify(actualColumns) !== JSON.stringify(expectedColumns)) {
+    throw new ProjectDatabaseError(
+      "PROJECT_DATABASE_SCHEMA_ERROR",
+      `Project database schema is incompatible with finalized schema version 1. The ${tableName} table does not match the expected structure; prototype development databases must be recreated.`
+    );
+  }
+}
+
+function readIndexFlag(value: unknown, column: string): number {
+  if (typeof value !== "number") {
+    throw new ProjectDatabaseError(
+      "PROJECT_DATABASE_SCHEMA_ERROR",
+      `Could not read project database index ${column} flag.`
+    );
+  }
+
+  return value;
+}
+
+async function assertGlossaryFormIndex(
+  database: ProjectDatabase,
+  indexName: string,
+  expectedUnique: number,
+  expectedPartial: number
+): Promise<void> {
+  const indexes = await database.all<IndexListRow>(
+    "PRAGMA index_list(glossary_forms)"
+  );
+  const index = indexes.find((row) => row.name === indexName);
+
+  if (!index) {
+    throw new ProjectDatabaseError(
+      "PROJECT_DATABASE_SCHEMA_ERROR",
+      `Project database schema is missing required index ${indexName}.`
+    );
+  }
+
+  if (
+    readIndexFlag(index.unique, "unique") !== expectedUnique ||
+    readIndexFlag(index.partial, "partial") !== expectedPartial
+  ) {
+    throw new ProjectDatabaseError(
+      "PROJECT_DATABASE_SCHEMA_ERROR",
+      `Project database index ${indexName} does not match the expected structure.`
+    );
+  }
+}
+
+async function validateProjectDatabaseSchema(
+  database: ProjectDatabase
+): Promise<void> {
+  await assertTableSchema(database, "glossary_entries", [
+    ["id", "TEXT", 1],
+    ["kind", "TEXT", 0],
+    ["description", "TEXT", 0],
+    ["created_at", "TEXT", 0],
+    ["updated_at", "TEXT", 0]
+  ]);
+  await assertTableSchema(database, "glossary_forms", [
+    ["id", "TEXT", 1],
+    ["entry_id", "TEXT", 0],
+    ["surface", "TEXT", 0],
+    ["relation", "TEXT", 0],
+    ["warning_policy", "TEXT", 0],
+    ["is_canonical", "INTEGER", 0],
+    ["created_at", "TEXT", 0],
+    ["updated_at", "TEXT", 0]
+  ]);
+  await assertGlossaryFormIndex(
+    database,
+    "glossary_forms_surface_idx",
+    0,
+    0
+  );
+  await assertGlossaryFormIndex(
+    database,
+    "glossary_forms_one_canonical_per_entry_idx",
+    1,
+    1
+  );
+}
 
 async function initializeProjectDatabase(
   database: ProjectDatabase
@@ -313,6 +490,8 @@ async function initializeProjectDatabase(
       );
     }
   }
+
+  await validateProjectDatabaseSchema(database);
 }
 
 export async function openProjectDatabase(
