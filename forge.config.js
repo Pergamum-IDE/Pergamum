@@ -1,12 +1,66 @@
 const { FusesPlugin } = require('@electron-forge/plugin-fuses');
 const { FuseV1Options, FuseVersion } = require('@electron/fuses');
+const path = require('node:path');
 
 const appIcon = 'assets/icon';
+const packagedExternalDependencies = [
+  'node_modules/better-sqlite3',
+  'node_modules/bindings',
+  'node_modules/file-uri-to-path',
+];
+
+function shouldPackageFile(file) {
+  if (!file) {
+    return false;
+  }
+
+  const normalizedFile = toPackageRelativePath(file);
+
+  if (normalizedFile === '/package.json') {
+    return true;
+  }
+
+  if (normalizedFile === '/.vite' || normalizedFile.startsWith('/.vite/')) {
+    return true;
+  }
+
+  if (normalizedFile === '/node_modules') {
+    return true;
+  }
+
+  return packagedExternalDependencies.some((dependencyPath) => {
+    const normalizedDependencyPath = `/${dependencyPath}`;
+
+    return (
+      normalizedFile === normalizedDependencyPath ||
+      normalizedFile.startsWith(`${normalizedDependencyPath}/`)
+    );
+  });
+}
+
+function toPackageRelativePath(file) {
+  const normalizedFile = file.replace(/\\/g, '/');
+
+  if (normalizedFile.startsWith('/')) {
+    return normalizedFile;
+  }
+
+  if (path.isAbsolute(file)) {
+    const relativeFile = path.relative(__dirname, file).replace(/\\/g, '/');
+
+    if (!relativeFile.startsWith('..')) {
+      return `/${relativeFile}`;
+    }
+  }
+
+  return `/${normalizedFile}`;
+}
 
 module.exports = {
   packagerConfig: {
     asar: true,
     icon: appIcon,
+    ignore: (file) => (file ? !shouldPackageFile(file) : false),
   },
   rebuildConfig: {},
   makers: [
