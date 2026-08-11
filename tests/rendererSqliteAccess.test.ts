@@ -9,7 +9,11 @@ const forbiddenPatterns = [
   /\bfrom\s+["']better-sqlite3["']/,
   /\brequire\(\s*["']better-sqlite3["']\s*\)/,
   /\bfrom\s+["']node:sqlite["']/,
-  /\brequire\(\s*["']node:sqlite["']\s*\)/
+  /\brequire\(\s*["']node:sqlite["']\s*\)/,
+  /\bfrom\s+["'][^"']*main\/projectDatabase["']/,
+  /\brequire\(\s*["'][^"']*main\/projectDatabase["']\s*\)/,
+  /\bfrom\s+["'][^"']*main\/glossaryStore["']/,
+  /\brequire\(\s*["'][^"']*main\/glossaryStore["']\s*\)/
 ];
 
 async function listSourceFiles(directoryPath: string): Promise<string[]> {

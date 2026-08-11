@@ -3,6 +3,11 @@ import type {
   ProjectSettings,
   SaveApplicationSettingsRequest
 } from "./settings";
+import type {
+  CreateGlossaryEntryInput,
+  GlossaryEntry,
+  UpdateGlossaryEntryInput
+} from "./glossary";
 
 export type {
   ApplicationSettings,
@@ -36,6 +41,14 @@ export const PROJECT_CHANNELS = {
 export const SETTINGS_CHANNELS = {
   getSettings: "settings:getSettings",
   saveSettings: "settings:saveSettings"
+} as const;
+
+export const GLOSSARY_CHANNELS = {
+  create: "glossary:create",
+  getById: "glossary:getById",
+  list: "glossary:list",
+  update: "glossary:update",
+  delete: "glossary:delete"
 } as const;
 
 export interface MarkdownFile {
@@ -91,6 +104,10 @@ export interface OpenRecentProjectRequest {
   path: string;
 }
 
+export interface GlossaryEntryIdRequest {
+  id: number;
+}
+
 export interface PergamumApi {
   files: {
     openMarkdown: () => Promise<MarkdownFile | null>;
@@ -115,5 +132,12 @@ export interface PergamumApi {
     saveSettings: (
       settings: SaveApplicationSettingsRequest
     ) => Promise<ApplicationSettings>;
+  };
+  glossary: {
+    create: (input: CreateGlossaryEntryInput) => Promise<GlossaryEntry>;
+    getById: (id: number) => Promise<GlossaryEntry | null>;
+    list: () => Promise<GlossaryEntry[]>;
+    update: (input: UpdateGlossaryEntryInput) => Promise<GlossaryEntry>;
+    delete: (id: number) => Promise<void>;
   };
 }

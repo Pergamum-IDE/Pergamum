@@ -2,6 +2,7 @@ import { app, BrowserWindow } from "electron";
 import started from "electron-squirrel-startup";
 import path from "node:path";
 import { registerFileIpc } from "./fileIpc";
+import { registerGlossaryIpc } from "./glossaryIpc";
 import { installApplicationMenu } from "./menu";
 import { registerProjectIpc } from "./projectIpc";
 import { registerSettingsIpc } from "./settingsIpc";
@@ -44,6 +45,7 @@ async function createMainWindow(): Promise<void> {
 app.whenReady().then(async () => {
   await installApplicationMenu();
   registerFileIpc();
+  registerGlossaryIpc();
   registerProjectIpc();
   registerSettingsIpc();
   void createMainWindow();
