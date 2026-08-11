@@ -28,6 +28,14 @@ interface CurrentProjectState {
 
 let currentProjectState: CurrentProjectState | null = null;
 
+export function requireCurrentProjectRootPath(): string {
+  if (!currentProjectState) {
+    throw new Error("No project is currently open.");
+  }
+
+  return currentProjectState.rootPath;
+}
+
 function parentWindow(event: IpcMainInvokeEvent): BrowserWindow | undefined {
   return BrowserWindow.fromWebContents(event.sender) ?? undefined;
 }

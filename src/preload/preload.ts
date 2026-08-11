@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from "electron";
 import {
   FILE_CHANNELS,
+  GLOSSARY_CHANNELS,
   PROJECT_CHANNELS,
   SETTINGS_CHANNELS,
   type PergamumApi
@@ -35,6 +36,19 @@ const pergamumApi: PergamumApi = {
     getSettings: () => ipcRenderer.invoke(SETTINGS_CHANNELS.getSettings),
     saveSettings: (settings) =>
       ipcRenderer.invoke(SETTINGS_CHANNELS.saveSettings, settings)
+  },
+  glossary: {
+    create: (input) => ipcRenderer.invoke(GLOSSARY_CHANNELS.create, input),
+    getById: (id) =>
+      ipcRenderer.invoke(GLOSSARY_CHANNELS.getById, {
+        id
+      }),
+    list: () => ipcRenderer.invoke(GLOSSARY_CHANNELS.list),
+    update: (input) => ipcRenderer.invoke(GLOSSARY_CHANNELS.update, input),
+    delete: (id) =>
+      ipcRenderer.invoke(GLOSSARY_CHANNELS.delete, {
+        id
+      })
   }
 };
 
