@@ -21,7 +21,7 @@ SQLite → Store → IPC → Preload → Renderer
 
 一方、Renderer 内部の横方向の構造――ユーザーの操作がどこを通ってどこへ届くのか――は明文化されていない。Phase 2-3 では Glossary を Special Tab として Main Area に出し、Navigation History と Command Registry を導入する。これらは相互に型を共有するため、実装順に関わらず**語彙と不変条件を先に固定しないと、後続 Issue が前段の決定を作り直すことになる**。
 
-本 ADR は Pergamum の**操作モデルの憲法**を定める。個別の API シグネチャは定めない（それは Issue #41〜#43 の裁量）。定めるのは、それらが満たさなければならない不変条件である。
+本 ADR は Pergamum の**操作モデルの憲法**を定める。個別の API シグネチャは定めない（それは Issue #44 以降の裁量）。定めるのは、それらが満たさなければならない不変条件である。
 
 規定する因果関係は次の一本である。
 
@@ -139,13 +139,13 @@ I-2 が禁じるのは状態の保持であり、I-3 が許すのは操作の起
 
 理由: Editor 種別は今後増加する。文字列を一次表現にすると `startsWith('glossary:')` や `split(':')` が各所に発生し、種別追加時に網羅性が保証されない。union であれば TypeScript が exhaustiveness を検査する。
 
-既存 `OpenDocumentsState` の文字列 ID は、Issue #41 / #42 で serialization 境界へ移す。
+既存 `OpenDocumentsState` の文字列 ID は、Issue #44 で serialization 境界へ移す。
 
 #### I-10 の一般性
 
 I-10 は `projectDocument` 固有の規則ではなく、Project に属するあらゆるオブジェクトに適用される。将来 DB-backed な Editor（timeline event、character、location、plot thread 等）が追加された場合も、追加の条項を必要とせず I-10 に乗る。
 
-Project Context 変更時に Navigation History をどう扱うかは Issue #43 の判断である。History には project scope の項目と application scope の項目（`file`）が混在するため、字面に忠実な部分的除去は I-33（除外前後の順序と現在位置の整合）の作業を再度要求する。**History 全体を破棄する**のが実装上も意味論上も素直であり、本 ADR はそれを推奨するが禁止も強制もしない。
+Project Context 変更時に Navigation History をどう扱うかは、Navigation History 実装 Issue の判断である。History には project scope の項目と application scope の項目（`file`）が混在するため、字面に忠実な部分的除去は I-33（除外前後の順序と現在位置の整合）の作業を再度要求する。**History 全体を破棄する**のが実装上も意味論上も素直であり、本 ADR はそれを推奨するが禁止も強制もしない。
 
 #### I-11 の境界
 
@@ -157,7 +157,7 @@ Context を越えて Editor を参照する必要が生じた場合に必要と�
 
 I-7 は Pergamum の identity 規則上の一意性を要求するものであり、**ファイルシステム上の物理的同一性の判定までは要求しない。** symlink、junction、UNC パス、case-insensitive な volume 上の表記差などによって同一実体を指す複数の EditorId が生じ得ることは、本 ADR では許容する。
 
-Issue #41 で最低限決めるのは以下である。
+Issue #44 で最低限決めるのは以下である。
 
 - project.rootPath 配下は `projectDocument`、それ以外は `file` として、両者が重複しないこと
 - `file` の path canonicalization の範囲（relative / absolute、`.` と `..`、separator、drive 表記、case のどこまでを正規化するか）
@@ -171,11 +171,11 @@ TypeScript の通常の union では、任意の箇所での literal 構築を�
 raw input + active Project Context → canonicalization → EditorId
 ```
 
-という入口が一つであることが要求であり、手段は規定しない。factory 関数、branded type、lint rule のいずれをどこまで用いるかは Issue #41 で検討する。
+という入口が一つであることが要求であり、手段は規定しない。factory 関数、branded type、lint rule のいずれをどこまで用いるかは Issue #44 で検討する。
 
 **正規化は active Project Context の下で行われる。**同一の物理ファイルは、Project Context によって `projectDocument` になるか `file` になるかが変わるため、構築境界は path のみの純関数として実装できない。Project Context は暗黙のグローバル参照ではなく明示的な入力として渡すこと。
 
-この帰結として、Issue #41 は「型を新設する Issue」ではなく「既存の ID 生成箇所を構築境界へ集約する Issue」になる見込みである。
+この帰結として、Issue #44 は「型を新設する Issue」ではなく「既存の ID 生成箇所を構築境界へ集約する Issue」になる見込みである。
 
 ### 3. Command
 
@@ -216,7 +216,7 @@ editor.save
 - **I-24** Editor 実体を開く低レベル経路は**ただ一つ**である。Navigator、Command Palette、Shortcut、Navigation History、Session Restore、Plugin、AI はすべてこの経路を通る。
 - **I-25** Editor を開くことは、それ自体では Navigation History への記録を含意しない。履歴に積むか否かは呼び出し側の意図として明示される。
 
-I-25 は、History back/forward および Session Restore が「開く」操作を再帰的に履歴へ積む事故を防ぐ。意図の表現方法（オプション引数か、上位関数の分離か）は Issue #42 / #43 で決める。
+I-25 は、History back/forward および Session Restore が「開く」操作を再帰的に履歴へ積む事故を防ぐ。意図の表現方法（オプション引数か、上位関数の分離か）は Editor opening / Navigation History 実装 Issue で決める。
 
 ### 6. Navigation
 
@@ -229,7 +229,7 @@ I-25 は、History back/forward および Session Restore が「開く」操作�
 - **I-32** Navigation 操作は直列化される。要求順を保った逐次実行とし、resolve 中に次の Navigation 操作を並行実行してはならない。
 - **I-33** 除外の前後で、残存する履歴項目の相対順序および現在位置の整合性は保たれる。
 
-I-29 の根拠: 復帰可能な障害で履歴を永久に失うことを防ぐ。この区別のため、resolve の結果は成否二値では表現できず、少なくとも「解決済み」「確定的に不在」「一時的に不可用」の区別が必要になる。具体的な結果型は Issue #43 に委ねる。
+I-29 の根拠: 復帰可能な障害で履歴を永久に失うことを防ぐ。この区別のため、resolve の結果は成否二値では表現できず、少なくとも「解決済み」「確定的に不在」「一時的に不可用」の区別が必要になる。具体的な結果型は Navigation History 実装 Issue に委ねる。
 
 I-30 の根拠: 一件のみの除外では、同一オブジェクトが複数回現れる履歴で同じ失敗を繰り返す。
 
@@ -253,7 +253,7 @@ Markdown はファイル保存、Glossary は DB write であり、保存の意�
   - 保存軸: `clean` / `dirty` / `saving` / `saveFailed`
   - 同期軸: `fresh` / `stale` / `deleted`
 - **I-38** 「衝突」は独立した状態ではなく、`dirty` かつ `stale` の導出である。
-- **I-39** Issue #42 の時点では型のみを導入し、遷移の実装は行わない。
+- **I-39** Editor state 型導入 Issue の時点では型のみを導入し、遷移の実装は行わない。
 
 I-37 は全 Editor に両軸の保持を要求しない。read-only Editor（Search 結果、Git diff、Timeline 閲覧、生成された Preview 等）は、いずれの軸も持たなくてよい。軸の分離のみを規定するのは、`dirty` と `stale` が独立に成立し得る（編集中の entry が他経路で書き換えられる）ためである。
 
@@ -279,7 +279,7 @@ I-37 は全 Editor に両軸の保持を要求しない。read-only Editor（Sea
 
 ### 支払うもの
 
-- Issue #41 のスコープが「Command Registry の箱」から「型契約の確定」へ拡大する。着手前の設計コストが増える。
+- Issue #44 のスコープが「Command Registry の箱」から「型契約の確定」へ拡大する。着手前の設計コストが増える。
 - I-5 により、EditorId の変更は広範囲へ波及する。型を一つに集約した代償である。
 - I-11 により、Context を越えて Editor を参照する機能（recent files、横断検索等）は EditorId 単体では実装できず、Context 識別子との対を扱う必要がある。
 - I-24 により、Editor を開く処理の追加は常に単一経路の改修となる。局所的な近道が取れない。
@@ -288,9 +288,10 @@ I-37 は全 Editor に両軸の保持を要求しない。read-only Editor（Sea
 ### リスク
 
 - I-37 の2軸は、将来 domain が増えたときに3軸目を要求する可能性がある。軸の追加は型の変更であり I-5 と同様に波及する。
-- I-22 により、Command ID の設計ミスは公開後に安価に直せない。Issue #41 で ID を切る際は Reviewer が命名を個別に確認する。
+- I-22 により、Command ID の設計ミスは公開後に安価に直せない。Command Registry 実装 Issue で ID を切る際は Reviewer が命名を個別に確認する。
 - I-12 の構築境界は、迂回するコードが混入すると静かに破れる。強制手段を持たない場合、I-7 と I-6 は実装規律のみに依存する。
 - I-7 が物理的同一性を要求しないため、symlink 等を経由して同一実体に対し複数の Editor が開き得る。双方が `dirty` になった場合、後に保存した側が他方の変更を上書きする。同期軸の `stale` による検出は可能だが、防止はできない。本 ADR はこれを許容する。
+- filesystem の case sensitivity は Issue #44 時点では実 filesystem probing を行わず、Windows drive path および UNC path は case-insensitive、POSIX path は case-sensitive という path 形式による近似で扱う。macOS の case-sensitive volume、Samba、その他の特殊な mount の実挙動とは一致しない可能性がある。
 - I-10 は project-scoped state の再利用のみを禁じており、`untitled` および project 外の `file` の扱いには言及していない。`untitled` は durable でないため（I-13）、Project Context の切替時に未保存内容が失われる経路が残る。draft recovery を実装するか否かは別途判断する。
 
 ---
@@ -300,11 +301,11 @@ I-37 は全 Editor に両軸の保持を要求しない。read-only Editor（Sea
 本 ADR は以下を定めない。いずれも意図的な保留である。
 
 - 具体的な関数シグネチャおよびモジュール構成
-- EditorId の serialization format、および `file` の path canonicalization の具体的範囲（Issue #41）
-- Navigation の resolve 結果型、および Project Context 変更時の Navigation History の扱い（Issue #43）
+- EditorId の serialization format、および `file` の path canonicalization の具体的範囲（Issue #44）
+- Navigation の resolve 結果型、および Project Context 変更時の Navigation History の扱い（Navigation History 実装 Issue）
 - Context を越えた Editor 参照型（`{ context, editorId }` 相当）の定義。必要になった時点で決定する。
-- Command Palette の検索方式、MRU 順（Issue #44）
-- Glossary 編集の undo 実装、トランザクション境界（Issue #45）
+- Command Palette の検索方式、MRU 順（Command Palette 実装 Issue）
+- Glossary 編集の undo 実装、トランザクション境界（Glossary 編集実装 Issue）
 - **Command ID の namespace 予約**（built-in と Plugin 提供 Command の衝突回避）。Plugin Foundation 着手時に決定する。
 - Design Token および Theme。操作意味論と視覚意味論は変更理由が異なるため混在させない。Theme 対応の着手時に **ADR-0004: Visual Design System / Theme Architecture** として分離する。
 

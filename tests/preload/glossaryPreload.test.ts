@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  FILE_CHANNELS,
   GLOSSARY_CHANNELS,
   type PergamumApi
 } from "../../src/shared/api";
@@ -101,5 +102,24 @@ describe("glossary preload API", () => {
         }
       ]
     ]);
+  });
+
+  it("does not send project root information in standalone save requests", async () => {
+    electronMock.invoke.mockClear();
+    const api = electronMock.exposedApi;
+
+    if (!api) {
+      throw new Error("Pergamum API was not exposed.");
+    }
+
+    await api.files.saveMarkdown(null, "content");
+
+    expect(electronMock.invoke).toHaveBeenCalledWith(
+      FILE_CHANNELS.saveMarkdown,
+      {
+        path: null,
+        content: "content"
+      }
+    );
   });
 });

@@ -72,6 +72,7 @@ export const jaTranslations = {
   "status.projectOpenFailed": "プロジェクトを開けませんでした: {message}",
   "status.recentProjectOpenFailed": "最近のプロジェクトを開けませんでした: {message}",
   "status.saveCanceled": "保存をキャンセルしました",
+  "status.saveFailed": "保存できませんでした: {message}",
   "status.saveAsTargetAlreadyOpen": "保存しました。ただし保存先が別のタブで開かれているため、このタブはUntitledのまま残しました: {path}",
   "status.savedPath": "{path} を保存しました",
   "status.settingsReloadFailed": "設定の再読み込みに失敗しました: {message}",

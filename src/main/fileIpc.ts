@@ -14,6 +14,8 @@ import {
   type SaveMarkdownRequest,
   type SaveMarkdownResult
 } from "../shared/api";
+import { createEditorIdForPath } from "../shared/editorId";
+import { currentProjectRootPath } from "./projectIpc";
 
 const markdownFilters = [
   {
@@ -37,7 +39,6 @@ function parseSaveRequest(value: unknown): SaveMarkdownRequest {
   }
 
   const maybePath = "path" in value ? value.path : null;
-
   if (maybePath !== null && typeof maybePath !== "string") {
     throw new Error("Invalid save path.");
   }
@@ -54,6 +55,25 @@ function ensureMarkdownExtension(filePath: string): string {
   }
 
   return `${filePath}.md`;
+}
+
+function assertStandaloneSaveTargetAllowed(
+  filePath: string,
+  projectRootPath: string | null
+): void {
+  if (!projectRootPath) {
+    return;
+  }
+
+  const editorId = createEditorIdForPath(filePath, {
+    rootPath: projectRootPath
+  });
+
+  if (editorId.kind === "projectDocument") {
+    throw new Error(
+      "Standalone save inside the active project is not supported."
+    );
+  }
 }
 
 export function registerFileIpc(): void {
@@ -109,6 +129,7 @@ export function registerFileIpc(): void {
       }
 
       filePath = ensureMarkdownExtension(filePath);
+      assertStandaloneSaveTargetAllowed(filePath, currentProjectRootPath());
       await fs.writeFile(filePath, request.content, "utf8");
 
       return {

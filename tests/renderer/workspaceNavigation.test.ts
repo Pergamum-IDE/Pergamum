@@ -4,6 +4,11 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GlossaryEntry } from "../../src/shared/glossary";
 import type { PergamumProject } from "../../src/shared/api";
+import {
+  createProjectDocumentEditorId,
+  editorIdEquals,
+  type ActiveProjectContext
+} from "../../src/shared/editorId";
 import type { Translate } from "../../src/shared/i18n";
 import { ActivityBar } from "../../src/renderer/ActivityBar";
 import { createProjectDocument } from "../../src/renderer/currentDocument";
@@ -44,6 +49,10 @@ const project: PergamumProject = {
       name: "chapter-02.md"
     }
   ]
+};
+
+const projectContext: ActiveProjectContext = {
+  rootPath: project.rootPath
 };
 
 const timestamp = "2026-01-01T00:00:00.000Z";
@@ -420,7 +429,10 @@ describe("workspace navigation", () => {
 
   it("keeps Sidebar mode switching independent from open document tabs", () => {
     const document = createProjectDocument(project.documents[0], "content");
-    const openDocumentsState = createOpenDocumentsStateWithDocument(document);
+    const openDocumentsState = createOpenDocumentsStateWithDocument(
+      document,
+      projectContext
+    );
     const tabsBeforeSwitch = documentTabs(openDocumentsState);
 
     const searchMode = selectSidebarMode("search");
@@ -430,12 +442,20 @@ describe("workspace navigation", () => {
     expect(searchMode).toBe("search");
     expect(glossaryMode).toBe("glossary");
     expect(tabsAfterSwitch).toEqual(tabsBeforeSwitch);
-    expect(openDocumentsState.activeDocumentId).toBe("project:chapter-01.md");
+    expect(
+      editorIdEquals(
+        openDocumentsState.activeDocumentId,
+        createProjectDocumentEditorId("chapter-01.md", projectContext)
+      )
+    ).toBe(true);
   });
 
   it("keeps glossary selection independent from open document tabs", () => {
     const document = createProjectDocument(project.documents[0], "content");
-    const openDocumentsState = createOpenDocumentsStateWithDocument(document);
+    const openDocumentsState = createOpenDocumentsStateWithDocument(
+      document,
+      projectContext
+    );
     const tabsBeforeSelection = documentTabs(openDocumentsState);
     const onSelectEntry = vi.fn();
     const element = GlossarySidebarView({
@@ -457,7 +477,12 @@ describe("workspace navigation", () => {
 
     expect(onSelectEntry).toHaveBeenCalledWith("entry-alpha");
     expect(documentTabs(openDocumentsState)).toEqual(tabsBeforeSelection);
-    expect(openDocumentsState.activeDocumentId).toBe("project:chapter-01.md");
+    expect(
+      editorIdEquals(
+        openDocumentsState.activeDocumentId,
+        createProjectDocumentEditorId("chapter-01.md", projectContext)
+      )
+    ).toBe(true);
   });
 
   it("keeps renderer glossary code isolated from SQLite and main process persistence modules", () => {

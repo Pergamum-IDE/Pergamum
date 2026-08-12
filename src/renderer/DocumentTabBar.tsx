@@ -1,11 +1,16 @@
 import type { Translate } from "../shared/i18n";
-import type { DocumentTab, OpenDocumentId } from "./openDocuments";
+import {
+  editorIdEquals,
+  serializeEditorId,
+  type EditorId
+} from "../shared/editorId";
+import type { DocumentTab } from "./openDocuments";
 
 interface DocumentTabBarProps {
   tabs: DocumentTab[];
-  activeDocumentId: OpenDocumentId;
+  activeDocumentId: EditorId;
   translate: Translate;
-  onSelectDocument: (documentId: OpenDocumentId) => void;
+  onSelectDocument: (documentId: EditorId) => void;
 }
 
 export function DocumentTabBar({
@@ -21,11 +26,11 @@ export function DocumentTabBar({
       role="tablist"
     >
       {tabs.map((tab) => {
-        const isActive = tab.id === activeDocumentId;
+        const isActive = editorIdEquals(tab.id, activeDocumentId);
 
         return (
           <button
-            key={tab.id}
+            key={serializeEditorId(tab.id)}
             type="button"
             className={isActive ? "documentTab isActive" : "documentTab"}
             role="tab"

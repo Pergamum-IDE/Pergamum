@@ -74,6 +74,7 @@ export const enTranslations = {
   "status.projectOpenFailed": "Project open failed: {message}",
   "status.recentProjectOpenFailed": "Recent project open failed: {message}",
   "status.saveCanceled": "Save canceled",
+  "status.saveFailed": "Save failed: {message}",
   "status.saveAsTargetAlreadyOpen": "Saved, but this tab remains untitled because the target is already open in another tab: {path}",
   "status.savedPath": "Saved {path}",
   "status.settingsReloadFailed": "Settings reload failed: {message}",
