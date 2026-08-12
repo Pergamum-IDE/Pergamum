@@ -6,6 +6,11 @@ import type {
   SaveApplicationSettingsRequest
 } from "../shared/api";
 import {
+  CommandRegistry,
+  type CommandArgumentList,
+  type CommandId
+} from "../shared/commandRegistry";
+import {
   createEditorIdForPath,
   createProjectDocumentEditorId,
   editorIdEquals,
@@ -54,9 +59,15 @@ import {
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
 import { RecentProjectsPanel } from "./RecentProjectsPanel";
 import { SettingsPanel } from "./SettingsPanel";
-import { defaultSidebarMode, selectSidebarMode } from "./sidebarMode";
+import { defaultSidebarMode } from "./sidebarMode";
 import { useApplicationSettings } from "./useApplicationSettings";
 import { WelcomeScreen } from "./WelcomeScreen";
+import {
+  createWorkspaceCommandTitles,
+  registerWorkspaceCommands,
+  workspaceCommandIds,
+  workspaceFocusCommandIdForMode
+} from "./workspaceCommands";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 
 interface StatusMessage {
@@ -169,6 +180,24 @@ export function App(): JSX.Element {
       t(displayLanguage, key, values),
     [displayLanguage]
   );
+  const commandRegistry = useMemo(() => {
+    const registry = new CommandRegistry();
+
+    registerWorkspaceCommands(
+      registry,
+      {
+        focusSidebarMode: (mode) => {
+          setSidebarMode(mode);
+        },
+        toggleProjectSettings: () => {
+          setIsSettingsOpen((isOpen) => !isOpen);
+        }
+      },
+      createWorkspaceCommandTitles(translate)
+    );
+
+    return registry;
+  }, [translate]);
   const shouldShowWelcome =
     project === null && isOnlyInitialUntitledDocument(openDocumentsState);
   const previewHtml = useMemo(() => {
@@ -206,6 +235,18 @@ export function App(): JSX.Element {
     setOpenDocumentsState((state) =>
       openOrActivateDocument(state, document, activeProjectContext)
     );
+  }
+
+  function executeUiCommand<TArgs extends readonly unknown[], TResult>(
+    commandId: CommandId<TArgs, TResult>,
+    ...args: CommandArgumentList<TArgs>
+  ): void {
+    void commandRegistry.execute(commandId, ...args).catch((error) => {
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+    });
   }
 
   async function openFile(): Promise<void> {
@@ -507,9 +548,11 @@ export function App(): JSX.Element {
           activeMode={sidebarMode}
           isProjectSettingsOpen={isSettingsOpen}
           translate={translate}
-          onSelectMode={(mode) => setSidebarMode(selectSidebarMode(mode))}
+          onSelectMode={(mode) =>
+            executeUiCommand(workspaceFocusCommandIdForMode(mode))
+          }
           onToggleProjectSettings={() =>
-            setIsSettingsOpen((isOpen) => !isOpen)
+            executeUiCommand(workspaceCommandIds.toggleSettings)
           }
         />
 
