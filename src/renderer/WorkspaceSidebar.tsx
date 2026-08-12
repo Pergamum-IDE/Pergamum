@@ -8,26 +8,29 @@ import type { SidebarMode } from "./sidebarMode";
 interface WorkspaceSidebarProps {
   mode: SidebarMode;
   project: PergamumProject | null;
-  activeRelativePath: string | null;
+  highlightedProjectDocumentRelativePath: string | null;
   translate: Translate;
-  onSelectProjectDocument: (relativePath: string) => void;
+  onActivateProjectDocument: (relativePath: string) => void;
 }
 
 export function WorkspaceSidebar({
   mode,
   project,
-  activeRelativePath,
+  highlightedProjectDocumentRelativePath,
   translate,
-  onSelectProjectDocument
+  onActivateProjectDocument
 }: WorkspaceSidebarProps): JSX.Element {
   switch (mode) {
     case "files":
       return (
         <FileExplorer
+          key={project?.rootPath ?? "no-project"}
           documents={project?.documents ?? []}
-          activeRelativePath={project ? activeRelativePath : null}
+          highlightedRelativePath={
+            project ? highlightedProjectDocumentRelativePath : null
+          }
           translate={translate}
-          onSelectDocument={onSelectProjectDocument}
+          onActivateDocument={onActivateProjectDocument}
         />
       );
     case "search":

@@ -556,7 +556,7 @@ export function App(): JSX.Element {
     }
   }
 
-  async function selectProjectDocument(relativePath: string): Promise<void> {
+  async function activateProjectDocument(relativePath: string): Promise<void> {
     const document = project?.documents.find(
       (projectDocument) => projectDocument.relativePath === relativePath
     );
@@ -689,10 +689,12 @@ export function App(): JSX.Element {
               <WorkspaceSidebar
                 mode={sidebarMode}
                 project={project}
-                activeRelativePath={currentProjectRelativePath(currentDocument)}
+                highlightedProjectDocumentRelativePath={
+                  currentProjectRelativePath(currentDocument)
+                }
                 translate={translate}
-                onSelectProjectDocument={(relativePath) => {
-                  void selectProjectDocument(relativePath);
+                onActivateProjectDocument={(relativePath) => {
+                  void activateProjectDocument(relativePath);
                 }}
               />
 
