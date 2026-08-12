@@ -1,4 +1,4 @@
-import { useMemo, useState } from "react";
+import { useMemo, useRef, useState } from "react";
 import type {
   MarkdownFile,
   PergamumProject,
@@ -40,6 +40,11 @@ import {
   type CurrentDocument
 } from "./currentDocument";
 import { DocumentTabBar } from "./DocumentTabBar";
+import {
+  EditorNavigation,
+  type EditorResolveResult,
+  type OpenEditorOptions
+} from "./editorNavigation";
 import { MarkdownEditor } from "./MarkdownEditor";
 import {
   activeCurrentDocument,
@@ -48,6 +53,8 @@ import {
   createInitialOpenDocumentsState,
   createOpenDocumentsStateWithDocument,
   documentTabs,
+  editorIdForCurrentDocument,
+  findOpenDocument,
   hasDirtyOpenDocuments,
   hasOpenDocument,
   isOnlyInitialUntitledDocument,
@@ -154,6 +161,9 @@ export function App(): JSX.Element {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [status, setStatus] = useState<StatusMessage>({ key: "app.ready" });
+  const editorNavigationRef = useRef<EditorNavigation<CurrentDocument> | null>(
+    null
+  );
   const {
     settings,
     displayLanguage,
@@ -210,6 +220,17 @@ export function App(): JSX.Element {
     () => documentTabs(openDocumentsState),
     [openDocumentsState]
   );
+  if (!editorNavigationRef.current) {
+    editorNavigationRef.current = new EditorNavigation({
+      resolveEditor,
+      applyEditor
+    });
+  }
+  const editorNavigation = editorNavigationRef.current;
+  editorNavigation.updateAdapter({
+    resolveEditor,
+    applyEditor
+  });
 
   function confirmProjectSwitch(): boolean {
     if (!hasDirtyOpenDocuments(openDocumentsState)) {
@@ -228,13 +249,91 @@ export function App(): JSX.Element {
   }
 
   function activateDocument(documentId: EditorId): void {
-    setOpenDocumentsState((state) => activateOpenDocument(state, documentId));
+    openEditorFromUi(documentId);
   }
 
-  function openDocument(document: CurrentDocument): void {
-    setOpenDocumentsState((state) =>
-      openOrActivateDocument(state, document, activeProjectContext)
+  async function resolveEditor(
+    editorId: EditorId
+  ): Promise<EditorResolveResult<CurrentDocument>> {
+    const openDocument = findOpenDocument(openDocumentsState, editorId);
+
+    if (openDocument) {
+      return {
+        kind: "resolved",
+        editor: openDocument.document
+      };
+    }
+
+    if (editorId.kind !== "projectDocument" || !project || !activeProjectContext) {
+      return { kind: "notFound" };
+    }
+
+    const projectDocument = findProjectDocumentByEditorId(
+      project,
+      editorId,
+      activeProjectContext
     );
+
+    if (!projectDocument) {
+      return { kind: "notFound" };
+    }
+
+    try {
+      return {
+        kind: "resolved",
+        editor: await readProjectDocument(projectDocument)
+      };
+    } catch (error) {
+      return {
+        kind: "unavailable",
+        error
+      };
+    }
+  }
+
+  function applyEditor(editorId: EditorId, document: CurrentDocument): void {
+    setOpenDocumentsState((state) => {
+      if (hasOpenDocument(state, editorId)) {
+        return activateOpenDocument(state, editorId);
+      }
+
+      return openOrActivateDocument(state, document, activeProjectContext);
+    });
+  }
+
+  function openEditor(
+    editorId: EditorId,
+    options?: OpenEditorOptions<CurrentDocument>
+  ): Promise<boolean> {
+    return editorNavigation.openEditor(editorId, options);
+  }
+
+  function openEditorFromUi(
+    editorId: EditorId,
+    options?: OpenEditorOptions<CurrentDocument>
+  ): void {
+    void openEditor(editorId, options).catch((error) => {
+      setStatus({
+        key: "status.documentOpenFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+    });
+  }
+
+  async function openDocument(document: CurrentDocument): Promise<boolean> {
+    const editorId = editorIdForCurrentDocument(
+      document,
+      activeProjectContext
+    );
+
+    if (!editorId) {
+      throw new Error("Untitled editors must already have an EditorId.");
+    }
+
+    return await openEditor(editorId, {
+      history: "record",
+      resolvedEditor: document
+    });
   }
 
   function executeUiCommand<TArgs extends readonly unknown[], TResult>(
@@ -264,7 +363,7 @@ export function App(): JSX.Element {
         activeProjectContext
       );
 
-      openDocument(openedDocument);
+      await openDocument(openedDocument);
       setStatus({
         key: "status.openedFile",
         values: { name: openedDocument.name }
@@ -361,6 +460,7 @@ export function App(): JSX.Element {
     openedProject: PergamumProject
   ): Promise<StatusMessage> {
     setProject(openedProject);
+    editorNavigation.reset();
     const openedProjectContext = projectContextForProject(openedProject);
 
     if (openedProject.documents.length > 0) {
@@ -472,22 +572,16 @@ export function App(): JSX.Element {
         activeProjectContext
       );
 
-      if (hasOpenDocument(openDocumentsState, documentId)) {
-        activateDocument(documentId);
-        setStatus({
-          key: "status.openedProjectDocumentOnly",
-          values: { relativePath: document.relativePath }
-        });
-        return;
-      }
+      const didOpen = await openEditor(documentId);
 
-      const openedDocument = await readProjectDocument(document);
-
-      openDocument(openedDocument);
-      setStatus({
-        key: "status.openedProjectDocumentOnly",
-        values: { relativePath: document.relativePath }
-      });
+      setStatus(
+        didOpen
+          ? {
+              key: "status.openedProjectDocumentOnly",
+              values: { relativePath: document.relativePath }
+            }
+          : { key: "status.projectDocumentNotFound" }
+      );
     } catch (error) {
       setStatus({
         key: "status.documentOpenFailed",
