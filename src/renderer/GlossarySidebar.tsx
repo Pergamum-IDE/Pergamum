@@ -1,12 +1,101 @@
+import { useEffect, useRef, useState } from "react";
+import type { GlossaryEntryId } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
+import {
+  canonicalGlossarySurface,
+  createErrorGlossarySidebarState,
+  createLoadedGlossarySidebarState,
+  createLoadingGlossarySidebarState,
+  createNoProjectGlossarySidebarState,
+  loadGlossaryEntries,
+  shouldApplyGlossaryLoadResult,
+  type GlossarySidebarState
+} from "./glossarySidebarState";
 
 interface GlossarySidebarProps {
+  projectRootPath: string | null;
   translate: Translate;
 }
 
-export function GlossarySidebar({
-  translate
-}: GlossarySidebarProps): JSX.Element {
+interface GlossarySidebarViewProps {
+  state: GlossarySidebarState;
+  translate: Translate;
+  onSelectEntry: (entryId: GlossaryEntryId) => void;
+}
+
+function initialGlossarySidebarState(
+  projectRootPath: string | null
+): GlossarySidebarState {
+  return projectRootPath
+    ? createLoadingGlossarySidebarState(null)
+    : createNoProjectGlossarySidebarState();
+}
+
+export function GlossarySidebarView({
+  state,
+  translate,
+  onSelectEntry
+}: GlossarySidebarViewProps): JSX.Element {
+  let content: JSX.Element;
+
+  switch (state.status) {
+    case "noProject":
+      content = (
+        <div className="workspacePlaceholder">
+          {translate("glossary.noProject")}
+        </div>
+      );
+      break;
+    case "loading":
+      content = (
+        <div className="workspacePlaceholder" role="status">
+          {translate("glossary.loading")}
+        </div>
+      );
+      break;
+    case "error":
+      content = (
+        <div className="workspacePlaceholder" role="alert">
+          {translate("glossary.loadError")}
+        </div>
+      );
+      break;
+    case "loaded":
+      content =
+        state.entries.length === 0 ? (
+          <div className="workspacePlaceholder">
+            {translate("glossary.empty")}
+          </div>
+        ) : (
+          <div
+            className="workspaceSidebarList"
+            aria-label={translate("glossary.entries")}
+          >
+            {state.entries.map((entry) => {
+              const label = canonicalGlossarySurface(entry);
+
+              return (
+                <button
+                  type="button"
+                  key={entry.id}
+                  className={
+                    state.selectedEntryId === entry.id
+                      ? "workspaceSidebarItem isActive"
+                      : "workspaceSidebarItem"
+                  }
+                  aria-pressed={state.selectedEntryId === entry.id}
+                  title={label}
+                  onClick={() => onSelectEntry(entry.id)}
+                >
+                  {label}
+                </button>
+              );
+            })}
+          </div>
+        );
+      break;
+  }
+
   return (
     <aside
       className="workspaceSidebarPanel"
@@ -16,9 +105,7 @@ export function GlossarySidebar({
         {translate("glossary.sidebarTitle")}
       </div>
       <div className="workspacePlaceholderList">
-        <div className="workspacePlaceholder">
-          {translate("glossary.empty")}
-        </div>
+        {content}
       </div>
       <div className="workspaceSidebarActions">
         <button type="button" className="workspaceSidebarButton" disabled>
@@ -26,5 +113,91 @@ export function GlossarySidebar({
         </button>
       </div>
     </aside>
+  );
+}
+
+export function GlossarySidebar({
+  projectRootPath,
+  translate
+}: GlossarySidebarProps): JSX.Element {
+  const [state, setState] = useState<GlossarySidebarState>(() =>
+    initialGlossarySidebarState(projectRootPath)
+  );
+  const projectRootPathRef = useRef<string | null>(projectRootPath);
+  const loadRequestIdRef = useRef(0);
+
+  useEffect(() => {
+    const requestId = loadRequestIdRef.current + 1;
+    loadRequestIdRef.current = requestId;
+
+    const didProjectChange = projectRootPathRef.current !== projectRootPath;
+    projectRootPathRef.current = projectRootPath;
+
+    if (!projectRootPath) {
+      setState(createNoProjectGlossarySidebarState());
+      return;
+    }
+
+    setState((currentState) =>
+      createLoadingGlossarySidebarState(
+        didProjectChange ? null : currentState.selectedEntryId
+      )
+    );
+
+    let isActive = true;
+
+    void loadGlossaryEntries()
+      .then((entries) => {
+        if (
+          !isActive ||
+          !shouldApplyGlossaryLoadResult(
+            loadRequestIdRef.current,
+            requestId
+          )
+        ) {
+          return;
+        }
+
+        setState((currentState) =>
+          createLoadedGlossarySidebarState(
+            entries,
+            didProjectChange ? null : currentState.selectedEntryId
+          )
+        );
+      })
+      .catch(() => {
+        if (
+          !isActive ||
+          !shouldApplyGlossaryLoadResult(
+            loadRequestIdRef.current,
+            requestId
+          )
+        ) {
+          return;
+        }
+
+        setState((currentState) =>
+          createErrorGlossarySidebarState(
+            didProjectChange ? null : currentState.selectedEntryId
+          )
+        );
+      });
+
+    return () => {
+      isActive = false;
+    };
+  }, [projectRootPath]);
+
+  return (
+    <GlossarySidebarView
+      state={state}
+      translate={translate}
+      onSelectEntry={(entryId) =>
+        setState((currentState) => ({
+          ...currentState,
+          selectedEntryId: entryId
+        }))
+      }
+    />
   );
 }

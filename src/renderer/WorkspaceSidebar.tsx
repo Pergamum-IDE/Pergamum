@@ -33,6 +33,11 @@ export function WorkspaceSidebar({
     case "search":
       return <SearchSidebar translate={translate} />;
     case "glossary":
-      return <GlossarySidebar translate={translate} />;
+      return (
+        <GlossarySidebar
+          projectRootPath={project?.rootPath ?? null}
+          translate={translate}
+        />
+      );
   }
 }
