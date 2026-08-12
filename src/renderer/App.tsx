@@ -1,6 +1,5 @@
 import { useMemo, useRef, useState } from "react";
 import type {
-  MarkdownFile,
   PergamumProject,
   ProjectDocument,
   SaveApplicationSettingsRequest
@@ -11,12 +10,12 @@ import {
   type CommandId
 } from "../shared/commandRegistry";
 import {
-  createEditorIdForPath,
+  createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
-  editorIdEquals,
   type ActiveProjectContext,
   type EditorId
 } from "../shared/editorId";
+import type { GlossaryEntryId } from "../shared/glossary";
 import {
   t,
   type Translate,
@@ -27,44 +26,58 @@ import { resolveEffectiveSettings } from "../shared/settings";
 import { ActivityBar } from "./ActivityBar";
 import {
   applyStandaloneSaveResult,
-  createFileDocument,
   createProjectDocument,
-  currentDocumentContent,
-  currentDocumentTitle,
-  currentProjectRelativePath,
-  isCurrentDocumentDirty,
   isProjectCurrentDocument,
   markCurrentDocumentSaved,
   standaloneSavePath,
   updateCurrentDocumentContent,
   type CurrentDocument
 } from "./currentDocument";
+import {
+  createMarkdownCurrentEditor,
+  currentEditorGlossaryEntryId,
+  currentEditorProjectRelativePath,
+  currentEditorTitle,
+  isCurrentEditorDirty,
+  markdownDocumentForEditor,
+  type CurrentEditor
+} from "./currentEditor";
 import { DocumentTabBar } from "./DocumentTabBar";
+import { EditorSurface } from "./EditorSurface";
 import {
   EditorNavigation,
   type EditorResolveResult,
   type OpenEditorOptions
 } from "./editorNavigation";
-import { MarkdownEditor } from "./MarkdownEditor";
 import {
-  activeCurrentDocument,
+  createGlossaryCommandTitles,
+  glossaryCommandIds,
+  registerGlossaryCommands
+} from "./glossaryCommands";
+import {
+  activeCurrentEditor,
   activeOpenDocument,
   activateOpenDocument,
   createInitialOpenDocumentsState,
-  createOpenDocumentsStateWithDocument,
   documentTabs,
   editorIdForCurrentDocument,
-  findOpenDocument,
   hasDirtyOpenDocuments,
   hasOpenDocument,
   isOnlyInitialUntitledDocument,
-  openOrActivateDocument,
+  openOrActivateEditor,
   replaceOpenDocument,
   updateActiveOpenDocument,
   type OpenDocumentsState
 } from "./openDocuments";
-import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
+import { currentDocumentForOpenedFile } from "./projectDocumentResolution";
+import {
+  loadFirstProjectDocumentIfCurrent,
+  openFirstProjectDocumentAfterContextSwitch,
+  ProjectActivationLifetime,
+  resetOpenDocumentsForProjectContextSwitch
+} from "./projectActivationState";
 import { RecentProjectsPanel } from "./RecentProjectsPanel";
+import { resolveCurrentEditor } from "./resolveCurrentEditor";
 import { SettingsPanel } from "./SettingsPanel";
 import { defaultSidebarMode } from "./sidebarMode";
 import { useApplicationSettings } from "./useApplicationSettings";
@@ -108,51 +121,6 @@ function projectContextForProject(
   return project ? { rootPath: project.rootPath } : null;
 }
 
-export function findProjectDocumentByEditorId(
-  project: PergamumProject,
-  editorId: EditorId,
-  activeProjectContext: ActiveProjectContext
-): ProjectDocument | null {
-  if (editorId.kind !== "projectDocument") {
-    return null;
-  }
-
-  return (
-    project.documents.find((document) =>
-      editorIdEquals(
-        createProjectDocumentEditorId(
-          document.relativePath,
-          activeProjectContext
-        ),
-        editorId
-      )
-    ) ?? null
-  );
-}
-
-export function currentDocumentForOpenedFile(
-  file: MarkdownFile,
-  project: PergamumProject | null,
-  activeProjectContext: ActiveProjectContext | null
-): CurrentDocument {
-  const editorId = createEditorIdForPath(file.path, activeProjectContext);
-
-  if (editorId.kind === "projectDocument") {
-    const projectDocument =
-      project && activeProjectContext
-        ? findProjectDocumentByEditorId(project, editorId, activeProjectContext)
-        : null;
-
-    if (!projectDocument) {
-      throw new Error("Project document is not listed in the active project.");
-    }
-
-    return createProjectDocument(projectDocument, file.content);
-  }
-
-  return createFileDocument(file);
-}
-
 export function App(): JSX.Element {
   const [project, setProject] = useState<PergamumProject | null>(null);
   const [openDocumentsState, setOpenDocumentsState] =
@@ -161,8 +129,11 @@ export function App(): JSX.Element {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [status, setStatus] = useState<StatusMessage>({ key: "app.ready" });
-  const editorNavigationRef = useRef<EditorNavigation<CurrentDocument> | null>(
+  const editorNavigationRef = useRef<EditorNavigation<CurrentEditor> | null>(
     null
+  );
+  const projectActivationLifetimeRef = useRef(
+    new ProjectActivationLifetime()
   );
   const {
     settings,
@@ -174,7 +145,8 @@ export function App(): JSX.Element {
   } = useApplicationSettings();
 
   const activeDocument = activeOpenDocument(openDocumentsState);
-  const currentDocument = activeCurrentDocument(openDocumentsState);
+  const currentEditor = activeCurrentEditor(openDocumentsState);
+  const activeMarkdownDocument = markdownDocumentForEditor(currentEditor);
   const activeProjectContext = useMemo(
     () => projectContextForProject(project),
     [project]
@@ -183,8 +155,7 @@ export function App(): JSX.Element {
     () => resolveEffectiveSettings(settings, project?.config?.settings),
     [settings, project?.config?.settings]
   );
-  const content = currentDocumentContent(currentDocument);
-  const isDirty = isCurrentDocumentDirty(currentDocument);
+  const isDirty = isCurrentEditorDirty(currentEditor);
   const translate = useMemo(
     () => (key: TranslationKey, values?: TranslationValues) =>
       t(displayLanguage, key, values),
@@ -205,17 +176,25 @@ export function App(): JSX.Element {
       },
       createWorkspaceCommandTitles(translate)
     );
+    registerGlossaryCommands(
+      registry,
+      {
+        openGlossaryEntry: async (entryId) => {
+          const editorId = createGlossaryEntryEditorId(
+            entryId,
+            activeProjectContext
+          );
+
+          return await openEditorFromExplicitActivation(editorId);
+        }
+      },
+      createGlossaryCommandTitles(translate)
+    );
 
     return registry;
-  }, [translate]);
+  }, [activeProjectContext, translate]);
   const shouldShowWelcome =
     project === null && isOnlyInitialUntitledDocument(openDocumentsState);
-  const previewHtml = useMemo(() => {
-    switch (effectiveSettings.preview.renderer) {
-      case "markdown":
-        return markdownPreviewRenderer.render(content);
-    }
-  }, [content, effectiveSettings.preview.renderer]);
   const tabs = useMemo(
     () => documentTabs(openDocumentsState),
     [openDocumentsState]
@@ -254,65 +233,47 @@ export function App(): JSX.Element {
 
   async function resolveEditor(
     editorId: EditorId
-  ): Promise<EditorResolveResult<CurrentDocument>> {
-    const openDocument = findOpenDocument(openDocumentsState, editorId);
-
-    if (openDocument) {
-      return {
-        kind: "resolved",
-        editor: openDocument.document
-      };
-    }
-
-    if (editorId.kind !== "projectDocument" || !project || !activeProjectContext) {
-      return { kind: "notFound" };
-    }
-
-    const projectDocument = findProjectDocumentByEditorId(
+  ): Promise<EditorResolveResult<CurrentEditor>> {
+    return resolveCurrentEditor(editorId, {
+      openDocumentsState,
       project,
-      editorId,
-      activeProjectContext
-    );
-
-    if (!projectDocument) {
-      return { kind: "notFound" };
-    }
-
-    try {
-      return {
-        kind: "resolved",
-        editor: await readProjectDocument(projectDocument)
-      };
-    } catch (error) {
-      return {
-        kind: "unavailable",
-        error
-      };
-    }
+      activeProjectContext,
+      readProjectDocument,
+      getGlossaryEntryById: window.pergamum.glossary.getById
+    });
   }
 
-  function applyEditor(editorId: EditorId, document: CurrentDocument): void {
+  function applyEditor(editorId: EditorId, editor: CurrentEditor): void {
     setOpenDocumentsState((state) => {
       if (hasOpenDocument(state, editorId)) {
         return activateOpenDocument(state, editorId);
       }
 
-      return openOrActivateDocument(state, document, activeProjectContext);
+      return openOrActivateEditor(state, editor, activeProjectContext);
     });
   }
 
   function openEditor(
     editorId: EditorId,
-    options?: OpenEditorOptions<CurrentDocument>
+    options?: OpenEditorOptions<CurrentEditor>
   ): Promise<boolean> {
     return editorNavigation.openEditor(editorId, options);
   }
 
+  function openEditorFromExplicitActivation(
+    editorId: EditorId,
+    options?: OpenEditorOptions<CurrentEditor>
+  ): Promise<boolean> {
+    projectActivationLifetimeRef.current.markExplicitEditorActivation();
+
+    return openEditor(editorId, options);
+  }
+
   function openEditorFromUi(
     editorId: EditorId,
-    options?: OpenEditorOptions<CurrentDocument>
+    options?: OpenEditorOptions<CurrentEditor>
   ): void {
-    void openEditor(editorId, options).catch((error) => {
+    void openEditorFromExplicitActivation(editorId, options).catch((error) => {
       setStatus({
         key: "status.documentOpenFailed",
         values: { message: errorMessage(error, translate) }
@@ -330,9 +291,9 @@ export function App(): JSX.Element {
       throw new Error("Untitled editors must already have an EditorId.");
     }
 
-    return await openEditor(editorId, {
+    return await openEditorFromExplicitActivation(editorId, {
       history: "record",
-      resolvedEditor: document
+      resolvedEditor: createMarkdownCurrentEditor(document)
     });
   }
 
@@ -394,7 +355,11 @@ export function App(): JSX.Element {
 
   async function saveFile(): Promise<void> {
     try {
-      const documentToSave = activeDocument.document;
+      if (activeDocument.editor.kind !== "markdown") {
+        return;
+      }
+
+      const documentToSave = activeDocument.editor.document;
       const documentIdToSave = activeDocument.id;
 
       if (isProjectCurrentDocument(documentToSave)) {
@@ -458,20 +423,36 @@ export function App(): JSX.Element {
 
   async function activateProject(
     openedProject: PergamumProject
-  ): Promise<StatusMessage> {
-    setProject(openedProject);
+  ): Promise<StatusMessage | null> {
+    const activationToken =
+      projectActivationLifetimeRef.current.startProjectContextSwitch();
+    const openedProjectContext: ActiveProjectContext = {
+      rootPath: openedProject.rootPath
+    };
+
     editorNavigation.reset();
-    const openedProjectContext = projectContextForProject(openedProject);
+    setOpenDocumentsState((state) =>
+      resetOpenDocumentsForProjectContextSwitch(state)
+    );
+    setProject(openedProject);
 
     if (openedProject.documents.length > 0) {
       const firstDocument = openedProject.documents[0];
-      const firstCurrentDocument = await readProjectDocument(firstDocument);
+      const firstCurrentDocument = await loadFirstProjectDocumentIfCurrent(
+        projectActivationLifetimeRef.current,
+        activationToken,
+        () => readProjectDocument(firstDocument)
+      );
+
+      if (!firstCurrentDocument) {
+        return null;
+      }
 
       setOpenDocumentsState((state) =>
-        createOpenDocumentsStateWithDocument(
+        openFirstProjectDocumentAfterContextSwitch(
+          state,
           firstCurrentDocument,
-          openedProjectContext,
-          state.nextUntitledId
+          openedProjectContext
         )
       );
 
@@ -483,10 +464,6 @@ export function App(): JSX.Element {
         }
       };
     }
-
-    setOpenDocumentsState((state) =>
-      createInitialOpenDocumentsState(state.nextUntitledId)
-    );
 
     return {
       key: "status.openedProject",
@@ -525,6 +502,11 @@ export function App(): JSX.Element {
 
       const settingsReloadError = await reloadSettingsAfterProjectOpen();
       const openedStatus = await activateProject(openedProject);
+
+      if (!openedStatus) {
+        return;
+      }
+
       setStatus(projectOpenStatus(openedStatus, settingsReloadError, translate));
     } catch (error) {
       setStatus({
@@ -546,6 +528,11 @@ export function App(): JSX.Element {
       );
       const settingsReloadError = await reloadSettingsAfterProjectOpen();
       const openedStatus = await activateProject(openedProject);
+
+      if (!openedStatus) {
+        return;
+      }
+
       setIsRecentProjectsOpen(false);
       setStatus(projectOpenStatus(openedStatus, settingsReloadError, translate));
     } catch (error) {
@@ -572,7 +559,7 @@ export function App(): JSX.Element {
         activeProjectContext
       );
 
-      const didOpen = await openEditor(documentId);
+      const didOpen = await openEditorFromExplicitActivation(documentId);
 
       setStatus(
         didOpen
@@ -608,7 +595,7 @@ export function App(): JSX.Element {
     <main className="appShell">
       <header className="toolbar">
         <div className="documentTitle">
-          <span>{currentDocumentTitle(currentDocument)}</span>
+          <span>{currentEditorTitle(currentEditor)}</span>
           {isDirty ? (
             <span className="dirtyIndicator">
               {translate("document.unsaved")}
@@ -626,7 +613,11 @@ export function App(): JSX.Element {
         <button type="button" onClick={openFile}>
           {translate("common.open")}
         </button>
-        <button type="button" onClick={saveFile}>
+        <button
+          type="button"
+          onClick={saveFile}
+          disabled={!activeMarkdownDocument}
+        >
           {translate("common.save")}
         </button>
         <button
@@ -690,11 +681,17 @@ export function App(): JSX.Element {
                 mode={sidebarMode}
                 project={project}
                 highlightedProjectDocumentRelativePath={
-                  currentProjectRelativePath(currentDocument)
+                  currentEditorProjectRelativePath(currentEditor)
+                }
+                highlightedGlossaryEntryId={
+                  currentEditorGlossaryEntryId(currentEditor)
                 }
                 translate={translate}
                 onActivateProjectDocument={(relativePath) => {
                   void activateProjectDocument(relativePath);
+                }}
+                onActivateGlossaryEntry={(entryId) => {
+                  executeUiCommand(glossaryCommandIds.openEntry, entryId);
                 }}
               />
 
@@ -706,36 +703,11 @@ export function App(): JSX.Element {
                   onSelectDocument={activateDocument}
                 />
 
-                <section
-                  className="workspace"
-                  aria-label={translate("workspace.markdownWorkspace")}
-                >
-                  <section
-                    className="pane"
-                    aria-label={translate("workspace.markdownEditor")}
-                  >
-                    <div className="paneHeader">
-                      {translate("workspace.editor")}
-                    </div>
-                    <MarkdownEditor
-                      value={content}
-                      onChange={setActiveDocumentContent}
-                    />
-                  </section>
-
-                  <section
-                    className="pane"
-                    aria-label={translate("workspace.markdownPreview")}
-                  >
-                    <div className="paneHeader">
-                      {translate("workspace.preview")}
-                    </div>
-                    <article
-                      className="preview"
-                      dangerouslySetInnerHTML={{ __html: previewHtml }}
-                    />
-                  </section>
-                </section>
+                <EditorSurface
+                  editor={currentEditor}
+                  translate={translate}
+                  onChangeMarkdownContent={setActiveDocumentContent}
+                />
               </section>
             </section>
           )}

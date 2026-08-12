@@ -33,6 +33,7 @@ export interface EditorNavigationAdapter<TEditor> {
 export class EditorNavigation<TEditor> {
   private readonly history = new NavigationHistory();
   private operationQueue: Promise<void> = Promise.resolve();
+  private generation = 0;
 
   constructor(private adapter: EditorNavigationAdapter<TEditor>) {}
 
@@ -44,16 +45,26 @@ export class EditorNavigation<TEditor> {
     editorId: EditorId,
     options: OpenEditorOptions<TEditor> = {}
   ): Promise<boolean> {
+    const generation = this.generation;
+
     return this.enqueue(async () => {
+      if (!this.isCurrentGeneration(generation)) {
+        return false;
+      }
+
       const editor =
         options.resolvedEditor ??
-        (await this.resolveEditorForOpen(editorId));
+        (await this.resolveEditorForOpen(editorId, generation));
 
-      if (!editor) {
+      if (!editor || !this.isCurrentGeneration(generation)) {
         return false;
       }
 
       await this.adapter.applyEditor(editorId, editor);
+
+      if (!this.isCurrentGeneration(generation)) {
+        return false;
+      }
 
       if ((options.history ?? "record") === "record") {
         this.history.record(editorId);
@@ -72,6 +83,7 @@ export class EditorNavigation<TEditor> {
   }
 
   reset(): void {
+    this.generation += 1;
     this.history.reset();
   }
 
@@ -80,11 +92,21 @@ export class EditorNavigation<TEditor> {
   }
 
   private navigateHistory(direction: NavigationDirection): Promise<boolean> {
+    const generation = this.generation;
+
     return this.enqueue(async () => {
+      if (!this.isCurrentGeneration(generation)) {
+        return false;
+      }
+
       let candidate = this.history.candidate(direction);
 
       while (candidate) {
         const result = await this.adapter.resolveEditor(candidate.editorId);
+
+        if (!this.isCurrentGeneration(generation)) {
+          return false;
+        }
 
         switch (result.kind) {
           case "resolved":
@@ -92,7 +114,16 @@ export class EditorNavigation<TEditor> {
               return false;
             }
 
+            if (!this.isCurrentGeneration(generation)) {
+              return false;
+            }
+
             await this.adapter.applyEditor(candidate.editorId, result.editor);
+
+            if (!this.isCurrentGeneration(generation)) {
+              return false;
+            }
+
             return true;
           case "notFound":
             this.history.invalidate(candidate.editorId);
@@ -108,9 +139,14 @@ export class EditorNavigation<TEditor> {
   }
 
   private async resolveEditorForOpen(
-    editorId: EditorId
+    editorId: EditorId,
+    generation: number
   ): Promise<TEditor | null> {
     const result = await this.adapter.resolveEditor(editorId);
+
+    if (!this.isCurrentGeneration(generation)) {
+      return null;
+    }
 
     switch (result.kind) {
       case "resolved":
@@ -131,5 +167,9 @@ export class EditorNavigation<TEditor> {
     );
 
     return queuedOperation;
+  }
+
+  private isCurrentGeneration(generation: number): boolean {
+    return generation === this.generation;
   }
 }

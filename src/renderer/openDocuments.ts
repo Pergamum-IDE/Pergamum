@@ -1,22 +1,27 @@
 import {
   createUntitledDocument,
-  currentDocumentTitle,
-  isCurrentDocumentDirty,
   isInitialUntitledDocument,
   type CurrentDocument
 } from "./currentDocument";
 import {
-  createEditorIdForPath,
-  createProjectDocumentEditorId,
   createUntitledEditorId,
   editorIdEquals,
   type ActiveProjectContext,
   type EditorId
 } from "../shared/editorId";
+import {
+  createMarkdownCurrentEditor,
+  currentEditorTitle,
+  editorIdForCurrentEditor,
+  isCurrentEditorDirty,
+  isCurrentEditorIdentityCompatible,
+  markdownDocumentForEditor,
+  type CurrentEditor
+} from "./currentEditor";
 
 export interface OpenDocument {
   id: EditorId;
-  document: CurrentDocument;
+  editor: CurrentEditor;
 }
 
 export interface OpenDocumentsState {
@@ -40,39 +45,18 @@ export function editorIdForCurrentDocument(
   document: CurrentDocument,
   activeProjectContext: ActiveProjectContext | null
 ): EditorId | null {
-  switch (document.kind) {
-    case "file":
-      return createEditorIdForPath(document.path, activeProjectContext);
-    case "project":
-      return createProjectDocumentEditorId(
-        document.relativePath,
-        activeProjectContext
-      );
-    case "untitled":
-      return null;
-  }
+  return editorIdForCurrentEditor(
+    createMarkdownCurrentEditor(document),
+    activeProjectContext
+  );
 }
 
-function isDocumentIdentityCompatible(
-  document: CurrentDocument,
-  editorId: EditorId
-): boolean {
-  switch (document.kind) {
-    case "file":
-      return editorId.kind === "file";
-    case "project":
-      return editorId.kind === "projectDocument";
-    case "untitled":
-      return editorId.kind === "untitled";
-  }
-}
-
-function assertDocumentIdentityCompatible(
-  document: CurrentDocument,
+function assertEditorIdentityCompatible(
+  editor: CurrentEditor,
   editorId: EditorId
 ): void {
-  if (!isDocumentIdentityCompatible(document, editorId)) {
-    throw new Error("CurrentDocument kind does not match its EditorId.");
+  if (!isCurrentEditorIdentityCompatible(editor, editorId)) {
+    throw new Error("CurrentEditor kind does not match its EditorId.");
   }
 }
 
@@ -86,7 +70,7 @@ export function createInitialOpenDocumentsState(
     documents: [
       {
         id: activeDocumentId,
-        document: createUntitledDocument()
+        editor: createMarkdownCurrentEditor(createUntitledDocument())
       }
     ],
     activeDocumentId,
@@ -99,8 +83,20 @@ export function createOpenDocumentsStateWithDocument(
   activeProjectContext: ActiveProjectContext | null,
   nextUntitledId = 1
 ): OpenDocumentsState {
-  const stableId = editorIdForCurrentDocument(
-    document,
+  return createOpenDocumentsStateWithEditor(
+    createMarkdownCurrentEditor(document),
+    activeProjectContext,
+    nextUntitledId
+  );
+}
+
+export function createOpenDocumentsStateWithEditor(
+  editor: CurrentEditor,
+  activeProjectContext: ActiveProjectContext | null,
+  nextUntitledId = 1
+): OpenDocumentsState {
+  const stableId = editorIdForCurrentEditor(
+    editor,
     activeProjectContext
   );
 
@@ -108,13 +104,13 @@ export function createOpenDocumentsStateWithDocument(
     return createInitialOpenDocumentsState(nextUntitledId);
   }
 
-  assertDocumentIdentityCompatible(document, stableId);
+  assertEditorIdentityCompatible(editor, stableId);
 
   return {
     documents: [
       {
         id: stableId,
-        document
+        editor
       }
     ],
     activeDocumentId: stableId,
@@ -144,12 +140,24 @@ export function findOpenDocument(
 export function activeCurrentDocument(
   state: OpenDocumentsState
 ): CurrentDocument {
-  return activeOpenDocument(state).document;
+  const document = markdownDocumentForEditor(activeOpenDocument(state).editor);
+
+  if (!document) {
+    throw new Error("Active editor is not a Markdown document.");
+  }
+
+  return document;
+}
+
+export function activeCurrentEditor(
+  state: OpenDocumentsState
+): CurrentEditor {
+  return activeOpenDocument(state).editor;
 }
 
 export function hasDirtyOpenDocuments(state: OpenDocumentsState): boolean {
   return state.documents.some((openDocument) =>
-    isCurrentDocumentDirty(openDocument.document)
+    isCurrentEditorDirty(openDocument.editor)
   );
 }
 
@@ -158,16 +166,17 @@ export function isOnlyInitialUntitledDocument(
 ): boolean {
   return (
     state.documents.length === 1 &&
-    state.documents[0].document.kind === "untitled" &&
-    isInitialUntitledDocument(state.documents[0].document)
+    state.documents[0].editor.kind === "markdown" &&
+    state.documents[0].editor.document.kind === "untitled" &&
+    isInitialUntitledDocument(state.documents[0].editor.document)
   );
 }
 
 export function documentTabs(state: OpenDocumentsState): DocumentTab[] {
   return state.documents.map((openDocument) => ({
     id: openDocument.id,
-    title: currentDocumentTitle(openDocument.document),
-    isDirty: isCurrentDocumentDirty(openDocument.document)
+    title: currentEditorTitle(openDocument.editor),
+    isDirty: isCurrentEditorDirty(openDocument.editor)
   }));
 }
 
@@ -199,8 +208,20 @@ export function openOrActivateDocument(
   document: CurrentDocument,
   activeProjectContext: ActiveProjectContext | null
 ): OpenDocumentsState {
-  const stableId = editorIdForCurrentDocument(
-    document,
+  return openOrActivateEditor(
+    state,
+    createMarkdownCurrentEditor(document),
+    activeProjectContext
+  );
+}
+
+export function openOrActivateEditor(
+  state: OpenDocumentsState,
+  editor: CurrentEditor,
+  activeProjectContext: ActiveProjectContext | null
+): OpenDocumentsState {
+  const stableId = editorIdForCurrentEditor(
+    editor,
     activeProjectContext
   );
 
@@ -212,7 +233,7 @@ export function openOrActivateDocument(
         ...state.documents,
         {
           id: activeDocumentId,
-          document
+          editor
         }
       ],
       activeDocumentId,
@@ -220,7 +241,7 @@ export function openOrActivateDocument(
     };
   }
 
-  assertDocumentIdentityCompatible(document, stableId);
+  assertEditorIdentityCompatible(editor, stableId);
 
   if (hasOpenDocument(state, stableId)) {
     return activateOpenDocument(state, stableId);
@@ -232,7 +253,7 @@ export function openOrActivateDocument(
       documents: [
         {
           id: stableId,
-          document
+          editor
         }
       ],
       activeDocumentId: stableId
@@ -245,7 +266,7 @@ export function openOrActivateDocument(
       ...state.documents,
       {
         id: stableId,
-        document
+        editor
       }
     ],
     activeDocumentId: stableId
@@ -257,13 +278,27 @@ export function updateOpenDocument(
   editorId: EditorId,
   updateDocument: (document: CurrentDocument) => CurrentDocument
 ): OpenDocumentsState {
+  return updateOpenEditor(state, editorId, (editor) => {
+    const document = markdownDocumentForEditor(editor);
+
+    return document
+      ? createMarkdownCurrentEditor(updateDocument(document))
+      : editor;
+  });
+}
+
+export function updateOpenEditor(
+  state: OpenDocumentsState,
+  editorId: EditorId,
+  updateEditor: (editor: CurrentEditor) => CurrentEditor
+): OpenDocumentsState {
   return {
     ...state,
     documents: state.documents.map((openDocument) =>
       editorIdEquals(openDocument.id, editorId)
         ? {
             ...openDocument,
-            document: updateDocument(openDocument.document)
+            editor: updateEditor(openDocument.editor)
           }
         : openDocument
     )
@@ -283,6 +318,20 @@ export function replaceOpenDocument(
   document: CurrentDocument,
   activeProjectContext: ActiveProjectContext | null
 ): ReplaceOpenDocumentResult {
+  return replaceOpenEditor(
+    state,
+    editorId,
+    createMarkdownCurrentEditor(document),
+    activeProjectContext
+  );
+}
+
+export function replaceOpenEditor(
+  state: OpenDocumentsState,
+  editorId: EditorId,
+  editor: CurrentEditor,
+  activeProjectContext: ActiveProjectContext | null
+): ReplaceOpenDocumentResult {
   const existingIndex = state.documents.findIndex(
     (openDocument) => editorIdEquals(openDocument.id, editorId)
   );
@@ -295,8 +344,8 @@ export function replaceOpenDocument(
   }
 
   const nextId =
-    editorIdForCurrentDocument(document, activeProjectContext) ?? editorId;
-  assertDocumentIdentityCompatible(document, nextId);
+    editorIdForCurrentEditor(editor, activeProjectContext) ?? editorId;
+  assertEditorIdentityCompatible(editor, nextId);
 
   const didCollide =
     !editorIdEquals(nextId, editorId) && hasOpenDocument(state, nextId);
@@ -312,7 +361,7 @@ export function replaceOpenDocument(
     editorIdEquals(openDocument.id, editorId)
       ? {
           id: nextId,
-          document
+          editor
         }
       : openDocument
   );

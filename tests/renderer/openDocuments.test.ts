@@ -5,26 +5,30 @@ import {
   createUntitledDocument,
   updateCurrentDocumentContent
 } from "../../src/renderer/currentDocument";
+import { createGlossaryEntryCurrentEditor } from "../../src/renderer/currentEditor";
 import {
   currentDocumentForOpenedFile,
   findProjectDocumentByEditorId
-} from "../../src/renderer/App";
+} from "../../src/renderer/projectDocumentResolution";
 import {
   createInitialOpenDocumentsState,
   createOpenDocumentsStateWithDocument,
   documentTabs,
+  openOrActivateEditor,
   openOrActivateDocument,
   replaceOpenDocument,
   updateActiveOpenDocument
 } from "../../src/renderer/openDocuments";
 import {
   createEditorIdForPath,
+  createGlossaryEntryEditorId,
   createProjectDocumentEditorId,
   createUntitledEditorId,
   editorIdEquals,
   type ActiveProjectContext
 } from "../../src/shared/editorId";
 import type { PergamumProject, ProjectDocument } from "../../src/shared/api";
+import type { GlossaryEntry } from "../../src/shared/glossary";
 
 const projectContext: ActiveProjectContext = {
   rootPath: "C:\\Novel"
@@ -45,6 +49,26 @@ const project: PergamumProject = {
   name: "Novel",
   config: null,
   documents: [firstProjectDocument, secondProjectDocument]
+};
+
+const glossaryEntry: GlossaryEntry = {
+  id: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
+  kind: "place",
+  description: "王国の首都",
+  createdAt: "2026-01-01T00:00:00.000Z",
+  updatedAt: "2026-01-01T00:00:00.000Z",
+  forms: [
+    {
+      id: "018f4b8c-7a2b-7c3d-8e4f-223456789abc",
+      entryId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
+      surface: "王都",
+      relation: null,
+      warningPolicy: null,
+      isCanonical: true,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    }
+  ]
 };
 
 describe("OpenDocumentsState", () => {
@@ -78,7 +102,8 @@ describe("OpenDocumentsState", () => {
         createProjectDocumentEditorId("chapter-01.md", projectContext)
       )
     ).toBe(true);
-    expect(state.documents[0].document.content).toBe("project content");
+    expect(state.documents[0].editor.kind).toBe("markdown");
+    expect(state.documents[0].editor.document.content).toBe("project content");
   });
 
   it("rejects a file CurrentDocument that would be identified as a projectDocument without open state", () => {
@@ -91,7 +116,7 @@ describe("OpenDocumentsState", () => {
         }),
         projectContext
       )
-    ).toThrow("CurrentDocument kind does not match its EditorId.");
+    ).toThrow("CurrentEditor kind does not match its EditorId.");
   });
 
   it("rejects a file CurrentDocument that would be identified as an already-open projectDocument", () => {
@@ -109,7 +134,7 @@ describe("OpenDocumentsState", () => {
         }),
         projectContext
       )
-    ).toThrow("CurrentDocument kind does not match its EditorId.");
+    ).toThrow("CurrentEditor kind does not match its EditorId.");
   });
 
   it("matches Windows project listings case-insensitively without changing display paths", () => {
@@ -282,7 +307,7 @@ describe("OpenDocumentsState", () => {
         }),
         projectContext
       )
-    ).toThrow("CurrentDocument kind does not match its EditorId.");
+    ).toThrow("CurrentEditor kind does not match its EditorId.");
   });
 
   it("replaces the initial untitled tab when a project document is opened", () => {
@@ -299,5 +324,61 @@ describe("OpenDocumentsState", () => {
         createProjectDocumentEditorId("chapter-02.md", projectContext)
       )
     ).toBe(true);
+  });
+
+  it("keeps Markdown documents and glossary entries in one Open Documents state", () => {
+    const projectDocument = createProjectDocument(
+      firstProjectDocument,
+      "project content"
+    );
+    let state = createOpenDocumentsStateWithDocument(
+      projectDocument,
+      projectContext
+    );
+
+    state = openOrActivateEditor(
+      state,
+      createGlossaryEntryCurrentEditor(glossaryEntry),
+      projectContext
+    );
+
+    expect(state.documents).toHaveLength(2);
+    expect(documentTabs(state)).toEqual([
+      {
+        id: createProjectDocumentEditorId("chapter-01.md", projectContext),
+        title: "chapter-01.md",
+        isDirty: false
+      },
+      {
+        id: createGlossaryEntryEditorId(glossaryEntry.id, projectContext),
+        title: "王都",
+        isDirty: false
+      }
+    ]);
+  });
+
+  it("does not duplicate the same glossary entry when reopened", () => {
+    const firstEditor = createGlossaryEntryCurrentEditor(glossaryEntry);
+    const secondEditor = createGlossaryEntryCurrentEditor({
+      ...glossaryEntry,
+      description: "changed after the first open"
+    });
+    let state = openOrActivateEditor(
+      createInitialOpenDocumentsState(),
+      firstEditor,
+      projectContext
+    );
+
+    state = openOrActivateEditor(state, secondEditor, projectContext);
+
+    expect(state.documents).toHaveLength(1);
+    expect(
+      editorIdEquals(
+        state.activeDocumentId,
+        createGlossaryEntryEditorId(glossaryEntry.id, projectContext)
+      )
+    ).toBe(true);
+    expect(state.documents[0].editor.kind).toBe("glossaryEntry");
+    expect(state.documents[0].editor.entry.description).toBe("王国の首都");
   });
 });

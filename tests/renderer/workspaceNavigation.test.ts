@@ -308,8 +308,10 @@ describe("workspace navigation", () => {
         mode: "files",
         project,
         highlightedProjectDocumentRelativePath: "chapter-02.md",
+        highlightedGlossaryEntryId: null,
         translate,
-        onActivateProjectDocument: () => undefined
+        onActivateProjectDocument: () => undefined,
+        onActivateGlossaryEntry: () => undefined
       })
     );
 
@@ -414,8 +416,23 @@ describe("workspace navigation", () => {
     expect(source).toContain(
       "async function activateProjectDocument(relativePath: string)"
     );
-    expect(source).toContain("const didOpen = await openEditor(documentId);");
+    expect(source).toContain(
+      "const didOpen = await openEditorFromExplicitActivation(documentId);"
+    );
     expect(source).toContain("onActivateProjectDocument={(relativePath) => {");
+  });
+
+  it("connects Glossary activation through command execution", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+
+    expect(source).toContain("registerGlossaryCommands(");
+    expect(source).toContain("createGlossaryEntryEditorId(");
+    expect(source).toContain(
+      "return await openEditorFromExplicitActivation(editorId);"
+    );
+    expect(source).toContain(
+      "executeUiCommand(glossaryCommandIds.openEntry, entryId);"
+    );
   });
 
   it("binds Project document Navigator selection lifetime to Project identity", () => {
@@ -446,15 +463,19 @@ describe("workspace navigation", () => {
       mode: "files",
       project: projectA,
       highlightedProjectDocumentRelativePath: null,
+      highlightedGlossaryEntryId: null,
       translate,
-      onActivateProjectDocument: () => undefined
+      onActivateProjectDocument: () => undefined,
+      onActivateGlossaryEntry: () => undefined
     });
     const sidebarForProjectB = WorkspaceSidebar({
       mode: "files",
       project: projectB,
       highlightedProjectDocumentRelativePath: null,
+      highlightedGlossaryEntryId: null,
       translate,
-      onActivateProjectDocument: () => undefined
+      onActivateProjectDocument: () => undefined,
+      onActivateGlossaryEntry: () => undefined
     });
 
     expect(React.isValidElement(sidebarForProjectA)).toBe(true);
@@ -472,8 +493,10 @@ describe("workspace navigation", () => {
         mode: "files",
         project,
         highlightedProjectDocumentRelativePath: "chapter-01.md",
+        highlightedGlossaryEntryId: null,
         translate,
-        onActivateProjectDocument
+        onActivateProjectDocument,
+        onActivateGlossaryEntry: () => undefined
       })
     );
     renderToStaticMarkup(
@@ -481,8 +504,10 @@ describe("workspace navigation", () => {
         mode: "files",
         project,
         highlightedProjectDocumentRelativePath: "chapter-02.md",
+        highlightedGlossaryEntryId: null,
         translate,
-        onActivateProjectDocument
+        onActivateProjectDocument,
+        onActivateGlossaryEntry: () => undefined
       })
     );
 
@@ -520,8 +545,10 @@ describe("workspace navigation", () => {
         mode: "search",
         project,
         highlightedProjectDocumentRelativePath: "chapter-02.md",
+        highlightedGlossaryEntryId: null,
         translate,
-        onActivateProjectDocument: () => undefined
+        onActivateProjectDocument: () => undefined,
+        onActivateGlossaryEntry: () => undefined
       })
     );
 
@@ -536,8 +563,10 @@ describe("workspace navigation", () => {
         mode: "glossary",
         project,
         highlightedProjectDocumentRelativePath: "chapter-02.md",
+        highlightedGlossaryEntryId: null,
         translate,
-        onActivateProjectDocument: () => undefined
+        onActivateProjectDocument: () => undefined,
+        onActivateGlossaryEntry: () => undefined
       })
     );
 
@@ -553,7 +582,9 @@ describe("workspace navigation", () => {
     const markup = renderToStaticMarkup(
       React.createElement(GlossarySidebar, {
         projectRootPath: null,
-        translate
+        highlightedEntryId: null,
+        translate,
+        onActivateEntry: () => undefined
       })
     );
 
@@ -578,8 +609,10 @@ describe("workspace navigation", () => {
     const markup = renderToStaticMarkup(
       React.createElement(GlossarySidebarView, {
         state: createLoadedGlossarySidebarState(glossaryEntries, null),
+        highlightedEntryId: null,
         translate,
-        onSelectEntry: () => undefined
+        onSelectEntry: () => undefined,
+        onActivateEntry: () => undefined
       })
     );
 
@@ -591,8 +624,10 @@ describe("workspace navigation", () => {
     const markup = renderToStaticMarkup(
       React.createElement(GlossarySidebarView, {
         state: createLoadedGlossarySidebarState(glossaryEntries, null),
+        highlightedEntryId: null,
         translate,
-        onSelectEntry: () => undefined
+        onSelectEntry: () => undefined,
+        onActivateEntry: () => undefined
       })
     );
 
@@ -601,10 +636,13 @@ describe("workspace navigation", () => {
 
   it("tracks glossary selection by persistent entry ID", () => {
     const onSelectEntry = vi.fn();
+    const onActivateEntry = vi.fn();
     const element = GlossarySidebarView({
       state: createLoadedGlossarySidebarState(glossaryEntries, null),
+      highlightedEntryId: null,
       translate,
-      onSelectEntry
+      onSelectEntry,
+      onActivateEntry
     });
     const buttons = collectElements(
       element,
@@ -621,6 +659,64 @@ describe("workspace navigation", () => {
     (onClick as () => void)();
 
     expect(onSelectEntry).toHaveBeenCalledWith("entry-beta");
+    expect(onActivateEntry).toHaveBeenCalledWith("entry-beta");
+  });
+
+  it("renders Glossary selection independently from Active Editor highlight", () => {
+    const element = GlossarySidebarView({
+      state: createLoadedGlossarySidebarState(glossaryEntries, "entry-alpha"),
+      highlightedEntryId: "entry-beta",
+      translate,
+      onSelectEntry: () => undefined,
+      onActivateEntry: () => undefined
+    });
+    const buttons = collectElements(
+      element,
+      (child) => child.type === "button"
+    );
+    const selectedButton = buttons.find(
+      (button) => button.props.title === "王都"
+    );
+    const highlightedButton = buttons.find(
+      (button) => button.props.title === "魔導炉"
+    );
+
+    expect(selectedButton?.props.className).toContain("isSelected");
+    expect(selectedButton?.props.className).not.toContain("isActive");
+    expect(selectedButton?.props["data-selected"]).toBe("true");
+    expect(selectedButton?.props["aria-current"]).toBeUndefined();
+
+    expect(highlightedButton?.props.className).toContain("isActive");
+    expect(highlightedButton?.props.className).not.toContain("isSelected");
+    expect(highlightedButton?.props["aria-current"]).toBe("page");
+    expect(highlightedButton?.props["data-selected"]).toBeUndefined();
+  });
+
+  it("does not activate a Glossary Editor when highlight changes", () => {
+    const onSelectEntry = vi.fn();
+    const onActivateEntry = vi.fn();
+
+    renderToStaticMarkup(
+      React.createElement(GlossarySidebarView, {
+        state: createLoadedGlossarySidebarState(glossaryEntries, null),
+        highlightedEntryId: "entry-alpha",
+        translate,
+        onSelectEntry,
+        onActivateEntry
+      })
+    );
+    renderToStaticMarkup(
+      React.createElement(GlossarySidebarView, {
+        state: createLoadedGlossarySidebarState(glossaryEntries, null),
+        highlightedEntryId: "entry-beta",
+        translate,
+        onSelectEntry,
+        onActivateEntry
+      })
+    );
+
+    expect(onSelectEntry).not.toHaveBeenCalled();
+    expect(onActivateEntry).not.toHaveBeenCalled();
   });
 
   it("preserves selection across reload when the entry still exists", () => {
@@ -656,29 +752,37 @@ describe("workspace navigation", () => {
     const loadingMarkup = renderToStaticMarkup(
       React.createElement(GlossarySidebarView, {
         state: createLoadingGlossarySidebarState(null),
+        highlightedEntryId: null,
         translate,
-        onSelectEntry: () => undefined
+        onSelectEntry: () => undefined,
+        onActivateEntry: () => undefined
       })
     );
     const emptyMarkup = renderToStaticMarkup(
       React.createElement(GlossarySidebarView, {
         state: createLoadedGlossarySidebarState([], null),
+        highlightedEntryId: null,
         translate,
-        onSelectEntry: () => undefined
+        onSelectEntry: () => undefined,
+        onActivateEntry: () => undefined
       })
     );
     const errorMarkup = renderToStaticMarkup(
       React.createElement(GlossarySidebarView, {
         state: createErrorGlossarySidebarState(null),
+        highlightedEntryId: null,
         translate,
-        onSelectEntry: () => undefined
+        onSelectEntry: () => undefined,
+        onActivateEntry: () => undefined
       })
     );
     const noProjectMarkup = renderToStaticMarkup(
       React.createElement(GlossarySidebarView, {
         state: createNoProjectGlossarySidebarState(),
+        highlightedEntryId: null,
         translate,
-        onSelectEntry: () => undefined
+        onSelectEntry: () => undefined,
+        onActivateEntry: () => undefined
       })
     );
 
@@ -719,10 +823,13 @@ describe("workspace navigation", () => {
     );
     const tabsBeforeSelection = documentTabs(openDocumentsState);
     const onSelectEntry = vi.fn();
+    const onActivateEntry = vi.fn();
     const element = GlossarySidebarView({
       state: createLoadedGlossarySidebarState(glossaryEntries, null),
+      highlightedEntryId: null,
       translate,
-      onSelectEntry
+      onSelectEntry,
+      onActivateEntry
     });
     const buttons = collectElements(
       element,
@@ -737,6 +844,7 @@ describe("workspace navigation", () => {
     (onClick as () => void)();
 
     expect(onSelectEntry).toHaveBeenCalledWith("entry-alpha");
+    expect(onActivateEntry).toHaveBeenCalledWith("entry-alpha");
     expect(documentTabs(openDocumentsState)).toEqual(tabsBeforeSelection);
     expect(
       editorIdEquals(
@@ -748,8 +856,11 @@ describe("workspace navigation", () => {
 
   it("keeps renderer glossary code isolated from SQLite and main process persistence modules", () => {
     const rendererFiles = [
+      "src/renderer/GlossaryEditor.tsx",
       "src/renderer/GlossarySidebar.tsx",
       "src/renderer/WorkspaceSidebar.tsx",
+      "src/renderer/glossaryCommands.ts",
+      "src/renderer/resolveCurrentEditor.ts",
       "src/renderer/glossarySidebarState.ts"
     ];
 
