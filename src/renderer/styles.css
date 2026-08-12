@@ -649,6 +649,10 @@ button:active {
   outline-offset: -2px;
 }
 
+.fileExplorerItem.isSelected:not(.isActive) {
+  box-shadow: inset 2px 0 0 var(--workspace-sidebar-focus-ring);
+}
+
 .fileExplorerItem.isActive,
 .fileExplorerItem.isActive:hover {
   background: var(--workspace-sidebar-active-background);

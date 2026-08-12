@@ -13,6 +13,7 @@ import {
 import type { Translate } from "../../src/shared/i18n";
 import { ActivityBar } from "../../src/renderer/ActivityBar";
 import { createProjectDocument } from "../../src/renderer/currentDocument";
+import { FileExplorerView } from "../../src/renderer/FileExplorer";
 import {
   GlossarySidebar,
   GlossarySidebarView
@@ -306,9 +307,9 @@ describe("workspace navigation", () => {
       React.createElement(WorkspaceSidebar, {
         mode: "files",
         project,
-        activeRelativePath: "chapter-02.md",
+        highlightedProjectDocumentRelativePath: "chapter-02.md",
         translate,
-        onSelectProjectDocument: () => undefined
+        onActivateProjectDocument: () => undefined
       })
     );
 
@@ -318,14 +319,209 @@ describe("workspace navigation", () => {
     expect(markup).toContain("aria-current=\"page\"");
   });
 
+  it("renders Navigator selection independently from Active Editor highlight", () => {
+    const element = FileExplorerView({
+      documents: project.documents,
+      selectedRelativePath: "chapter-01.md",
+      highlightedRelativePath: "chapter-02.md",
+      translate,
+      onSelectDocument: () => undefined,
+      onActivateDocument: () => undefined
+    });
+    const buttons = collectElements(
+      element,
+      (child) => child.type === "button"
+    );
+    const selectedButton = buttons.find(
+      (button) => button.props.title === "chapter-01.md"
+    );
+    const highlightedButton = buttons.find(
+      (button) => button.props.title === "chapter-02.md"
+    );
+
+    expect(selectedButton?.props.className).toContain("isSelected");
+    expect(selectedButton?.props.className).not.toContain("isActive");
+    expect(selectedButton?.props["data-selected"]).toBe("true");
+    expect(selectedButton?.props["aria-current"]).toBeUndefined();
+
+    expect(highlightedButton?.props.className).toContain("isActive");
+    expect(highlightedButton?.props.className).not.toContain("isSelected");
+    expect(highlightedButton?.props["aria-current"]).toBe("page");
+    expect(highlightedButton?.props["data-selected"]).toBeUndefined();
+  });
+
+  it("does not activate an Editor when Navigator selection changes without user activation", () => {
+    const onSelectDocument = vi.fn();
+    const onActivateDocument = vi.fn();
+
+    renderToStaticMarkup(
+      React.createElement(FileExplorerView, {
+        documents: project.documents,
+        selectedRelativePath: "chapter-01.md",
+        highlightedRelativePath: null,
+        translate,
+        onSelectDocument,
+        onActivateDocument
+      })
+    );
+    renderToStaticMarkup(
+      React.createElement(FileExplorerView, {
+        documents: project.documents,
+        selectedRelativePath: "chapter-02.md",
+        highlightedRelativePath: null,
+        translate,
+        onSelectDocument,
+        onActivateDocument
+      })
+    );
+
+    expect(onSelectDocument).not.toHaveBeenCalled();
+    expect(onActivateDocument).not.toHaveBeenCalled();
+  });
+
+  it("uses activation callbacks only for user-initiated Project document opening", () => {
+    const onSelectDocument = vi.fn();
+    const onActivateDocument = vi.fn();
+    const element = FileExplorerView({
+      documents: project.documents,
+      selectedRelativePath: null,
+      highlightedRelativePath: null,
+      translate,
+      onSelectDocument,
+      onActivateDocument
+    });
+    const buttons = collectElements(
+      element,
+      (child) => child.type === "button"
+    );
+    const firstDocumentButton = buttons.find(
+      (button) => button.props.title === "chapter-01.md"
+    );
+
+    expect(firstDocumentButton).toBeDefined();
+
+    const onClick = firstDocumentButton?.props.onClick;
+    expect(typeof onClick).toBe("function");
+    (onClick as () => void)();
+
+    expect(onSelectDocument).toHaveBeenCalledWith("chapter-01.md");
+    expect(onActivateDocument).toHaveBeenCalledWith("chapter-01.md");
+  });
+
+  it("connects Project document activation to the shared openEditor path", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+
+    expect(source).toContain(
+      "async function activateProjectDocument(relativePath: string)"
+    );
+    expect(source).toContain("const didOpen = await openEditor(documentId);");
+    expect(source).toContain("onActivateProjectDocument={(relativePath) => {");
+  });
+
+  it("binds Project document Navigator selection lifetime to Project identity", () => {
+    const projectA: PergamumProject = {
+      ...project,
+      rootPath: "C:\\ProjectA",
+      name: "ProjectA",
+      documents: [
+        {
+          relativePath: "chapter-01.md",
+          name: "chapter-01.md"
+        }
+      ]
+    };
+    const projectB: PergamumProject = {
+      ...project,
+      rootPath: "C:\\ProjectB",
+      name: "ProjectB",
+      documents: [
+        {
+          relativePath: "chapter-01.md",
+          name: "chapter-01.md"
+        }
+      ]
+    };
+
+    const sidebarForProjectA = WorkspaceSidebar({
+      mode: "files",
+      project: projectA,
+      highlightedProjectDocumentRelativePath: null,
+      translate,
+      onActivateProjectDocument: () => undefined
+    });
+    const sidebarForProjectB = WorkspaceSidebar({
+      mode: "files",
+      project: projectB,
+      highlightedProjectDocumentRelativePath: null,
+      translate,
+      onActivateProjectDocument: () => undefined
+    });
+
+    expect(React.isValidElement(sidebarForProjectA)).toBe(true);
+    expect(React.isValidElement(sidebarForProjectB)).toBe(true);
+    expect(sidebarForProjectA.key).toBe(projectA.rootPath);
+    expect(sidebarForProjectB.key).toBe(projectB.rootPath);
+    expect(sidebarForProjectB.key).not.toBe(sidebarForProjectA.key);
+  });
+
+  it("does not activate an Editor when Active Editor highlight changes", () => {
+    const onActivateProjectDocument = vi.fn();
+
+    renderToStaticMarkup(
+      React.createElement(WorkspaceSidebar, {
+        mode: "files",
+        project,
+        highlightedProjectDocumentRelativePath: "chapter-01.md",
+        translate,
+        onActivateProjectDocument
+      })
+    );
+    renderToStaticMarkup(
+      React.createElement(WorkspaceSidebar, {
+        mode: "files",
+        project,
+        highlightedProjectDocumentRelativePath: "chapter-02.md",
+        translate,
+        onActivateProjectDocument
+      })
+    );
+
+    expect(onActivateProjectDocument).not.toHaveBeenCalled();
+  });
+
+  it("does not create a feedback loop across repeated highlight renders", () => {
+    const onSelectDocument = vi.fn();
+    const onActivateDocument = vi.fn();
+
+    for (const highlightedRelativePath of [
+      "chapter-01.md",
+      "chapter-02.md",
+      "chapter-01.md"
+    ]) {
+      renderToStaticMarkup(
+        React.createElement(FileExplorerView, {
+          documents: project.documents,
+          selectedRelativePath: null,
+          highlightedRelativePath,
+          translate,
+          onSelectDocument,
+          onActivateDocument
+        })
+      );
+    }
+
+    expect(onSelectDocument).not.toHaveBeenCalled();
+    expect(onActivateDocument).not.toHaveBeenCalled();
+  });
+
   it("switches Sidebar content to the Search placeholder", () => {
     const markup = renderToStaticMarkup(
       React.createElement(WorkspaceSidebar, {
         mode: "search",
         project,
-        activeRelativePath: "chapter-02.md",
+        highlightedProjectDocumentRelativePath: "chapter-02.md",
         translate,
-        onSelectProjectDocument: () => undefined
+        onActivateProjectDocument: () => undefined
       })
     );
 
@@ -339,9 +535,9 @@ describe("workspace navigation", () => {
       React.createElement(WorkspaceSidebar, {
         mode: "glossary",
         project,
-        activeRelativePath: "chapter-02.md",
+        highlightedProjectDocumentRelativePath: "chapter-02.md",
         translate,
-        onSelectProjectDocument: () => undefined
+        onActivateProjectDocument: () => undefined
       })
     );
 
