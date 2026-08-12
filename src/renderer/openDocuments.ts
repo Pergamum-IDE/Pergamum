@@ -36,7 +36,7 @@ export interface ReplaceOpenDocumentResult {
   didCollide: boolean;
 }
 
-function stableOpenDocumentId(
+export function editorIdForCurrentDocument(
   document: CurrentDocument,
   activeProjectContext: ActiveProjectContext | null
 ): EditorId | null {
@@ -99,7 +99,10 @@ export function createOpenDocumentsStateWithDocument(
   activeProjectContext: ActiveProjectContext | null,
   nextUntitledId = 1
 ): OpenDocumentsState {
-  const stableId = stableOpenDocumentId(document, activeProjectContext);
+  const stableId = editorIdForCurrentDocument(
+    document,
+    activeProjectContext
+  );
 
   if (!stableId) {
     return createInitialOpenDocumentsState(nextUntitledId);
@@ -125,6 +128,17 @@ export function activeOpenDocument(state: OpenDocumentsState): OpenDocument {
   );
 
   return activeDocument ?? state.documents[0];
+}
+
+export function findOpenDocument(
+  state: OpenDocumentsState,
+  editorId: EditorId
+): OpenDocument | null {
+  return (
+    state.documents.find((document) =>
+      editorIdEquals(document.id, editorId)
+    ) ?? null
+  );
 }
 
 export function activeCurrentDocument(
@@ -185,7 +199,10 @@ export function openOrActivateDocument(
   document: CurrentDocument,
   activeProjectContext: ActiveProjectContext | null
 ): OpenDocumentsState {
-  const stableId = stableOpenDocumentId(document, activeProjectContext);
+  const stableId = editorIdForCurrentDocument(
+    document,
+    activeProjectContext
+  );
 
   if (!stableId) {
     const activeDocumentId = createUntitledEditorId(state.nextUntitledId);
@@ -278,7 +295,7 @@ export function replaceOpenDocument(
   }
 
   const nextId =
-    stableOpenDocumentId(document, activeProjectContext) ?? editorId;
+    editorIdForCurrentDocument(document, activeProjectContext) ?? editorId;
   assertDocumentIdentityCompatible(document, nextId);
 
   const didCollide =
