@@ -17,7 +17,8 @@ import {
   openOrActivateEditor,
   openOrActivateDocument,
   replaceOpenDocument,
-  updateActiveOpenDocument
+  updateActiveOpenDocument,
+  updateActiveOpenEditor
 } from "../../src/renderer/openDocuments";
 import {
   createEditorIdForPath,
@@ -379,6 +380,38 @@ describe("OpenDocumentsState", () => {
       )
     ).toBe(true);
     expect(state.documents[0].editor.kind).toBe("glossaryEntry");
-    expect(state.documents[0].editor.entry.description).toBe("王国の首都");
+    expect(state.documents[0].editor.draft.entry.description).toBe(
+      "王国の首都"
+    );
+  });
+
+  it("updates only the active editor's draft, leaving other open editors untouched", () => {
+    const projectDocument = createProjectDocument(
+      firstProjectDocument,
+      "project content"
+    );
+    let state = createOpenDocumentsStateWithDocument(
+      projectDocument,
+      projectContext
+    );
+    state = openOrActivateEditor(
+      state,
+      createGlossaryEntryCurrentEditor(glossaryEntry),
+      projectContext
+    );
+
+    const updatedState = updateActiveOpenEditor(state, (editor) =>
+      editor.kind === "glossaryEntry"
+        ? {
+            ...editor,
+            draft: { ...editor.draft, description: "編集後" }
+          }
+        : editor
+    );
+
+    expect(updatedState.documents[1].editor.draft.description).toBe("編集後");
+    expect(updatedState.documents[0].editor.document.content).toBe(
+      "project content"
+    );
   });
 });

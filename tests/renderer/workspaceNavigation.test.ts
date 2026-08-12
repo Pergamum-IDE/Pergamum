@@ -16,7 +16,8 @@ import { createProjectDocument } from "../../src/renderer/currentDocument";
 import { FileExplorerView } from "../../src/renderer/FileExplorer";
 import {
   GlossarySidebar,
-  GlossarySidebarView
+  GlossarySidebarView,
+  initialGlossaryCreateFormState
 } from "../../src/renderer/GlossarySidebar";
 import {
   canonicalGlossarySurface,
@@ -175,6 +176,15 @@ function stubGlossaryApi(
 
   return glossaryApi;
 }
+
+const noopGlossaryCreateFormProps = {
+  canCreateEntry: true,
+  createForm: initialGlossaryCreateFormState,
+  onToggleCreateForm: () => undefined,
+  onChangeCreateSurface: () => undefined,
+  onChangeCreateKind: () => undefined,
+  onSubmitCreateForm: () => undefined
+};
 
 describe("workspace navigation", () => {
   afterEach(() => {
@@ -612,7 +622,8 @@ describe("workspace navigation", () => {
         highlightedEntryId: null,
         translate,
         onSelectEntry: () => undefined,
-        onActivateEntry: () => undefined
+        onActivateEntry: () => undefined,
+        ...noopGlossaryCreateFormProps
       })
     );
 
@@ -627,7 +638,8 @@ describe("workspace navigation", () => {
         highlightedEntryId: null,
         translate,
         onSelectEntry: () => undefined,
-        onActivateEntry: () => undefined
+        onActivateEntry: () => undefined,
+        ...noopGlossaryCreateFormProps
       })
     );
 
@@ -642,7 +654,8 @@ describe("workspace navigation", () => {
       highlightedEntryId: null,
       translate,
       onSelectEntry,
-      onActivateEntry
+      onActivateEntry,
+      ...noopGlossaryCreateFormProps
     });
     const buttons = collectElements(
       element,
@@ -668,7 +681,8 @@ describe("workspace navigation", () => {
       highlightedEntryId: "entry-beta",
       translate,
       onSelectEntry: () => undefined,
-      onActivateEntry: () => undefined
+      onActivateEntry: () => undefined,
+      ...noopGlossaryCreateFormProps
     });
     const buttons = collectElements(
       element,
@@ -702,7 +716,8 @@ describe("workspace navigation", () => {
         highlightedEntryId: "entry-alpha",
         translate,
         onSelectEntry,
-        onActivateEntry
+        onActivateEntry,
+        ...noopGlossaryCreateFormProps
       })
     );
     renderToStaticMarkup(
@@ -711,7 +726,8 @@ describe("workspace navigation", () => {
         highlightedEntryId: "entry-beta",
         translate,
         onSelectEntry,
-        onActivateEntry
+        onActivateEntry,
+        ...noopGlossaryCreateFormProps
       })
     );
 
@@ -755,7 +771,8 @@ describe("workspace navigation", () => {
         highlightedEntryId: null,
         translate,
         onSelectEntry: () => undefined,
-        onActivateEntry: () => undefined
+        onActivateEntry: () => undefined,
+        ...noopGlossaryCreateFormProps
       })
     );
     const emptyMarkup = renderToStaticMarkup(
@@ -764,7 +781,8 @@ describe("workspace navigation", () => {
         highlightedEntryId: null,
         translate,
         onSelectEntry: () => undefined,
-        onActivateEntry: () => undefined
+        onActivateEntry: () => undefined,
+        ...noopGlossaryCreateFormProps
       })
     );
     const errorMarkup = renderToStaticMarkup(
@@ -773,7 +791,8 @@ describe("workspace navigation", () => {
         highlightedEntryId: null,
         translate,
         onSelectEntry: () => undefined,
-        onActivateEntry: () => undefined
+        onActivateEntry: () => undefined,
+        ...noopGlossaryCreateFormProps
       })
     );
     const noProjectMarkup = renderToStaticMarkup(
@@ -782,7 +801,8 @@ describe("workspace navigation", () => {
         highlightedEntryId: null,
         translate,
         onSelectEntry: () => undefined,
-        onActivateEntry: () => undefined
+        onActivateEntry: () => undefined,
+        ...noopGlossaryCreateFormProps
       })
     );
 
@@ -829,7 +849,8 @@ describe("workspace navigation", () => {
       highlightedEntryId: null,
       translate,
       onSelectEntry,
-      onActivateEntry
+      onActivateEntry,
+      ...noopGlossaryCreateFormProps
     });
     const buttons = collectElements(
       element,

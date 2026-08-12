@@ -1,3 +1,4 @@
+import type { GlossaryEntryKind } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import {
   currentDocumentContent,
@@ -12,12 +13,16 @@ interface EditorSurfaceProps {
   editor: CurrentEditor;
   translate: Translate;
   onChangeMarkdownContent: (content: string) => void;
+  onChangeGlossaryEntryKind: (kind: GlossaryEntryKind) => void;
+  onChangeGlossaryEntryDescription: (description: string) => void;
 }
 
 export function EditorSurface({
   editor,
   translate,
-  onChangeMarkdownContent
+  onChangeMarkdownContent,
+  onChangeGlossaryEntryKind,
+  onChangeGlossaryEntryDescription
 }: EditorSurfaceProps): JSX.Element {
   switch (editor.kind) {
     case "markdown":
@@ -31,8 +36,10 @@ export function EditorSurface({
     case "glossaryEntry":
       return (
         <GlossaryEditor
-          entry={editor.entry}
+          draft={editor.draft}
           translate={translate}
+          onChangeKind={onChangeGlossaryEntryKind}
+          onChangeDescription={onChangeGlossaryEntryDescription}
         />
       );
   }

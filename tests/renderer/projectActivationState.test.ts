@@ -295,4 +295,117 @@ describe("project activation state", () => {
 
     expectOnlyUntitledEditor(state);
   });
+
+  it("treats a captured Project activation generation as stale after a Project switch", () => {
+    const lifetime = new ProjectActivationLifetime();
+    const generation = lifetime.captureProjectActivationGeneration();
+
+    expect(lifetime.isProjectActivationCurrent(generation)).toBe(true);
+
+    lifetime.startProjectContextSwitch();
+
+    expect(lifetime.isProjectActivationCurrent(generation)).toBe(false);
+  });
+
+  it("does not open an Editor from a Glossary Entry create started in the old Project after a switch to a new Project", async () => {
+    const lifetime = new ProjectActivationLifetime();
+    const createGeneration = lifetime.captureProjectActivationGeneration();
+    const pendingCreate = deferred<GlossaryEntry>();
+    let openedEditor = false;
+
+    const staleCreateCompletion = (async () => {
+      const entry = await pendingCreate.promise;
+
+      if (!lifetime.isProjectActivationCurrent(createGeneration)) {
+        return;
+      }
+
+      lifetime.markExplicitEditorActivation();
+      openedEditor = true;
+    })();
+
+    lifetime.startProjectContextSwitch();
+    pendingCreate.resolve(oldGlossaryEntry);
+    await staleCreateCompletion;
+
+    expect(openedEditor).toBe(false);
+  });
+
+  it("does not let a stale Glossary Entry create invalidate the new Project's first-document activation", async () => {
+    const lifetime = new ProjectActivationLifetime();
+    const createGeneration = lifetime.captureProjectActivationGeneration();
+    const pendingCreate = deferred<GlossaryEntry>();
+
+    const projectBToken = lifetime.startProjectContextSwitch();
+    const pendingFirstDocument = deferred<
+      ReturnType<typeof createProjectDocument>
+    >();
+    let state = resetOpenDocumentsForProjectContextSwitch(
+      oldProjectScopedOpenDocuments()
+    );
+    const firstDocumentLoad = loadFirstProjectDocumentIfCurrent(
+      lifetime,
+      projectBToken,
+      () => pendingFirstDocument.promise
+    ).then((document) => {
+      if (document) {
+        state = applyLoadedFirstDocument(state, document, newProjectContext);
+      }
+    });
+
+    const staleCreateCompletion = (async () => {
+      const entry = await pendingCreate.promise;
+
+      if (!lifetime.isProjectActivationCurrent(createGeneration)) {
+        return;
+      }
+
+      lifetime.markExplicitEditorActivation();
+    })();
+
+    pendingCreate.resolve(oldGlossaryEntry);
+    await staleCreateCompletion;
+
+    pendingFirstDocument.resolve(
+      createProjectDocument(newDocument, "new content")
+    );
+    await firstDocumentLoad;
+
+    expect(state.documents).toHaveLength(1);
+    expect(
+      editorIdEquals(
+        state.activeDocumentId,
+        createProjectDocumentEditorId(
+          newDocument.relativePath,
+          newProjectContext
+        )
+      )
+    ).toBe(true);
+  });
+
+  it("does not apply a Glossary Entry save's status or Sidebar refresh from the old Project after a switch to a new Project", async () => {
+    const lifetime = new ProjectActivationLifetime();
+    const saveGeneration = lifetime.captureProjectActivationGeneration();
+    const pendingSave = deferred<GlossaryEntry>();
+    let didRefreshSidebar = false;
+    let appliedStatusEntryId: string | null = null;
+
+    const staleSaveCompletion = (async () => {
+      const savedEntry = await pendingSave.promise;
+
+      if (!lifetime.isProjectActivationCurrent(saveGeneration)) {
+        return;
+      }
+
+      didRefreshSidebar = true;
+      appliedStatusEntryId = savedEntry.id;
+    })();
+
+    lifetime.startProjectContextSwitch();
+    pendingSave.resolve(oldGlossaryEntry);
+    await staleSaveCompletion;
+
+    expect(didRefreshSidebar).toBe(false);
+    expect(appliedStatusEntryId).toBeNull();
+  });
 });

@@ -620,6 +620,34 @@ button:active {
   width: 100%;
 }
 
+.glossaryCreateForm {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  padding: 8px;
+  border-top: 1px solid var(--workspace-sidebar-divider);
+}
+
+.glossaryCreateFormField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.glossaryCreateFormError {
+  margin: 0;
+  color: #b3261e;
+  font-size: 12px;
+}
+
+.glossaryCreateFormActions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
 .fileExplorerList {
   flex: 1;
   min-height: 0;
@@ -813,6 +841,29 @@ button:active {
   font-weight: 600;
   line-height: 1;
   padding: 5px 7px;
+}
+
+.glossaryEditorKindField {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  gap: 8px;
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.glossaryEditorKindField select {
+  border: 1px solid #cbd5df;
+  border-radius: 4px;
+  padding: 5px 7px;
+}
+
+.glossaryEditorDescriptionWorkspace {
+  height: 360px;
+  border: 1px solid #e3e8ee;
+  border-radius: 6px;
+  overflow: hidden;
 }
 
 .glossaryEditorSection {
