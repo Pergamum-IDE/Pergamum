@@ -1,5 +1,5 @@
 import type { PergamumProject } from "../shared/api";
-import type { GlossaryEntryId } from "../shared/glossary";
+import type { CreateGlossaryEntryInput, GlossaryEntryId } from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import { FileExplorer } from "./FileExplorer";
 import { GlossarySidebar } from "./GlossarySidebar";
@@ -11,9 +11,13 @@ interface WorkspaceSidebarProps {
   project: PergamumProject | null;
   highlightedProjectDocumentRelativePath: string | null;
   highlightedGlossaryEntryId: GlossaryEntryId | null;
+  glossaryRefreshToken: number;
   translate: Translate;
   onActivateProjectDocument: (relativePath: string) => void;
   onActivateGlossaryEntry: (entryId: GlossaryEntryId) => void;
+  onCreateGlossaryEntry: (
+    input: CreateGlossaryEntryInput
+  ) => Promise<boolean>;
 }
 
 export function WorkspaceSidebar({
@@ -21,9 +25,11 @@ export function WorkspaceSidebar({
   project,
   highlightedProjectDocumentRelativePath,
   highlightedGlossaryEntryId,
+  glossaryRefreshToken,
   translate,
   onActivateProjectDocument,
-  onActivateGlossaryEntry
+  onActivateGlossaryEntry,
+  onCreateGlossaryEntry
 }: WorkspaceSidebarProps): JSX.Element {
   switch (mode) {
     case "files":
@@ -45,8 +51,10 @@ export function WorkspaceSidebar({
         <GlossarySidebar
           projectRootPath={project?.rootPath ?? null}
           highlightedEntryId={project ? highlightedGlossaryEntryId : null}
+          refreshToken={glossaryRefreshToken}
           translate={translate}
           onActivateEntry={onActivateGlossaryEntry}
+          onCreateEntry={onCreateGlossaryEntry}
         />
       );
   }

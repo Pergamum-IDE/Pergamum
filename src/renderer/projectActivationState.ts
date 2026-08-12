@@ -29,6 +29,14 @@ export class ProjectActivationLifetime {
     this.explicitEditorActivationGeneration += 1;
   }
 
+  captureProjectActivationGeneration(): number {
+    return this.projectActivationGeneration;
+  }
+
+  isProjectActivationCurrent(generation: number): boolean {
+    return generation === this.projectActivationGeneration;
+  }
+
   shouldApplyFirstProjectDocument(token: ProjectActivationToken): boolean {
     return (
       token.projectActivationGeneration ===

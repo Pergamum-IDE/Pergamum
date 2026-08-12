@@ -12,6 +12,11 @@ import {
   isCurrentDocumentDirty,
   type CurrentDocument
 } from "./currentDocument";
+import {
+  createGlossaryEntryDraft,
+  isGlossaryEntryDraftDirty,
+  type GlossaryEntryDraft
+} from "./glossaryEntryDraft";
 import { canonicalGlossarySurface } from "./glossaryPresentation";
 
 export interface MarkdownCurrentEditor {
@@ -21,7 +26,7 @@ export interface MarkdownCurrentEditor {
 
 export interface GlossaryEntryCurrentEditor {
   kind: "glossaryEntry";
-  entry: GlossaryEntry;
+  draft: GlossaryEntryDraft;
 }
 
 export type CurrentEditor =
@@ -42,7 +47,7 @@ export function createGlossaryEntryCurrentEditor(
 ): GlossaryEntryCurrentEditor {
   return {
     kind: "glossaryEntry",
-    entry
+    draft: createGlossaryEntryDraft(entry)
   };
 }
 
@@ -57,7 +62,7 @@ export function currentEditorTitle(editor: CurrentEditor): string {
     case "markdown":
       return currentDocumentTitle(editor.document);
     case "glossaryEntry":
-      return canonicalGlossarySurface(editor.entry);
+      return canonicalGlossarySurface(editor.draft.entry);
   }
 }
 
@@ -66,7 +71,7 @@ export function isCurrentEditorDirty(editor: CurrentEditor): boolean {
     case "markdown":
       return isCurrentDocumentDirty(editor.document);
     case "glossaryEntry":
-      return false;
+      return isGlossaryEntryDraftDirty(editor.draft);
   }
 }
 
@@ -81,7 +86,7 @@ export function currentEditorProjectRelativePath(
 export function currentEditorGlossaryEntryId(
   editor: CurrentEditor
 ): GlossaryEntryId | null {
-  return editor.kind === "glossaryEntry" ? editor.entry.id : null;
+  return editor.kind === "glossaryEntry" ? editor.draft.entry.id : null;
 }
 
 export function editorIdForCurrentEditor(
@@ -106,7 +111,7 @@ export function editorIdForCurrentEditor(
       }
     case "glossaryEntry":
       return createGlossaryEntryEditorId(
-        editor.entry.id,
+        editor.draft.entry.id,
         activeProjectContext
       );
   }

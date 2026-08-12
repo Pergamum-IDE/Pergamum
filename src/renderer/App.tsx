@@ -15,7 +15,12 @@ import {
   type ActiveProjectContext,
   type EditorId
 } from "../shared/editorId";
-import type { GlossaryEntryId } from "../shared/glossary";
+import type {
+  CreateGlossaryEntryInput,
+  GlossaryEntry,
+  GlossaryEntryId,
+  GlossaryEntryKind
+} from "../shared/glossary";
 import {
   t,
   type Translate,
@@ -34,6 +39,7 @@ import {
   type CurrentDocument
 } from "./currentDocument";
 import {
+  createGlossaryEntryCurrentEditor,
   createMarkdownCurrentEditor,
   currentEditorGlossaryEntryId,
   currentEditorProjectRelativePath,
@@ -49,6 +55,16 @@ import {
   type EditorResolveResult,
   type OpenEditorOptions
 } from "./editorNavigation";
+import {
+  applyGlossaryEntryDraftSaveResult,
+  glossaryEntryDraftUpdateInput,
+  isGlossaryEntryDraftDirty,
+  markGlossaryEntryDraftSaveFailed,
+  markGlossaryEntryDraftSaving,
+  updateGlossaryEntryDraftDescription,
+  updateGlossaryEntryDraftKind
+} from "./glossaryEntryDraft";
+import { canonicalGlossarySurface } from "./glossaryPresentation";
 import {
   createGlossaryCommandTitles,
   glossaryCommandIds,
@@ -67,6 +83,8 @@ import {
   openOrActivateEditor,
   replaceOpenDocument,
   updateActiveOpenDocument,
+  updateActiveOpenEditor,
+  updateOpenEditor,
   type OpenDocumentsState
 } from "./openDocuments";
 import { currentDocumentForOpenedFile } from "./projectDocumentResolution";
@@ -129,6 +147,7 @@ export function App(): JSX.Element {
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [status, setStatus] = useState<StatusMessage>({ key: "app.ready" });
+  const [glossaryRefreshToken, setGlossaryRefreshToken] = useState(0);
   const editorNavigationRef = useRef<EditorNavigation<CurrentEditor> | null>(
     null
   );
@@ -156,6 +175,13 @@ export function App(): JSX.Element {
     [settings, project?.config?.settings]
   );
   const isDirty = isCurrentEditorDirty(currentEditor);
+  const isSavingGlossaryEntry =
+    currentEditor.kind === "glossaryEntry" &&
+    currentEditor.draft.saveState === "saving";
+  const canSave =
+    currentEditor.kind === "markdown"
+      ? Boolean(activeMarkdownDocument)
+      : !isSavingGlossaryEntry;
   const translate = useMemo(
     () => (key: TranslationKey, values?: TranslationValues) =>
       t(displayLanguage, key, values),
@@ -186,6 +212,45 @@ export function App(): JSX.Element {
           );
 
           return await openEditorFromExplicitActivation(editorId);
+        },
+        createGlossaryEntry: async (input) => {
+          const projectGeneration =
+            projectActivationLifetimeRef.current.captureProjectActivationGeneration();
+          let entry: GlossaryEntry;
+
+          try {
+            entry = await window.pergamum.glossary.create(input);
+          } catch (error) {
+            if (
+              !projectActivationLifetimeRef.current.isProjectActivationCurrent(
+                projectGeneration
+              )
+            ) {
+              return false;
+            }
+
+            throw error;
+          }
+
+          if (
+            !projectActivationLifetimeRef.current.isProjectActivationCurrent(
+              projectGeneration
+            )
+          ) {
+            return false;
+          }
+
+          setGlossaryRefreshToken((token) => token + 1);
+
+          const editorId = createGlossaryEntryEditorId(
+            entry.id,
+            activeProjectContext
+          );
+
+          return await openEditorFromExplicitActivation(editorId, {
+            history: "record",
+            resolvedEditor: createGlossaryEntryCurrentEditor(entry)
+          });
         }
       },
       createGlossaryCommandTitles(translate)
@@ -225,6 +290,49 @@ export function App(): JSX.Element {
         updateCurrentDocumentContent(document, nextContent)
       )
     );
+  }
+
+  function setActiveGlossaryEntryKind(kind: GlossaryEntryKind): void {
+    setOpenDocumentsState((state) =>
+      updateActiveOpenEditor(state, (editor) =>
+        editor.kind === "glossaryEntry"
+          ? { ...editor, draft: updateGlossaryEntryDraftKind(editor.draft, kind) }
+          : editor
+      )
+    );
+  }
+
+  function setActiveGlossaryEntryDescription(description: string): void {
+    setOpenDocumentsState((state) =>
+      updateActiveOpenEditor(state, (editor) =>
+        editor.kind === "glossaryEntry"
+          ? {
+              ...editor,
+              draft: updateGlossaryEntryDraftDescription(
+                editor.draft,
+                description
+              )
+            }
+          : editor
+      )
+    );
+  }
+
+  async function createGlossaryEntryFromSidebar(
+    input: CreateGlossaryEntryInput
+  ): Promise<boolean> {
+    try {
+      return await commandRegistry.execute(
+        glossaryCommandIds.createEntry,
+        input
+      );
+    } catch (error) {
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+      return false;
+    }
   }
 
   function activateDocument(documentId: EditorId): void {
@@ -353,7 +461,95 @@ export function App(): JSX.Element {
     return replacement.didCollide;
   }
 
+  async function saveGlossaryEntry(): Promise<void> {
+    if (activeDocument.editor.kind !== "glossaryEntry") {
+      return;
+    }
+
+    const documentIdToSave = activeDocument.id;
+    const draftToSave = activeDocument.editor.draft;
+
+    if (
+      !isGlossaryEntryDraftDirty(draftToSave) ||
+      draftToSave.saveState === "saving"
+    ) {
+      return;
+    }
+
+    const projectGeneration =
+      projectActivationLifetimeRef.current.captureProjectActivationGeneration();
+
+    setOpenDocumentsState((state) =>
+      updateOpenEditor(state, documentIdToSave, (editor) =>
+        editor.kind === "glossaryEntry"
+          ? { ...editor, draft: markGlossaryEntryDraftSaving(editor.draft) }
+          : editor
+      )
+    );
+
+    try {
+      const savedEntry = await window.pergamum.glossary.update(
+        glossaryEntryDraftUpdateInput(draftToSave)
+      );
+
+      if (
+        !projectActivationLifetimeRef.current.isProjectActivationCurrent(
+          projectGeneration
+        )
+      ) {
+        return;
+      }
+
+      setOpenDocumentsState((state) =>
+        updateOpenEditor(state, documentIdToSave, (editor) =>
+          editor.kind === "glossaryEntry"
+            ? {
+                ...editor,
+                draft: applyGlossaryEntryDraftSaveResult(
+                  editor.draft,
+                  savedEntry
+                )
+              }
+            : editor
+        )
+      );
+      setGlossaryRefreshToken((token) => token + 1);
+      setStatus({
+        key: "status.savedPath",
+        values: { path: canonicalGlossarySurface(savedEntry) }
+      });
+    } catch (error) {
+      if (
+        !projectActivationLifetimeRef.current.isProjectActivationCurrent(
+          projectGeneration
+        )
+      ) {
+        return;
+      }
+
+      setOpenDocumentsState((state) =>
+        updateOpenEditor(state, documentIdToSave, (editor) =>
+          editor.kind === "glossaryEntry"
+            ? {
+                ...editor,
+                draft: markGlossaryEntryDraftSaveFailed(editor.draft)
+              }
+            : editor
+        )
+      );
+      setStatus({
+        key: "status.saveFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+    }
+  }
+
   async function saveFile(): Promise<void> {
+    if (activeDocument.editor.kind === "glossaryEntry") {
+      await saveGlossaryEntry();
+      return;
+    }
+
     try {
       if (activeDocument.editor.kind !== "markdown") {
         return;
@@ -616,7 +812,7 @@ export function App(): JSX.Element {
         <button
           type="button"
           onClick={saveFile}
-          disabled={!activeMarkdownDocument}
+          disabled={!canSave}
         >
           {translate("common.save")}
         </button>
@@ -686,6 +882,7 @@ export function App(): JSX.Element {
                 highlightedGlossaryEntryId={
                   currentEditorGlossaryEntryId(currentEditor)
                 }
+                glossaryRefreshToken={glossaryRefreshToken}
                 translate={translate}
                 onActivateProjectDocument={(relativePath) => {
                   void activateProjectDocument(relativePath);
@@ -693,6 +890,7 @@ export function App(): JSX.Element {
                 onActivateGlossaryEntry={(entryId) => {
                   executeUiCommand(glossaryCommandIds.openEntry, entryId);
                 }}
+                onCreateGlossaryEntry={createGlossaryEntryFromSidebar}
               />
 
               <section className="editorArea">
@@ -707,6 +905,10 @@ export function App(): JSX.Element {
                   editor={currentEditor}
                   translate={translate}
                   onChangeMarkdownContent={setActiveDocumentContent}
+                  onChangeGlossaryEntryKind={setActiveGlossaryEntryKind}
+                  onChangeGlossaryEntryDescription={
+                    setActiveGlossaryEntryDescription
+                  }
                 />
               </section>
             </section>

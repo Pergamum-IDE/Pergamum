@@ -7,25 +7,33 @@ import {
   registerGlossaryCommands
 } from "../../src/renderer/glossaryCommands";
 
+const bothCommandTitles = {
+  openEntry: "Open glossary entry",
+  createEntry: "Create glossary entry"
+};
+
 describe("glossary commands", () => {
-  it("registers the Glossary entry open command", () => {
+  it("registers the Glossary entry open and create commands", () => {
     const registry = new CommandRegistry();
 
     registerGlossaryCommands(
       registry,
       {
-        openGlossaryEntry: () => true
+        openGlossaryEntry: () => true,
+        createGlossaryEntry: () => true
       },
-      {
-        openEntry: "Open glossary entry"
-      }
+      bothCommandTitles
     );
 
     expect(registry.list().map((command) => command.id)).toEqual([
-      glossaryCommandIds.openEntry
+      glossaryCommandIds.openEntry,
+      glossaryCommandIds.createEntry
     ]);
     expect(registry.get(glossaryCommandIds.openEntry)?.title).toBe(
       "Open glossary entry"
+    );
+    expect(registry.get(glossaryCommandIds.createEntry)?.title).toBe(
+      "Create glossary entry"
     );
   });
 
@@ -36,11 +44,10 @@ describe("glossary commands", () => {
     registerGlossaryCommands(
       registry,
       {
-        openGlossaryEntry
+        openGlossaryEntry,
+        createGlossaryEntry: () => true
       },
-      {
-        openEntry: "Open glossary entry"
-      }
+      bothCommandTitles
     );
 
     await expect(
@@ -54,11 +61,36 @@ describe("glossary commands", () => {
     );
   });
 
+  it("creates Glossary entries through a typed command argument", async () => {
+    const registry = new CommandRegistry();
+    const createGlossaryEntry = vi.fn(async () => true);
+    const input = {
+      kind: "place" as const,
+      canonicalSurface: "王都",
+      description: ""
+    };
+
+    registerGlossaryCommands(
+      registry,
+      {
+        openGlossaryEntry: () => true,
+        createGlossaryEntry
+      },
+      bothCommandTitles
+    );
+
+    await expect(
+      registry.execute(glossaryCommandIds.createEntry, input)
+    ).resolves.toBe(true);
+    expect(createGlossaryEntry).toHaveBeenCalledWith(input);
+  });
+
   it("creates localized command titles outside the registry", () => {
     const translate = vi.fn((key: string) => `translated:${key}`);
 
     expect(createGlossaryCommandTitles(translate)).toEqual({
-      openEntry: "translated:command.glossary.entry.open"
+      openEntry: "translated:command.glossary.entry.open",
+      createEntry: "translated:command.glossary.entry.create"
     });
   });
 

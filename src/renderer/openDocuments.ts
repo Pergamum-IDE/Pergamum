@@ -312,6 +312,13 @@ export function updateActiveOpenDocument(
   return updateOpenDocument(state, state.activeDocumentId, updateDocument);
 }
 
+export function updateActiveOpenEditor(
+  state: OpenDocumentsState,
+  updateEditor: (editor: CurrentEditor) => CurrentEditor
+): OpenDocumentsState {
+  return updateOpenEditor(state, state.activeDocumentId, updateEditor);
+}
+
 export function replaceOpenDocument(
   state: OpenDocumentsState,
   editorId: EditorId,
