@@ -1,9 +1,17 @@
 import { useMemo, useState } from "react";
 import type {
+  MarkdownFile,
   PergamumProject,
   ProjectDocument,
   SaveApplicationSettingsRequest
 } from "../shared/api";
+import {
+  createEditorIdForPath,
+  createProjectDocumentEditorId,
+  editorIdEquals,
+  type ActiveProjectContext,
+  type EditorId
+} from "../shared/editorId";
 import {
   t,
   type Translate,
@@ -39,10 +47,8 @@ import {
   hasOpenDocument,
   isOnlyInitialUntitledDocument,
   openOrActivateDocument,
-  projectOpenDocumentId,
   replaceOpenDocument,
   updateActiveOpenDocument,
-  type OpenDocumentId,
   type OpenDocumentsState
 } from "./openDocuments";
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
@@ -78,6 +84,57 @@ function projectOpenStatus(
     : openedStatus;
 }
 
+function projectContextForProject(
+  project: PergamumProject | null
+): ActiveProjectContext | null {
+  return project ? { rootPath: project.rootPath } : null;
+}
+
+export function findProjectDocumentByEditorId(
+  project: PergamumProject,
+  editorId: EditorId,
+  activeProjectContext: ActiveProjectContext
+): ProjectDocument | null {
+  if (editorId.kind !== "projectDocument") {
+    return null;
+  }
+
+  return (
+    project.documents.find((document) =>
+      editorIdEquals(
+        createProjectDocumentEditorId(
+          document.relativePath,
+          activeProjectContext
+        ),
+        editorId
+      )
+    ) ?? null
+  );
+}
+
+export function currentDocumentForOpenedFile(
+  file: MarkdownFile,
+  project: PergamumProject | null,
+  activeProjectContext: ActiveProjectContext | null
+): CurrentDocument {
+  const editorId = createEditorIdForPath(file.path, activeProjectContext);
+
+  if (editorId.kind === "projectDocument") {
+    const projectDocument =
+      project && activeProjectContext
+        ? findProjectDocumentByEditorId(project, editorId, activeProjectContext)
+        : null;
+
+    if (!projectDocument) {
+      throw new Error("Project document is not listed in the active project.");
+    }
+
+    return createProjectDocument(projectDocument, file.content);
+  }
+
+  return createFileDocument(file);
+}
+
 export function App(): JSX.Element {
   const [project, setProject] = useState<PergamumProject | null>(null);
   const [openDocumentsState, setOpenDocumentsState] =
@@ -97,6 +154,10 @@ export function App(): JSX.Element {
 
   const activeDocument = activeOpenDocument(openDocumentsState);
   const currentDocument = activeCurrentDocument(openDocumentsState);
+  const activeProjectContext = useMemo(
+    () => projectContextForProject(project),
+    [project]
+  );
   const effectiveSettings = useMemo(
     () => resolveEffectiveSettings(settings, project?.config?.settings),
     [settings, project?.config?.settings]
@@ -137,39 +198,53 @@ export function App(): JSX.Element {
     );
   }
 
-  function activateDocument(documentId: OpenDocumentId): void {
+  function activateDocument(documentId: EditorId): void {
     setOpenDocumentsState((state) => activateOpenDocument(state, documentId));
   }
 
   function openDocument(document: CurrentDocument): void {
-    setOpenDocumentsState((state) => openOrActivateDocument(state, document));
+    setOpenDocumentsState((state) =>
+      openOrActivateDocument(state, document, activeProjectContext)
+    );
   }
 
   async function openFile(): Promise<void> {
-    const file = await window.pergamum.files.openMarkdown();
+    try {
+      const file = await window.pergamum.files.openMarkdown();
 
-    if (!file) {
-      setStatus({ key: "status.openCanceled" });
-      return;
+      if (!file) {
+        setStatus({ key: "status.openCanceled" });
+        return;
+      }
+
+      const openedDocument = currentDocumentForOpenedFile(
+        file,
+        project,
+        activeProjectContext
+      );
+
+      openDocument(openedDocument);
+      setStatus({
+        key: "status.openedFile",
+        values: { name: openedDocument.name }
+      });
+    } catch (error) {
+      setStatus({
+        key: "status.documentOpenFailed",
+        values: { message: errorMessage(error, translate) }
+      });
     }
-
-    const openedDocument = createFileDocument(file);
-
-    openDocument(openedDocument);
-    setStatus({
-      key: "status.openedFile",
-      values: { name: openedDocument.name }
-    });
   }
 
   function replaceSavedDocument(
-    documentId: OpenDocumentId,
+    documentId: EditorId,
     document: CurrentDocument
   ): boolean {
     const replacement = replaceOpenDocument(
       openDocumentsState,
       documentId,
-      document
+      document,
+      activeProjectContext
     );
 
     setOpenDocumentsState(replacement.state);
@@ -178,50 +253,57 @@ export function App(): JSX.Element {
   }
 
   async function saveFile(): Promise<void> {
-    const documentToSave = activeDocument.document;
-    const documentIdToSave = activeDocument.id;
+    try {
+      const documentToSave = activeDocument.document;
+      const documentIdToSave = activeDocument.id;
 
-    if (isProjectCurrentDocument(documentToSave)) {
-      const result = await window.pergamum.projects.saveProjectDocument(
-        documentToSave.relativePath,
+      if (isProjectCurrentDocument(documentToSave)) {
+        const result = await window.pergamum.projects.saveProjectDocument(
+          documentToSave.relativePath,
+          documentToSave.content
+        );
+
+        replaceSavedDocument(
+          documentIdToSave,
+          markCurrentDocumentSaved(documentToSave)
+        );
+        setStatus({
+          key: "status.savedPath",
+          values: { path: result.relativePath }
+        });
+        return;
+      }
+
+      const result = await window.pergamum.files.saveMarkdown(
+        standaloneSavePath(documentToSave),
         documentToSave.content
       );
 
-      replaceSavedDocument(
-        documentIdToSave,
-        markCurrentDocumentSaved(documentToSave)
+      if (!result) {
+        setStatus({ key: "status.saveCanceled" });
+        return;
+      }
+
+      const savedDocument = applyStandaloneSaveResult(documentToSave, result);
+      const didCollide = replaceSavedDocument(documentIdToSave, savedDocument);
+
+      setStatus(
+        didCollide
+          ? {
+              key: "status.saveAsTargetAlreadyOpen",
+              values: { path: result.path }
+            }
+          : {
+              key: "status.savedPath",
+              values: { path: savedDocument.name }
+            }
       );
+    } catch (error) {
       setStatus({
-        key: "status.savedPath",
-        values: { path: result.relativePath }
+        key: "status.saveFailed",
+        values: { message: errorMessage(error, translate) }
       });
-      return;
     }
-
-    const result = await window.pergamum.files.saveMarkdown(
-      standaloneSavePath(documentToSave),
-      documentToSave.content
-    );
-
-    if (!result) {
-      setStatus({ key: "status.saveCanceled" });
-      return;
-    }
-
-    const savedDocument = applyStandaloneSaveResult(documentToSave, result);
-    const didCollide = replaceSavedDocument(documentIdToSave, savedDocument);
-
-    setStatus(
-      didCollide
-        ? {
-            key: "status.saveAsTargetAlreadyOpen",
-            values: { path: result.path }
-          }
-        : {
-            key: "status.savedPath",
-            values: { path: savedDocument.name }
-          }
-    );
   }
 
   async function readProjectDocument(
@@ -238,13 +320,18 @@ export function App(): JSX.Element {
     openedProject: PergamumProject
   ): Promise<StatusMessage> {
     setProject(openedProject);
+    const openedProjectContext = projectContextForProject(openedProject);
 
     if (openedProject.documents.length > 0) {
       const firstDocument = openedProject.documents[0];
       const firstCurrentDocument = await readProjectDocument(firstDocument);
 
-      setOpenDocumentsState(
-        createOpenDocumentsStateWithDocument(firstCurrentDocument)
+      setOpenDocumentsState((state) =>
+        createOpenDocumentsStateWithDocument(
+          firstCurrentDocument,
+          openedProjectContext,
+          state.nextUntitledId
+        )
       );
 
       return {
@@ -256,7 +343,9 @@ export function App(): JSX.Element {
       };
     }
 
-    setOpenDocumentsState(createInitialOpenDocumentsState());
+    setOpenDocumentsState((state) =>
+      createInitialOpenDocumentsState(state.nextUntitledId)
+    );
 
     return {
       key: "status.openedProject",
@@ -336,18 +425,21 @@ export function App(): JSX.Element {
       return;
     }
 
-    const documentId = projectOpenDocumentId(document.relativePath);
-
-    if (hasOpenDocument(openDocumentsState, documentId)) {
-      activateDocument(documentId);
-      setStatus({
-        key: "status.openedProjectDocumentOnly",
-        values: { relativePath: document.relativePath }
-      });
-      return;
-    }
-
     try {
+      const documentId = createProjectDocumentEditorId(
+        document.relativePath,
+        activeProjectContext
+      );
+
+      if (hasOpenDocument(openDocumentsState, documentId)) {
+        activateDocument(documentId);
+        setStatus({
+          key: "status.openedProjectDocumentOnly",
+          values: { relativePath: document.relativePath }
+        });
+        return;
+      }
+
       const openedDocument = await readProjectDocument(document);
 
       openDocument(openedDocument);

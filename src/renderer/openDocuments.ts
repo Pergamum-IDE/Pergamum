@@ -5,28 +5,28 @@ import {
   isInitialUntitledDocument,
   type CurrentDocument
 } from "./currentDocument";
-
-export type FileOpenDocumentId = `file:${string}`;
-export type ProjectOpenDocumentId = `project:${string}`;
-export type UntitledOpenDocumentId = `untitled:${number}`;
-export type OpenDocumentId =
-  | FileOpenDocumentId
-  | ProjectOpenDocumentId
-  | UntitledOpenDocumentId;
+import {
+  createEditorIdForPath,
+  createProjectDocumentEditorId,
+  createUntitledEditorId,
+  editorIdEquals,
+  type ActiveProjectContext,
+  type EditorId
+} from "../shared/editorId";
 
 export interface OpenDocument {
-  id: OpenDocumentId;
+  id: EditorId;
   document: CurrentDocument;
 }
 
 export interface OpenDocumentsState {
   documents: OpenDocument[];
-  activeDocumentId: OpenDocumentId;
+  activeDocumentId: EditorId;
   nextUntitledId: number;
 }
 
 export interface DocumentTab {
-  id: OpenDocumentId;
+  id: EditorId;
   title: string;
   isDirty: boolean;
 }
@@ -36,36 +36,51 @@ export interface ReplaceOpenDocumentResult {
   didCollide: boolean;
 }
 
-export function fileOpenDocumentId(filePath: string): FileOpenDocumentId {
-  return `file:${filePath}`;
-}
-
-export function projectOpenDocumentId(
-  relativePath: string
-): ProjectOpenDocumentId {
-  return `project:${relativePath}`;
-}
-
-function untitledOpenDocumentId(untitledId: number): UntitledOpenDocumentId {
-  return `untitled:${untitledId}`;
-}
-
 function stableOpenDocumentId(
-  document: CurrentDocument
-): FileOpenDocumentId | ProjectOpenDocumentId | null {
+  document: CurrentDocument,
+  activeProjectContext: ActiveProjectContext | null
+): EditorId | null {
   switch (document.kind) {
     case "file":
-      return fileOpenDocumentId(document.path);
+      return createEditorIdForPath(document.path, activeProjectContext);
     case "project":
-      return projectOpenDocumentId(document.relativePath);
+      return createProjectDocumentEditorId(
+        document.relativePath,
+        activeProjectContext
+      );
     case "untitled":
       return null;
   }
 }
 
-export function createInitialOpenDocumentsState(): OpenDocumentsState {
-  const untitledId = 1;
-  const activeDocumentId = untitledOpenDocumentId(untitledId);
+function isDocumentIdentityCompatible(
+  document: CurrentDocument,
+  editorId: EditorId
+): boolean {
+  switch (document.kind) {
+    case "file":
+      return editorId.kind === "file";
+    case "project":
+      return editorId.kind === "projectDocument";
+    case "untitled":
+      return editorId.kind === "untitled";
+  }
+}
+
+function assertDocumentIdentityCompatible(
+  document: CurrentDocument,
+  editorId: EditorId
+): void {
+  if (!isDocumentIdentityCompatible(document, editorId)) {
+    throw new Error("CurrentDocument kind does not match its EditorId.");
+  }
+}
+
+export function createInitialOpenDocumentsState(
+  nextUntitledId = 1
+): OpenDocumentsState {
+  const untitledId = nextUntitledId;
+  const activeDocumentId = createUntitledEditorId(untitledId);
 
   return {
     documents: [
@@ -80,13 +95,17 @@ export function createInitialOpenDocumentsState(): OpenDocumentsState {
 }
 
 export function createOpenDocumentsStateWithDocument(
-  document: CurrentDocument
+  document: CurrentDocument,
+  activeProjectContext: ActiveProjectContext | null,
+  nextUntitledId = 1
 ): OpenDocumentsState {
-  const stableId = stableOpenDocumentId(document);
+  const stableId = stableOpenDocumentId(document, activeProjectContext);
 
   if (!stableId) {
-    return createInitialOpenDocumentsState();
+    return createInitialOpenDocumentsState(nextUntitledId);
   }
+
+  assertDocumentIdentityCompatible(document, stableId);
 
   return {
     documents: [
@@ -96,13 +115,13 @@ export function createOpenDocumentsStateWithDocument(
       }
     ],
     activeDocumentId: stableId,
-    nextUntitledId: 1
+    nextUntitledId
   };
 }
 
 export function activeOpenDocument(state: OpenDocumentsState): OpenDocument {
   const activeDocument = state.documents.find(
-    (document) => document.id === state.activeDocumentId
+    (document) => editorIdEquals(document.id, state.activeDocumentId)
   );
 
   return activeDocument ?? state.documents[0];
@@ -140,33 +159,36 @@ export function documentTabs(state: OpenDocumentsState): DocumentTab[] {
 
 export function hasOpenDocument(
   state: OpenDocumentsState,
-  openDocumentId: OpenDocumentId
+  editorId: EditorId
 ): boolean {
-  return state.documents.some((document) => document.id === openDocumentId);
+  return state.documents.some((document) =>
+    editorIdEquals(document.id, editorId)
+  );
 }
 
 export function activateOpenDocument(
   state: OpenDocumentsState,
-  openDocumentId: OpenDocumentId
+  editorId: EditorId
 ): OpenDocumentsState {
-  if (!hasOpenDocument(state, openDocumentId)) {
+  if (!hasOpenDocument(state, editorId)) {
     return state;
   }
 
   return {
     ...state,
-    activeDocumentId: openDocumentId
+    activeDocumentId: editorId
   };
 }
 
 export function openOrActivateDocument(
   state: OpenDocumentsState,
-  document: CurrentDocument
+  document: CurrentDocument,
+  activeProjectContext: ActiveProjectContext | null
 ): OpenDocumentsState {
-  const stableId = stableOpenDocumentId(document);
+  const stableId = stableOpenDocumentId(document, activeProjectContext);
 
   if (!stableId) {
-    const activeDocumentId = untitledOpenDocumentId(state.nextUntitledId);
+    const activeDocumentId = createUntitledEditorId(state.nextUntitledId);
 
     return {
       documents: [
@@ -180,6 +202,8 @@ export function openOrActivateDocument(
       nextUntitledId: state.nextUntitledId + 1
     };
   }
+
+  assertDocumentIdentityCompatible(document, stableId);
 
   if (hasOpenDocument(state, stableId)) {
     return activateOpenDocument(state, stableId);
@@ -213,13 +237,13 @@ export function openOrActivateDocument(
 
 export function updateOpenDocument(
   state: OpenDocumentsState,
-  openDocumentId: OpenDocumentId,
+  editorId: EditorId,
   updateDocument: (document: CurrentDocument) => CurrentDocument
 ): OpenDocumentsState {
   return {
     ...state,
     documents: state.documents.map((openDocument) =>
-      openDocument.id === openDocumentId
+      editorIdEquals(openDocument.id, editorId)
         ? {
             ...openDocument,
             document: updateDocument(openDocument.document)
@@ -238,11 +262,12 @@ export function updateActiveOpenDocument(
 
 export function replaceOpenDocument(
   state: OpenDocumentsState,
-  openDocumentId: OpenDocumentId,
-  document: CurrentDocument
+  editorId: EditorId,
+  document: CurrentDocument,
+  activeProjectContext: ActiveProjectContext | null
 ): ReplaceOpenDocumentResult {
   const existingIndex = state.documents.findIndex(
-    (openDocument) => openDocument.id === openDocumentId
+    (openDocument) => editorIdEquals(openDocument.id, editorId)
   );
 
   if (existingIndex === -1) {
@@ -252,9 +277,12 @@ export function replaceOpenDocument(
     };
   }
 
-  const nextId = stableOpenDocumentId(document) ?? openDocumentId;
+  const nextId =
+    stableOpenDocumentId(document, activeProjectContext) ?? editorId;
+  assertDocumentIdentityCompatible(document, nextId);
+
   const didCollide =
-    nextId !== openDocumentId && hasOpenDocument(state, nextId);
+    !editorIdEquals(nextId, editorId) && hasOpenDocument(state, nextId);
 
   if (didCollide) {
     return {
@@ -264,7 +292,7 @@ export function replaceOpenDocument(
   }
 
   const documents = state.documents.map((openDocument) =>
-    openDocument.id === openDocumentId
+    editorIdEquals(openDocument.id, editorId)
       ? {
           id: nextId,
           document
@@ -277,7 +305,7 @@ export function replaceOpenDocument(
       ...state,
       documents,
       activeDocumentId:
-        state.activeDocumentId === openDocumentId
+        editorIdEquals(state.activeDocumentId, editorId)
           ? nextId
           : state.activeDocumentId
     },

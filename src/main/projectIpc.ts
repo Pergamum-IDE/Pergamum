@@ -28,6 +28,10 @@ interface CurrentProjectState {
 
 let currentProjectState: CurrentProjectState | null = null;
 
+export function currentProjectRootPath(): string | null {
+  return currentProjectState?.rootPath ?? null;
+}
+
 export function requireCurrentProjectRootPath(): string {
   if (!currentProjectState) {
     throw new Error("No project is currently open.");
