@@ -4,6 +4,7 @@ import { renderToStaticMarkup } from "react-dom/server";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import type { GlossaryEntry } from "../../src/shared/glossary";
 import type { PergamumProject } from "../../src/shared/api";
+import { CommandRegistry } from "../../src/shared/commandRegistry";
 import {
   createProjectDocumentEditorId,
   editorIdEquals,
@@ -31,6 +32,11 @@ import {
 } from "../../src/renderer/openDocuments";
 import type { SidebarMode } from "../../src/renderer/sidebarMode";
 import { selectSidebarMode } from "../../src/renderer/sidebarMode";
+import {
+  registerWorkspaceCommands,
+  workspaceCommandIds,
+  workspaceFocusCommandIdForMode
+} from "../../src/renderer/workspaceCommands";
 import { WorkspaceSidebar } from "../../src/renderer/WorkspaceSidebar";
 
 const translate: Translate = (key) => key;
@@ -216,6 +222,65 @@ describe("workspace navigation", () => {
       (onClick as () => void)();
       expect(onSelectMode).toHaveBeenLastCalledWith(mode);
     }
+  });
+
+  it("routes Activity Bar Workspace operations through commands", async () => {
+    const registry = new CommandRegistry();
+    let selectedMode: SidebarMode = "files";
+    let isProjectSettingsOpen = false;
+
+    registerWorkspaceCommands(
+      registry,
+      {
+        focusSidebarMode: (mode) => {
+          selectedMode = mode;
+        },
+        toggleProjectSettings: () => {
+          isProjectSettingsOpen = !isProjectSettingsOpen;
+        }
+      },
+      {
+        focusFiles: "Focus Files",
+        focusSearch: "Focus Search",
+        focusGlossary: "Focus Glossary",
+        toggleSettings: "Toggle Settings"
+      }
+    );
+
+    const element = ActivityBar({
+      activeMode: "files",
+      isProjectSettingsOpen,
+      translate,
+      onSelectMode: (mode) => {
+        void registry.execute(workspaceFocusCommandIdForMode(mode));
+      },
+      onToggleProjectSettings: () => {
+        void registry.execute(workspaceCommandIds.toggleSettings);
+      }
+    });
+    const buttons = collectElements(
+      element,
+      (child) => child.type === "button"
+    );
+    const searchButton = buttons.find(
+      (button) => button.props["aria-label"] === "activity.searchReplace"
+    );
+    const settingsButton = buttons.find(
+      (button) => button.props["aria-label"] === "activity.projectSettings"
+    );
+
+    expect(searchButton).toBeDefined();
+    expect(settingsButton).toBeDefined();
+
+    (searchButton?.props.onClick as () => void)();
+    await Promise.resolve();
+
+    expect(selectedMode).toBe("search");
+
+    (settingsButton?.props.onClick as () => void)();
+    await Promise.resolve();
+
+    expect(isProjectSettingsOpen).toBe(true);
   });
 
   it("positions Project Settings in the secondary Activity Bar group", () => {
