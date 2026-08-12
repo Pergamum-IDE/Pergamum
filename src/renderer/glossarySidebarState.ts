@@ -2,6 +2,7 @@ import type {
   GlossaryEntry,
   GlossaryEntryId
 } from "../shared/glossary";
+export { canonicalGlossarySurface } from "./glossaryPresentation";
 
 export type GlossarySidebarStatus =
   | "noProject"
@@ -52,14 +53,6 @@ export function createErrorGlossarySidebarState(
     entries: [],
     selectedEntryId
   };
-}
-
-export function canonicalGlossarySurface(entry: GlossaryEntry): string {
-  const canonicalForm = entry.forms.find(
-    (form) => form.isCanonical === true
-  );
-
-  return canonicalForm?.surface ?? entry.id;
 }
 
 export function preserveGlossarySelection(

@@ -14,13 +14,17 @@ import {
 
 interface GlossarySidebarProps {
   projectRootPath: string | null;
+  highlightedEntryId: GlossaryEntryId | null;
   translate: Translate;
+  onActivateEntry: (entryId: GlossaryEntryId) => void;
 }
 
 interface GlossarySidebarViewProps {
   state: GlossarySidebarState;
+  highlightedEntryId: GlossaryEntryId | null;
   translate: Translate;
   onSelectEntry: (entryId: GlossaryEntryId) => void;
+  onActivateEntry: (entryId: GlossaryEntryId) => void;
 }
 
 function initialGlossarySidebarState(
@@ -33,8 +37,10 @@ function initialGlossarySidebarState(
 
 export function GlossarySidebarView({
   state,
+  highlightedEntryId,
   translate,
-  onSelectEntry
+  onSelectEntry,
+  onActivateEntry
 }: GlossarySidebarViewProps): JSX.Element {
   let content: JSX.Element;
 
@@ -73,19 +79,29 @@ export function GlossarySidebarView({
           >
             {state.entries.map((entry) => {
               const label = canonicalGlossarySurface(entry);
+              const isHighlighted = highlightedEntryId === entry.id;
+              const isSelected = state.selectedEntryId === entry.id;
 
               return (
                 <button
                   type="button"
                   key={entry.id}
                   className={
-                    state.selectedEntryId === entry.id
-                      ? "workspaceSidebarItem isActive"
-                      : "workspaceSidebarItem"
+                    [
+                      "workspaceSidebarItem",
+                      isHighlighted ? "isActive" : null,
+                      isSelected ? "isSelected" : null
+                    ]
+                      .filter(Boolean)
+                      .join(" ")
                   }
-                  aria-pressed={state.selectedEntryId === entry.id}
+                  aria-current={isHighlighted ? "page" : undefined}
+                  data-selected={isSelected ? "true" : undefined}
                   title={label}
-                  onClick={() => onSelectEntry(entry.id)}
+                  onClick={() => {
+                    onSelectEntry(entry.id);
+                    onActivateEntry(entry.id);
+                  }}
                 >
                   {label}
                 </button>
@@ -118,7 +134,9 @@ export function GlossarySidebarView({
 
 export function GlossarySidebar({
   projectRootPath,
-  translate
+  highlightedEntryId,
+  translate,
+  onActivateEntry
 }: GlossarySidebarProps): JSX.Element {
   const [state, setState] = useState<GlossarySidebarState>(() =>
     initialGlossarySidebarState(projectRootPath)
@@ -191,6 +209,7 @@ export function GlossarySidebar({
   return (
     <GlossarySidebarView
       state={state}
+      highlightedEntryId={highlightedEntryId}
       translate={translate}
       onSelectEntry={(entryId) =>
         setState((currentState) => ({
@@ -198,6 +217,7 @@ export function GlossarySidebar({
           selectedEntryId: entryId
         }))
       }
+      onActivateEntry={onActivateEntry}
     />
   );
 }
