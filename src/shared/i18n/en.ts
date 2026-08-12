@@ -1,6 +1,11 @@
 import type { TranslationDictionary } from "./ja";
 
 export const enTranslations = {
+  "activity.files": "Files",
+  "activity.glossary": "Glossary",
+  "activity.label": "Activity Bar",
+  "activity.projectSettings": "Project Settings",
+  "activity.searchReplace": "Search / Replace",
   "app.ready": "Ready",
   "common.open": "Open",
   "common.save": "Save",
@@ -12,6 +17,11 @@ export const enTranslations = {
   "explorer.files": "Files",
   "explorer.markdownDocuments": "Markdown documents",
   "explorer.projectFiles": "Project files",
+  "glossary.add": "+ Add",
+  "glossary.empty": "No entries",
+  "glossary.sidebarTitle": "Glossary",
+  "search.notImplemented": "Not implemented",
+  "search.sidebarTitle": "Search / Replace",
   "language.en": "English",
   "language.ja": "Japanese",
   "menu.aboutPergamum": "About Pergamum",
