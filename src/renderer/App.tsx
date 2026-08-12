@@ -11,6 +11,7 @@ import {
   type TranslationValues
 } from "../shared/i18n";
 import { resolveEffectiveSettings } from "../shared/settings";
+import { ActivityBar } from "./ActivityBar";
 import {
   applyStandaloneSaveResult,
   createFileDocument,
@@ -26,7 +27,6 @@ import {
   type CurrentDocument
 } from "./currentDocument";
 import { DocumentTabBar } from "./DocumentTabBar";
-import { FileExplorer } from "./FileExplorer";
 import { MarkdownEditor } from "./MarkdownEditor";
 import {
   activeCurrentDocument,
@@ -48,8 +48,10 @@ import {
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
 import { RecentProjectsPanel } from "./RecentProjectsPanel";
 import { SettingsPanel } from "./SettingsPanel";
+import { defaultSidebarMode, selectSidebarMode } from "./sidebarMode";
 import { useApplicationSettings } from "./useApplicationSettings";
 import { WelcomeScreen } from "./WelcomeScreen";
+import { WorkspaceSidebar } from "./WorkspaceSidebar";
 
 interface StatusMessage {
   key: TranslationKey;
@@ -80,6 +82,7 @@ export function App(): JSX.Element {
   const [project, setProject] = useState<PergamumProject | null>(null);
   const [openDocumentsState, setOpenDocumentsState] =
     useState<OpenDocumentsState>(createInitialOpenDocumentsState);
+  const [sidebarMode, setSidebarMode] = useState(defaultSidebarMode);
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [status, setStatus] = useState<StatusMessage>({ key: "app.ready" });
@@ -401,104 +404,112 @@ export function App(): JSX.Element {
         </button>
         <button
           type="button"
-          onClick={() => setIsSettingsOpen((isOpen) => !isOpen)}
-        >
-          {translate("toolbar.settings")}
-        </button>
-        <button
-          type="button"
           onClick={() => setIsRecentProjectsOpen((isOpen) => !isOpen)}
         >
           {translate("toolbar.recentProjects")}
         </button>
       </header>
 
-      {isSettingsOpen ? (
-        <SettingsPanel
-          settings={settings}
-          isLoading={isSettingsLoading}
-          error={settingsError}
+      <section className="appBody">
+        <ActivityBar
+          activeMode={sidebarMode}
+          isProjectSettingsOpen={isSettingsOpen}
           translate={translate}
-          onChangeSettings={(nextSettings) => {
-            void changeSettings(nextSettings);
-          }}
+          onSelectMode={(mode) => setSidebarMode(selectSidebarMode(mode))}
+          onToggleProjectSettings={() =>
+            setIsSettingsOpen((isOpen) => !isOpen)
+          }
         />
-      ) : null}
 
-      {isRecentProjectsOpen ? (
-        <RecentProjectsPanel
-          recentProjects={settings.recentProjects}
-          translate={translate}
-          onOpenProject={(projectPath) => {
-            void openRecentProject(projectPath);
-          }}
-        />
-      ) : null}
+        <section className="appContent">
+          {isSettingsOpen ? (
+            <SettingsPanel
+              settings={settings}
+              isLoading={isSettingsLoading}
+              error={settingsError}
+              translate={translate}
+              onChangeSettings={(nextSettings) => {
+                void changeSettings(nextSettings);
+              }}
+            />
+          ) : null}
 
-      {shouldShowWelcome ? (
-        <WelcomeScreen
-          recentProjects={settings.recentProjects}
-          translate={translate}
-          onOpenProject={() => {
-            void openProject();
-          }}
-          onOpenRecentProject={(projectPath) => {
-            void openRecentProject(projectPath);
-          }}
-        />
-      ) : (
-        <>
-          <DocumentTabBar
-            tabs={tabs}
-            activeDocumentId={openDocumentsState.activeDocumentId}
-            translate={translate}
-            onSelectDocument={activateDocument}
-          />
-          <section className="mainArea">
-            {project ? (
-              <FileExplorer
-                documents={project.documents}
+          {isRecentProjectsOpen ? (
+            <RecentProjectsPanel
+              recentProjects={settings.recentProjects}
+              translate={translate}
+              onOpenProject={(projectPath) => {
+                void openRecentProject(projectPath);
+              }}
+            />
+          ) : null}
+
+          {shouldShowWelcome ? (
+            <WelcomeScreen
+              recentProjects={settings.recentProjects}
+              translate={translate}
+              onOpenProject={() => {
+                void openProject();
+              }}
+              onOpenRecentProject={(projectPath) => {
+                void openRecentProject(projectPath);
+              }}
+            />
+          ) : (
+            <section className="mainArea">
+              <WorkspaceSidebar
+                mode={sidebarMode}
+                project={project}
                 activeRelativePath={currentProjectRelativePath(currentDocument)}
                 translate={translate}
-                onSelectDocument={(relativePath) => {
+                onSelectProjectDocument={(relativePath) => {
                   void selectProjectDocument(relativePath);
                 }}
               />
-            ) : null}
 
-            <section
-              className="workspace"
-              aria-label={translate("workspace.markdownWorkspace")}
-            >
-              <section
-                className="pane"
-                aria-label={translate("workspace.markdownEditor")}
-              >
-                <div className="paneHeader">
-                  {translate("workspace.editor")}
-                </div>
-                <MarkdownEditor
-                  value={content}
-                  onChange={setActiveDocumentContent}
+              <section className="editorArea">
+                <DocumentTabBar
+                  tabs={tabs}
+                  activeDocumentId={openDocumentsState.activeDocumentId}
+                  translate={translate}
+                  onSelectDocument={activateDocument}
                 />
-              </section>
 
-              <section
-                className="pane"
-                aria-label={translate("workspace.markdownPreview")}
-              >
-                <div className="paneHeader">
-                  {translate("workspace.preview")}
-                </div>
-                <article
-                  className="preview"
-                  dangerouslySetInnerHTML={{ __html: previewHtml }}
-                />
+                <section
+                  className="workspace"
+                  aria-label={translate("workspace.markdownWorkspace")}
+                >
+                  <section
+                    className="pane"
+                    aria-label={translate("workspace.markdownEditor")}
+                  >
+                    <div className="paneHeader">
+                      {translate("workspace.editor")}
+                    </div>
+                    <MarkdownEditor
+                      value={content}
+                      onChange={setActiveDocumentContent}
+                    />
+                  </section>
+
+                  <section
+                    className="pane"
+                    aria-label={translate("workspace.markdownPreview")}
+                  >
+                    <div className="paneHeader">
+                      {translate("workspace.preview")}
+                    </div>
+                    <article
+                      className="preview"
+                      dangerouslySetInnerHTML={{ __html: previewHtml }}
+                    />
+                  </section>
+                </section>
               </section>
             </section>
-          </section>
-        </>
-      )}
+          )}
+        </section>
+      </section>
 
       {effectiveSettings.showStatusBar ? (
         <footer className="statusBar">

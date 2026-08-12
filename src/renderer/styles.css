@@ -43,6 +43,21 @@ button:active {
   background: #f7f8fa;
 }
 
+.appBody {
+  display: flex;
+  flex: 1;
+  min-width: 0;
+  min-height: 0;
+}
+
+.appContent {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
 .toolbar {
   display: flex;
   align-items: center;
@@ -85,6 +100,94 @@ button:active {
   font-weight: 600;
   text-overflow: ellipsis;
   white-space: nowrap;
+}
+
+.activityBar {
+  display: flex;
+  width: 48px;
+  min-width: 48px;
+  min-height: 0;
+  flex: 0 0 auto;
+  flex-direction: column;
+  border-right: 1px solid #c8d2dc;
+  background: #edf2f7;
+}
+
+.activityBarPrimary,
+.activityBarSecondary {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 6px 0;
+}
+
+.activityBarSecondary {
+  margin-top: auto;
+}
+
+.activityBarItem {
+  position: relative;
+  display: flex;
+  width: 48px;
+  height: 44px;
+  align-items: center;
+  justify-content: center;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  color: #647486;
+  padding: 0;
+}
+
+.activityBarItem:hover {
+  background: #dfe8f1;
+  color: #25313d;
+}
+
+.activityBarItem:focus-visible {
+  outline: 2px solid #7aa7d9;
+  outline-offset: -2px;
+}
+
+.activityBarItem.isActive,
+.activityBarItem.isActive:hover {
+  background: #ffffff;
+  color: #0f2438;
+}
+
+.activityBarItem.isActive::before {
+  position: absolute;
+  top: 8px;
+  bottom: 8px;
+  left: 0;
+  width: 3px;
+  border-radius: 0 2px 2px 0;
+  background: #326da8;
+  content: "";
+}
+
+.activityBarItem:disabled {
+  color: #98a5b3;
+  cursor: default;
+}
+
+.activityBarItem:disabled:hover {
+  background: transparent;
+  color: #98a5b3;
+}
+
+.activityBarIcon {
+  display: flex;
+  width: 22px;
+  height: 22px;
+  align-items: center;
+  justify-content: center;
+}
+
+.activityBarIcon svg {
+  width: 22px;
+  height: 22px;
+  display: block;
 }
 
 .settingsPanel {
@@ -399,7 +502,16 @@ button:active {
 .mainArea {
   display: flex;
   flex: 1;
+  min-width: 0;
   min-height: 0;
+}
+
+.editorArea {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
 }
 
 .fileExplorer {
@@ -413,7 +525,19 @@ button:active {
   background: #f8fafc;
 }
 
-.fileExplorerHeader {
+.workspaceSidebarPanel {
+  display: flex;
+  width: 248px;
+  min-width: 200px;
+  min-height: 0;
+  flex: 0 0 auto;
+  flex-direction: column;
+  border-right: 1px solid #d3dae2;
+  background: #f8fafc;
+}
+
+.fileExplorerHeader,
+.sidebarHeader {
   min-height: 34px;
   padding: 8px 12px;
   border-bottom: 1px solid #e3e8ee;
@@ -421,6 +545,28 @@ button:active {
   font-size: 12px;
   font-weight: 700;
   text-transform: uppercase;
+}
+
+.workspacePlaceholderList {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 6px;
+}
+
+.workspacePlaceholder {
+  color: #6b7785;
+  font-size: 13px;
+  padding: 6px;
+}
+
+.workspaceSidebarActions {
+  padding: 8px;
+  border-top: 1px solid #e3e8ee;
+}
+
+.workspaceSidebarButton {
+  width: 100%;
 }
 
 .fileExplorerList {
@@ -625,7 +771,8 @@ button:active {
     flex-direction: column;
   }
 
-  .fileExplorer {
+  .fileExplorer,
+  .workspaceSidebarPanel {
     width: auto;
     max-height: 160px;
     border-right: 0;
