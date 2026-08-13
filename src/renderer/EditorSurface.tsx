@@ -1,5 +1,6 @@
 import type {
   GlossaryEntryKind,
+  GlossaryFormMatchBoundary,
   GlossaryFormRelation,
   GlossaryWarningPolicy
 } from "../shared/glossary";
@@ -24,6 +25,12 @@ interface EditorSurfaceProps {
   onChangeGlossaryEntryKind: (kind: GlossaryEntryKind) => void;
   onChangeGlossaryEntryDescription: (description: string) => void;
   onChangeGlossaryEntryCanonicalSurface: (surface: string) => void;
+  onChangeGlossaryEntryCanonicalMatchBoundaryStart: (
+    matchBoundaryStart: GlossaryFormMatchBoundary
+  ) => void;
+  onChangeGlossaryEntryCanonicalMatchBoundaryEnd: (
+    matchBoundaryEnd: GlossaryFormMatchBoundary
+  ) => void;
   onAddGlossaryEntryForm: (relation: GlossaryFormRelation) => void;
   onChangeGlossaryEntryFormSurface: (
     formId: string,
@@ -32,6 +39,14 @@ interface EditorSurfaceProps {
   onChangeGlossaryEntryFormWarningPolicy: (
     formId: string,
     warningPolicy: GlossaryWarningPolicy
+  ) => void;
+  onChangeGlossaryEntryFormMatchBoundaryStart: (
+    formId: string,
+    matchBoundaryStart: GlossaryFormMatchBoundary
+  ) => void;
+  onChangeGlossaryEntryFormMatchBoundaryEnd: (
+    formId: string,
+    matchBoundaryEnd: GlossaryFormMatchBoundary
   ) => void;
   onDeleteGlossaryEntryForm: (formId: string) => void;
 }
@@ -45,9 +60,13 @@ export function EditorSurface({
   onChangeGlossaryEntryKind,
   onChangeGlossaryEntryDescription,
   onChangeGlossaryEntryCanonicalSurface,
+  onChangeGlossaryEntryCanonicalMatchBoundaryStart,
+  onChangeGlossaryEntryCanonicalMatchBoundaryEnd,
   onAddGlossaryEntryForm,
   onChangeGlossaryEntryFormSurface,
   onChangeGlossaryEntryFormWarningPolicy,
+  onChangeGlossaryEntryFormMatchBoundaryStart,
+  onChangeGlossaryEntryFormMatchBoundaryEnd,
   onDeleteGlossaryEntryForm
 }: EditorSurfaceProps): JSX.Element {
   switch (editor.kind) {
@@ -69,10 +88,22 @@ export function EditorSurface({
           onChangeKind={onChangeGlossaryEntryKind}
           onChangeDescription={onChangeGlossaryEntryDescription}
           onChangeCanonicalSurface={onChangeGlossaryEntryCanonicalSurface}
+          onChangeCanonicalMatchBoundaryStart={
+            onChangeGlossaryEntryCanonicalMatchBoundaryStart
+          }
+          onChangeCanonicalMatchBoundaryEnd={
+            onChangeGlossaryEntryCanonicalMatchBoundaryEnd
+          }
           onAddForm={onAddGlossaryEntryForm}
           onChangeFormSurface={onChangeGlossaryEntryFormSurface}
           onChangeFormWarningPolicy={
             onChangeGlossaryEntryFormWarningPolicy
+          }
+          onChangeFormMatchBoundaryStart={
+            onChangeGlossaryEntryFormMatchBoundaryStart
+          }
+          onChangeFormMatchBoundaryEnd={
+            onChangeGlossaryEntryFormMatchBoundaryEnd
           }
           onDeleteForm={onDeleteGlossaryEntryForm}
         />

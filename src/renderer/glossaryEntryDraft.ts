@@ -23,6 +23,8 @@ export interface GlossaryFormDraft {
 export interface GlossaryEntryDraft {
   entry: GlossaryEntry;
   canonicalSurface: string;
+  canonicalMatchBoundaryStart: GlossaryFormMatchBoundary;
+  canonicalMatchBoundaryEnd: GlossaryFormMatchBoundary;
   kind: GlossaryEntryKind;
   description: string;
   forms: GlossaryFormDraft[];
@@ -53,11 +55,28 @@ export function isLocalGlossaryFormId(id: string): boolean {
   return id.startsWith("local:");
 }
 
+function canonicalFormOf(
+  entry: GlossaryEntry
+): GlossaryEntry["forms"][number] | undefined {
+  return entry.forms.find((form) => form.isCanonical === true);
+}
+
 function canonicalSurfaceOf(entry: GlossaryEntry): string {
-  return (
-    entry.forms.find((form) => form.isCanonical === true)?.surface ??
-    ""
-  );
+  return canonicalFormOf(entry)?.surface ?? "";
+}
+
+function canonicalMatchBoundaryStartOf(
+  entry: GlossaryEntry
+): GlossaryFormMatchBoundary {
+  return canonicalFormOf(entry)?.matchBoundaryStart ??
+    DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY;
+}
+
+function canonicalMatchBoundaryEndOf(
+  entry: GlossaryEntry
+): GlossaryFormMatchBoundary {
+  return canonicalFormOf(entry)?.matchBoundaryEnd ??
+    DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY;
 }
 
 function isNonCanonicalGlossaryForm(
@@ -180,6 +199,8 @@ export function createGlossaryEntryDraft(
   return {
     entry,
     canonicalSurface: canonicalSurfaceOf(entry),
+    canonicalMatchBoundaryStart: canonicalMatchBoundaryStartOf(entry),
+    canonicalMatchBoundaryEnd: canonicalMatchBoundaryEndOf(entry),
     kind: entry.kind,
     description: entry.description,
     forms: glossaryFormDraftsFromEntry(entry),
@@ -197,6 +218,10 @@ export function isGlossaryEntryDraftDirty(draft: GlossaryEntryDraft): boolean {
     draft.kind !== draft.entry.kind ||
     draft.description !== draft.entry.description ||
     draft.canonicalSurface.trim() !== canonicalSurfaceOf(draft.entry).trim() ||
+    draft.canonicalMatchBoundaryStart !==
+      canonicalMatchBoundaryStartOf(draft.entry) ||
+    draft.canonicalMatchBoundaryEnd !==
+      canonicalMatchBoundaryEndOf(draft.entry) ||
     !areNormalizedGlossaryFormsEqual(draftForms, savedForms)
   );
 }
@@ -233,6 +258,26 @@ export function updateGlossaryEntryDraftCanonicalSurface(
   canonicalSurface: string
 ): GlossaryEntryDraft {
   return withRecomputedSaveState({ ...draft, canonicalSurface });
+}
+
+export function updateGlossaryEntryDraftCanonicalMatchBoundaryStart(
+  draft: GlossaryEntryDraft,
+  canonicalMatchBoundaryStart: GlossaryFormMatchBoundary
+): GlossaryEntryDraft {
+  return withRecomputedSaveState({
+    ...draft,
+    canonicalMatchBoundaryStart
+  });
+}
+
+export function updateGlossaryEntryDraftCanonicalMatchBoundaryEnd(
+  draft: GlossaryEntryDraft,
+  canonicalMatchBoundaryEnd: GlossaryFormMatchBoundary
+): GlossaryEntryDraft {
+  return withRecomputedSaveState({
+    ...draft,
+    canonicalMatchBoundaryEnd
+  });
 }
 
 export function addGlossaryEntryDraftForm(
@@ -277,6 +322,32 @@ export function updateGlossaryEntryDraftFormWarningPolicy(
     ...draft,
     forms: draft.forms.map((form) =>
       form.id === formId ? { ...form, warningPolicy } : form
+    )
+  });
+}
+
+export function updateGlossaryEntryDraftFormMatchBoundaryStart(
+  draft: GlossaryEntryDraft,
+  formId: string,
+  matchBoundaryStart: GlossaryFormMatchBoundary
+): GlossaryEntryDraft {
+  return withRecomputedSaveState({
+    ...draft,
+    forms: draft.forms.map((form) =>
+      form.id === formId ? { ...form, matchBoundaryStart } : form
+    )
+  });
+}
+
+export function updateGlossaryEntryDraftFormMatchBoundaryEnd(
+  draft: GlossaryEntryDraft,
+  formId: string,
+  matchBoundaryEnd: GlossaryFormMatchBoundary
+): GlossaryEntryDraft {
+  return withRecomputedSaveState({
+    ...draft,
+    forms: draft.forms.map((form) =>
+      form.id === formId ? { ...form, matchBoundaryEnd } : form
     )
   });
 }
@@ -327,6 +398,8 @@ export function glossaryEntryDraftUpdateInput(
     kind: draft.kind,
     description: draft.description,
     canonicalSurface: draft.canonicalSurface.trim(),
+    matchBoundaryStart: draft.canonicalMatchBoundaryStart,
+    matchBoundaryEnd: draft.canonicalMatchBoundaryEnd,
     forms: draft.forms
       .map((form) => ({
         ...form,

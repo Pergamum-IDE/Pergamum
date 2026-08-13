@@ -958,8 +958,15 @@ button:active {
   text-transform: uppercase;
 }
 
-.glossaryEditorCanonicalField,
-.glossaryEditorFormRow {
+.glossaryEditorCanonicalField {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 6px;
+  margin-bottom: 16px;
+}
+
+.glossaryEditorCanonicalFieldMain {
   display: flex;
   min-width: 0;
   align-items: center;
@@ -968,19 +975,31 @@ button:active {
   font-size: 14px;
 }
 
-.glossaryEditorCanonicalField {
-  margin-bottom: 16px;
-}
-
-.glossaryEditorCanonicalField span {
+.glossaryEditorCanonicalFieldMain span {
   flex: 0 0 128px;
   color: #52616f;
   font-size: 12px;
   font-weight: 600;
 }
 
-.glossaryEditorCanonicalField input,
-.glossaryEditorFormRow input {
+.glossaryEditorFormRow {
+  display: flex;
+  flex-direction: column;
+  min-width: 0;
+  gap: 6px;
+}
+
+.glossaryEditorFormRowMain {
+  display: flex;
+  min-width: 0;
+  align-items: center;
+  gap: 8px;
+  color: #25313d;
+  font-size: 14px;
+}
+
+.glossaryEditorCanonicalFieldMain input,
+.glossaryEditorFormRowMain input {
   min-width: 0;
   flex: 1 1 auto;
   border: 1px solid #cbd5df;
@@ -988,14 +1007,14 @@ button:active {
   padding: 6px 8px;
 }
 
-.glossaryEditorFormRow select {
+.glossaryEditorFormRowMain select {
   flex: 0 0 132px;
   border: 1px solid #cbd5df;
   border-radius: 4px;
   padding: 6px 8px;
 }
 
-.glossaryEditorFormRow button,
+.glossaryEditorFormRowMain button,
 .glossaryEditorAddForm {
   flex: 0 0 auto;
   border: 1px solid #cbd5df;
@@ -1004,6 +1023,64 @@ button:active {
   color: #25313d;
   cursor: pointer;
   padding: 6px 10px;
+}
+
+.glossaryEditorAdvancedMatchingSettingsToggle {
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
+  align-self: flex-start;
+  border: none;
+  background: none;
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 600;
+  cursor: pointer;
+  padding: 2px 0;
+}
+
+.glossaryEditorAdvancedMatchingSettingsChevron {
+  display: inline-block;
+  width: 10px;
+  text-align: center;
+  font-size: 10px;
+}
+
+.glossaryEditorAdvancedMatchingSettingsBody {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 8px 10px;
+  border: 1px solid #e1e7ec;
+  border-radius: 4px;
+  background: #f7f9fb;
+}
+
+.glossaryEditorMatchBoundaryField {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  color: #25313d;
+  font-size: 13px;
+}
+
+.glossaryEditorMatchBoundaryField span {
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.glossaryEditorMatchBoundaryField select {
+  max-width: 200px;
+  border: 1px solid #cbd5df;
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.glossaryEditorMatchBoundaryDescription {
+  margin: 0;
+  color: #6b7785;
+  font-size: 12px;
 }
 
 .glossaryEditorFormGroup {

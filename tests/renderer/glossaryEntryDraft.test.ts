@@ -13,8 +13,12 @@ import {
   isLocalGlossaryFormId,
   markGlossaryEntryDraftSaveFailed,
   markGlossaryEntryDraftSaving,
+  updateGlossaryEntryDraftCanonicalMatchBoundaryEnd,
+  updateGlossaryEntryDraftCanonicalMatchBoundaryStart,
   updateGlossaryEntryDraftCanonicalSurface,
   updateGlossaryEntryDraftDescription,
+  updateGlossaryEntryDraftFormMatchBoundaryEnd,
+  updateGlossaryEntryDraftFormMatchBoundaryStart,
   updateGlossaryEntryDraftFormSurface,
   updateGlossaryEntryDraftFormWarningPolicy,
   updateGlossaryEntryDraftKind
@@ -73,6 +77,8 @@ describe("GlossaryEntryDraft", () => {
     expect(draft.saveState).toBe("clean");
     expect(isGlossaryEntryDraftDirty(draft)).toBe(false);
     expect(draft.canonicalSurface).toBe("王都");
+    expect(draft.canonicalMatchBoundaryStart).toBe("strict");
+    expect(draft.canonicalMatchBoundaryEnd).toBe("none");
     expect(draft.kind).toBe("place");
     expect(draft.description).toBe("王国の首都");
     expect(draft.forms).toEqual([
@@ -123,6 +129,43 @@ describe("GlossaryEntryDraft", () => {
 
     expect(isGlossaryEntryDraftDirty(draft)).toBe(true);
     expect(draft.saveState).toBe("dirty");
+  });
+
+  it("updates only the canonical start boundary and leaves the end boundary untouched", () => {
+    const draft = updateGlossaryEntryDraftCanonicalMatchBoundaryStart(
+      createGlossaryEntryDraft(savedEntry),
+      "none"
+    );
+
+    expect(draft.canonicalMatchBoundaryStart).toBe("none");
+    expect(draft.canonicalMatchBoundaryEnd).toBe("none");
+    expect(isGlossaryEntryDraftDirty(draft)).toBe(true);
+    expect(draft.saveState).toBe("dirty");
+  });
+
+  it("updates only the canonical end boundary and leaves the start boundary untouched", () => {
+    const draft = updateGlossaryEntryDraftCanonicalMatchBoundaryEnd(
+      createGlossaryEntryDraft(savedEntry),
+      "auto"
+    );
+
+    expect(draft.canonicalMatchBoundaryStart).toBe("strict");
+    expect(draft.canonicalMatchBoundaryEnd).toBe("auto");
+    expect(isGlossaryEntryDraftDirty(draft)).toBe(true);
+    expect(draft.saveState).toBe("dirty");
+  });
+
+  it("returns to clean when a canonical boundary edit is reverted back to the saved value", () => {
+    const draft = updateGlossaryEntryDraftCanonicalMatchBoundaryStart(
+      updateGlossaryEntryDraftCanonicalMatchBoundaryStart(
+        createGlossaryEntryDraft(savedEntry),
+        "none"
+      ),
+      "strict"
+    );
+
+    expect(isGlossaryEntryDraftDirty(draft)).toBe(false);
+    expect(draft.saveState).toBe("clean");
   });
 
   it("becomes dirty when an alias is added, edited, or deleted", () => {
@@ -190,6 +233,57 @@ describe("GlossaryEntryDraft", () => {
 
     expect(isGlossaryEntryDraftDirty(draft)).toBe(true);
     expect(draft.saveState).toBe("dirty");
+  });
+
+  it("updates only the start boundary of the edited form", () => {
+    const draft = updateGlossaryEntryDraftFormMatchBoundaryStart(
+      createGlossaryEntryDraft(savedEntry),
+      "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
+      "auto"
+    );
+    const editedForm = draft.forms.find(
+      (form) => form.id === "018f4b8c-7a2b-7c3d-8e4f-323456789abc"
+    );
+    const untouchedForm = draft.forms.find(
+      (form) => form.id === "018f4b8c-7a2b-7c3d-8e4f-423456789abc"
+    );
+
+    expect(editedForm?.matchBoundaryStart).toBe("auto");
+    expect(editedForm?.matchBoundaryEnd).toBe("none");
+    expect(untouchedForm?.matchBoundaryStart).toBe("none");
+    expect(isGlossaryEntryDraftDirty(draft)).toBe(true);
+    expect(draft.saveState).toBe("dirty");
+  });
+
+  it("updates only the end boundary of the edited form", () => {
+    const draft = updateGlossaryEntryDraftFormMatchBoundaryEnd(
+      createGlossaryEntryDraft(savedEntry),
+      "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
+      "auto"
+    );
+    const editedForm = draft.forms.find(
+      (form) => form.id === "018f4b8c-7a2b-7c3d-8e4f-323456789abc"
+    );
+
+    expect(editedForm?.matchBoundaryStart).toBe("strict");
+    expect(editedForm?.matchBoundaryEnd).toBe("auto");
+    expect(isGlossaryEntryDraftDirty(draft)).toBe(true);
+    expect(draft.saveState).toBe("dirty");
+  });
+
+  it("returns to clean when a boundary edit is reverted back to the saved value", () => {
+    const draft = updateGlossaryEntryDraftFormMatchBoundaryStart(
+      updateGlossaryEntryDraftFormMatchBoundaryStart(
+        createGlossaryEntryDraft(savedEntry),
+        "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
+        "auto"
+      ),
+      "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
+      "strict"
+    );
+
+    expect(isGlossaryEntryDraftDirty(draft)).toBe(false);
+    expect(draft.saveState).toBe("clean");
   });
 
   it("returns to clean when edits are reverted back to the saved snapshot", () => {
@@ -446,6 +540,8 @@ describe("GlossaryEntryDraft", () => {
       kind: "person",
       description: "更新後の説明",
       canonicalSurface: "王都",
+      matchBoundaryStart: "strict",
+      matchBoundaryEnd: "none",
       forms: [
         {
           id: "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
@@ -521,6 +617,8 @@ describe("GlossaryEntryDraft", () => {
       kind: "place",
       description: "王国の首都",
       canonicalSurface: "王都",
+      matchBoundaryStart: "strict",
+      matchBoundaryEnd: "none",
       forms: [
         {
           id: undefined,

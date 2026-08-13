@@ -2,10 +2,12 @@ import {
   glossaryEntryKinds,
   glossaryWarningPolicies,
   type GlossaryEntryKind,
+  type GlossaryFormMatchBoundary,
   type GlossaryFormRelation,
   type GlossaryWarningPolicy
 } from "../shared/glossary";
 import type { Translate, TranslationKey } from "../shared/i18n";
+import { GlossaryFormAdvancedMatchingSettings } from "./GlossaryFormAdvancedMatchingSettings";
 import type {
   GlossaryEntryDraft,
   GlossaryFormDraft
@@ -29,11 +31,25 @@ interface GlossaryEditorProps {
   onChangeKind: (kind: GlossaryEntryKind) => void;
   onChangeDescription: (description: string) => void;
   onChangeCanonicalSurface: (surface: string) => void;
+  onChangeCanonicalMatchBoundaryStart: (
+    matchBoundaryStart: GlossaryFormMatchBoundary
+  ) => void;
+  onChangeCanonicalMatchBoundaryEnd: (
+    matchBoundaryEnd: GlossaryFormMatchBoundary
+  ) => void;
   onAddForm: (relation: GlossaryFormRelation) => void;
   onChangeFormSurface: (formId: string, surface: string) => void;
   onChangeFormWarningPolicy: (
     formId: string,
     warningPolicy: GlossaryWarningPolicy
+  ) => void;
+  onChangeFormMatchBoundaryStart: (
+    formId: string,
+    matchBoundaryStart: GlossaryFormMatchBoundary
+  ) => void;
+  onChangeFormMatchBoundaryEnd: (
+    formId: string,
+    matchBoundaryEnd: GlossaryFormMatchBoundary
   ) => void;
   onDeleteForm: (formId: string) => void;
 }
@@ -44,9 +60,13 @@ export function GlossaryEditor({
   onChangeKind,
   onChangeDescription,
   onChangeCanonicalSurface,
+  onChangeCanonicalMatchBoundaryStart,
+  onChangeCanonicalMatchBoundaryEnd,
   onAddForm,
   onChangeFormSurface,
   onChangeFormWarningPolicy,
+  onChangeFormMatchBoundaryStart,
+  onChangeFormMatchBoundaryEnd,
   onDeleteForm
 }: GlossaryEditorProps): JSX.Element {
   const entry = draft.entry;
@@ -58,32 +78,45 @@ export function GlossaryEditor({
   function renderFormRows(forms: GlossaryFormDraft[]): JSX.Element[] {
     return forms.map((form) => (
       <div className="glossaryEditorFormRow" key={form.id}>
-        <input
-          type="text"
-          value={form.surface}
-          onChange={(event) =>
-            onChangeFormSurface(form.id, event.target.value)
+        <div className="glossaryEditorFormRowMain">
+          <input
+            type="text"
+            value={form.surface}
+            onChange={(event) =>
+              onChangeFormSurface(form.id, event.target.value)
+            }
+          />
+          <select
+            value={form.warningPolicy}
+            aria-label={translate("glossaryEditor.warningPolicy")}
+            onChange={(event) =>
+              onChangeFormWarningPolicy(
+                form.id,
+                event.target.value as GlossaryWarningPolicy
+              )
+            }
+          >
+            {glossaryWarningPolicies.map((warningPolicy) => (
+              <option key={warningPolicy} value={warningPolicy}>
+                {translate(warningPolicyTranslationKeys[warningPolicy])}
+              </option>
+            ))}
+          </select>
+          <button type="button" onClick={() => onDeleteForm(form.id)}>
+            {translate("glossaryEditor.removeForm")}
+          </button>
+        </div>
+        <GlossaryFormAdvancedMatchingSettings
+          matchBoundaryStart={form.matchBoundaryStart}
+          matchBoundaryEnd={form.matchBoundaryEnd}
+          translate={translate}
+          onChangeMatchBoundaryStart={(matchBoundaryStart) =>
+            onChangeFormMatchBoundaryStart(form.id, matchBoundaryStart)
+          }
+          onChangeMatchBoundaryEnd={(matchBoundaryEnd) =>
+            onChangeFormMatchBoundaryEnd(form.id, matchBoundaryEnd)
           }
         />
-        <select
-          value={form.warningPolicy}
-          aria-label={translate("glossaryEditor.warningPolicy")}
-          onChange={(event) =>
-            onChangeFormWarningPolicy(
-              form.id,
-              event.target.value as GlossaryWarningPolicy
-            )
-          }
-        >
-          {glossaryWarningPolicies.map((warningPolicy) => (
-            <option key={warningPolicy} value={warningPolicy}>
-              {translate(warningPolicyTranslationKeys[warningPolicy])}
-            </option>
-          ))}
-        </select>
-        <button type="button" onClick={() => onDeleteForm(form.id)}>
-          {translate("glossaryEditor.removeForm")}
-        </button>
       </div>
     ));
   }
@@ -114,17 +147,27 @@ export function GlossaryEditor({
 
       <section className="glossaryEditorSection">
         <h2>{translate("glossaryEditor.forms")}</h2>
-        <label className="glossaryEditorCanonicalField">
-          <span>{translate("glossaryEditor.canonicalSurface")}</span>
-          <input
-            type="text"
-            required
-            value={draft.canonicalSurface}
-            onChange={(event) =>
-              onChangeCanonicalSurface(event.target.value)
-            }
+        <div className="glossaryEditorCanonicalField">
+          <label className="glossaryEditorCanonicalFieldMain">
+            <span>{translate("glossaryEditor.canonicalSurface")}</span>
+            <input
+              type="text"
+              required
+              value={draft.canonicalSurface}
+              onChange={(event) =>
+                onChangeCanonicalSurface(event.target.value)
+              }
+            />
+          </label>
+          <GlossaryFormAdvancedMatchingSettings
+            key={draft.entry.id}
+            matchBoundaryStart={draft.canonicalMatchBoundaryStart}
+            matchBoundaryEnd={draft.canonicalMatchBoundaryEnd}
+            translate={translate}
+            onChangeMatchBoundaryStart={onChangeCanonicalMatchBoundaryStart}
+            onChangeMatchBoundaryEnd={onChangeCanonicalMatchBoundaryEnd}
           />
-        </label>
+        </div>
 
         <div className="glossaryEditorFormGroup">
           <h3>{translate("glossaryEditor.aliases")}</h3>

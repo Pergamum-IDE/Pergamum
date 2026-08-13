@@ -445,11 +445,19 @@ export async function updateGlossaryEntry(
         UPDATE glossary_forms
         SET
           surface = ?,
+          match_boundary_start = COALESCE(?, match_boundary_start),
+          match_boundary_end = COALESCE(?, match_boundary_end),
           updated_at = ?
         WHERE entry_id = ?
           AND is_canonical = 1
       `,
-      [entry.canonicalSurface, timestamp, entry.id]
+      [
+        entry.canonicalSurface,
+        entry.matchBoundaryStart ?? null,
+        entry.matchBoundaryEnd ?? null,
+        timestamp,
+        entry.id
+      ]
     );
 
     if (canonicalResult.changes !== 1) {
