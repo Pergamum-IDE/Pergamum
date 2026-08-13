@@ -62,7 +62,10 @@ export function currentEditorTitle(editor: CurrentEditor): string {
     case "markdown":
       return currentDocumentTitle(editor.document);
     case "glossaryEntry":
-      return canonicalGlossarySurface(editor.draft.entry);
+      return (
+        editor.draft.canonicalSurface.trim() ||
+        canonicalGlossarySurface(editor.draft.entry)
+      );
   }
 }
 

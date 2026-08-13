@@ -28,6 +28,7 @@ export type {
   GlossaryEntryKind,
   GlossaryForm,
   GlossaryFormId,
+  GlossaryFormInput,
   GlossaryFormRelation,
   GlossarySurfaceLookupInput,
   GlossarySurfaceLookupResult,

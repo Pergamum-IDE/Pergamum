@@ -1,4 +1,8 @@
-import type { GlossaryEntryKind } from "../shared/glossary";
+import type {
+  GlossaryEntryKind,
+  GlossaryFormRelation,
+  GlossaryWarningPolicy
+} from "../shared/glossary";
 import type { Translate } from "../shared/i18n";
 import {
   currentDocumentContent,
@@ -15,6 +19,17 @@ interface EditorSurfaceProps {
   onChangeMarkdownContent: (content: string) => void;
   onChangeGlossaryEntryKind: (kind: GlossaryEntryKind) => void;
   onChangeGlossaryEntryDescription: (description: string) => void;
+  onChangeGlossaryEntryCanonicalSurface: (surface: string) => void;
+  onAddGlossaryEntryForm: (relation: GlossaryFormRelation) => void;
+  onChangeGlossaryEntryFormSurface: (
+    formId: string,
+    surface: string
+  ) => void;
+  onChangeGlossaryEntryFormWarningPolicy: (
+    formId: string,
+    warningPolicy: GlossaryWarningPolicy
+  ) => void;
+  onDeleteGlossaryEntryForm: (formId: string) => void;
 }
 
 export function EditorSurface({
@@ -22,7 +37,12 @@ export function EditorSurface({
   translate,
   onChangeMarkdownContent,
   onChangeGlossaryEntryKind,
-  onChangeGlossaryEntryDescription
+  onChangeGlossaryEntryDescription,
+  onChangeGlossaryEntryCanonicalSurface,
+  onAddGlossaryEntryForm,
+  onChangeGlossaryEntryFormSurface,
+  onChangeGlossaryEntryFormWarningPolicy,
+  onDeleteGlossaryEntryForm
 }: EditorSurfaceProps): JSX.Element {
   switch (editor.kind) {
     case "markdown":
@@ -40,6 +60,13 @@ export function EditorSurface({
           translate={translate}
           onChangeKind={onChangeGlossaryEntryKind}
           onChangeDescription={onChangeGlossaryEntryDescription}
+          onChangeCanonicalSurface={onChangeGlossaryEntryCanonicalSurface}
+          onAddForm={onAddGlossaryEntryForm}
+          onChangeFormSurface={onChangeGlossaryEntryFormSurface}
+          onChangeFormWarningPolicy={
+            onChangeGlossaryEntryFormWarningPolicy
+          }
+          onDeleteForm={onDeleteGlossaryEntryForm}
         />
       );
   }

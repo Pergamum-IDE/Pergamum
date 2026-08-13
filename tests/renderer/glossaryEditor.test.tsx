@@ -4,6 +4,7 @@ import { describe, expect, it } from "vitest";
 import type { GlossaryEntry } from "../../src/shared/glossary";
 import type { Translate } from "../../src/shared/i18n";
 import { GlossaryEditor } from "../../src/renderer/GlossaryEditor";
+import { createGlossaryEntryDraft } from "../../src/renderer/glossaryEntryDraft";
 
 const translate: Translate = (key) => key;
 const timestamp = "2026-01-01T00:00:00.000Z";
@@ -41,11 +42,18 @@ function glossaryEntry(description: string): GlossaryEntry {
 }
 
 describe("GlossaryEditor", () => {
-  it("renders a Glossary entry as a read-only Editor surface", () => {
+  it("renders a Glossary entry as an editable Editor surface", () => {
     const markup = renderToStaticMarkup(
       React.createElement(GlossaryEditor, {
-        entry: glossaryEntry("王国の首都"),
-        translate
+        draft: createGlossaryEntryDraft(glossaryEntry("王国の首都")),
+        translate,
+        onChangeKind: () => undefined,
+        onChangeDescription: () => undefined,
+        onChangeCanonicalSurface: () => undefined,
+        onAddForm: () => undefined,
+        onChangeFormSurface: () => undefined,
+        onChangeFormWarningPolicy: () => undefined,
+        onDeleteForm: () => undefined
       })
     );
 
@@ -53,14 +61,21 @@ describe("GlossaryEditor", () => {
     expect(markup).toContain("王都");
     expect(markup).toContain("place");
     expect(markup).toContain("首都");
-    expect(markup).toContain("alias");
+    expect(markup).toContain("glossaryEditor.addAlias");
   });
 
   it("renders description as Markdown source through the preview renderer", () => {
     const markup = renderToStaticMarkup(
       React.createElement(GlossaryEditor, {
-        entry: glossaryEntry("**王都** の説明"),
-        translate
+        draft: createGlossaryEntryDraft(glossaryEntry("**王都** の説明")),
+        translate,
+        onChangeKind: () => undefined,
+        onChangeDescription: () => undefined,
+        onChangeCanonicalSurface: () => undefined,
+        onAddForm: () => undefined,
+        onChangeFormSurface: () => undefined,
+        onChangeFormWarningPolicy: () => undefined,
+        onDeleteForm: () => undefined
       })
     );
 
@@ -71,8 +86,15 @@ describe("GlossaryEditor", () => {
   it("does not create a separate description Editor boundary", () => {
     const markup = renderToStaticMarkup(
       React.createElement(GlossaryEditor, {
-        entry: glossaryEntry("説明"),
-        translate
+        draft: createGlossaryEntryDraft(glossaryEntry("説明")),
+        translate,
+        onChangeKind: () => undefined,
+        onChangeDescription: () => undefined,
+        onChangeCanonicalSurface: () => undefined,
+        onAddForm: () => undefined,
+        onChangeFormSurface: () => undefined,
+        onChangeFormWarningPolicy: () => undefined,
+        onDeleteForm: () => undefined
       })
     );
 

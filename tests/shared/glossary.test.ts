@@ -70,12 +70,28 @@ describe("glossary validation", () => {
       validateUpdateGlossaryEntryInput({
         id: entryId,
         kind: "concept",
-        description: "魔力を生成する技術"
+        description: "魔力を生成する技術",
+        canonicalSurface: "魔導炉",
+        forms: [
+          {
+            surface: "旧式魔導炉",
+            relation: "alias",
+            warningPolicy: "default"
+          }
+        ]
       })
     ).toEqual({
       id: entryId,
       kind: "concept",
-      description: "魔力を生成する技術"
+      description: "魔力を生成する技術",
+      canonicalSurface: "魔導炉",
+      forms: [
+        {
+          surface: "旧式魔導炉",
+          relation: "alias",
+          warningPolicy: "default"
+        }
+      ]
     });
 
     expect(
@@ -109,6 +125,65 @@ describe("glossary validation", () => {
         description: "空白のみの canonical surface"
       })
     ).toThrow(GlossaryValidationError);
+
+    expect(() =>
+      validateUpdateGlossaryEntryInput({
+        id: entryId,
+        kind: "term",
+        description: "invalid",
+        canonicalSurface: " ",
+        forms: []
+      })
+    ).toThrow(GlossaryValidationError);
+  });
+
+  it("validates update input forms and rejects invalid warning policies", () => {
+    expect(() =>
+      validateUpdateGlossaryEntryInput({
+        id: entryId,
+        kind: "term",
+        description: "invalid",
+        canonicalSurface: "魔導炉",
+        forms: [
+          {
+            surface: "旧式魔導炉",
+            relation: "alias",
+            warningPolicy: "block"
+          }
+        ]
+      })
+    ).toThrow(GlossaryValidationError);
+  });
+
+  it("rejects duplicate surfaces only within the update input entry", () => {
+    expect(() =>
+      validateUpdateGlossaryEntryInput({
+        id: entryId,
+        kind: "term",
+        description: "invalid",
+        canonicalSurface: "魔導炉",
+        forms: [
+          {
+            surface: " 魔導炉 ",
+            relation: "variant",
+            warningPolicy: "warn"
+          }
+        ]
+      })
+    ).toThrow(GlossaryValidationError);
+
+    expect(
+      validateUpdateGlossaryEntryInput({
+        id: entryId,
+        kind: "term",
+        description: "別エントリの重複はここでは検査しない",
+        canonicalSurface: "帝国",
+        forms: []
+      })
+    ).toMatchObject({
+      canonicalSurface: "帝国",
+      forms: []
+    });
   });
 
   it("rejects invalid canonical form relation and warning policy", () => {
@@ -200,5 +275,55 @@ describe("glossary validation", () => {
         updatedAt: "2026-08-11T12:00:00.000Z"
       })
     ).toThrow(GlossaryValidationError);
+  });
+
+  it("trims glossary surface inputs while preserving description whitespace", () => {
+    expect(
+      validateCreateGlossaryEntryInput({
+        kind: "item",
+        canonicalSurface: "  魔導炉  ",
+        description: "  説明文  "
+      })
+    ).toEqual({
+      kind: "item",
+      canonicalSurface: "魔導炉",
+      description: "  説明文  "
+    });
+
+    expect(
+      validateUpdateGlossaryEntryInput({
+        id: entryId,
+        kind: "concept",
+        description: "  説明文  ",
+        canonicalSurface: "  魔導炉  ",
+        forms: [
+          {
+            surface: "  旧式魔導炉  ",
+            relation: "alias",
+            warningPolicy: "default"
+          }
+        ]
+      })
+    ).toEqual({
+      id: entryId,
+      kind: "concept",
+      description: "  説明文  ",
+      canonicalSurface: "魔導炉",
+      forms: [
+        {
+          surface: "旧式魔導炉",
+          relation: "alias",
+          warningPolicy: "default"
+        }
+      ]
+    });
+
+    expect(
+      validateGlossarySurfaceLookupInput({
+        surface: "  魔導炉  "
+      })
+    ).toEqual({
+      surface: "魔導炉"
+    });
   });
 });
