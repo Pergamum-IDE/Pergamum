@@ -62,10 +62,19 @@ export interface CreateGlossaryEntryInput {
   description: string;
 }
 
+export interface GlossaryFormInput {
+  id?: GlossaryFormId;
+  surface: string;
+  relation: GlossaryFormRelation;
+  warningPolicy: GlossaryWarningPolicy;
+}
+
 export interface UpdateGlossaryEntryInput {
   id: GlossaryEntryId;
   kind: GlossaryEntryKind;
   description: string;
+  canonicalSurface: string;
+  forms: GlossaryFormInput[];
 }
 
 export interface GlossarySurfaceLookupInput {
@@ -192,6 +201,17 @@ export function validateGlossaryFormId(
   return validateUuidv7(value, path);
 }
 
+function validateOptionalGlossaryFormId(
+  value: unknown,
+  path: string
+): GlossaryFormId | undefined {
+  if (value === undefined) {
+    return undefined;
+  }
+
+  return validateGlossaryFormId(value, path);
+}
+
 export function validateGlossaryEntryKind(
   value: unknown,
   path = "kind"
@@ -266,6 +286,60 @@ export function validateGlossaryForm(
   };
 }
 
+function validateGlossarySurface(value: unknown, path: string): string {
+  return validateNonEmptyString(value, path).trim();
+}
+
+function validateGlossaryFormInput(
+  value: unknown,
+  path: string
+): GlossaryFormInput {
+  if (!isObject(value)) {
+    invalidGlossary(`${path} must be an object.`);
+  }
+
+  const id = validateOptionalGlossaryFormId(value.id, `${path}.id`);
+  const formInput = {
+    surface: validateGlossarySurface(value.surface, `${path}.surface`),
+    relation: validateGlossaryFormRelation(
+      value.relation,
+      `${path}.relation`
+    ),
+    warningPolicy: validateGlossaryWarningPolicy(
+      value.warningPolicy,
+      `${path}.warningPolicy`
+    )
+  };
+
+  return id === undefined ? formInput : { ...formInput, id };
+}
+
+function assertNoDuplicateGlossarySurfaces(
+  canonicalSurface: string,
+  forms: GlossaryFormInput[]
+): void {
+  const seenSurfaces = new Set<string>();
+  const surfaces = [
+    { path: "canonicalSurface", surface: canonicalSurface },
+    ...forms.map((form, index) => ({
+      path: `forms[${index}].surface`,
+      surface: form.surface
+    }))
+  ];
+
+  for (const { path, surface } of surfaces) {
+    const normalizedSurface = surface.trim();
+
+    if (seenSurfaces.has(normalizedSurface)) {
+      invalidGlossary(
+        `${path} duplicates another surface in the same glossary entry.`
+      );
+    }
+
+    seenSurfaces.add(normalizedSurface);
+  }
+}
+
 export function validateGlossaryEntry(
   value: unknown,
   path = "entry"
@@ -318,7 +392,7 @@ export function validateCreateGlossaryEntryInput(
 
   return {
     kind: validateGlossaryEntryKind(value.kind, "kind"),
-    canonicalSurface: validateNonEmptyString(
+    canonicalSurface: validateGlossarySurface(
       value.canonicalSurface,
       "canonicalSurface"
     ),
@@ -333,10 +407,26 @@ export function validateUpdateGlossaryEntryInput(
     invalidGlossary("Glossary entry input must be an object.");
   }
 
+  if (!Array.isArray(value.forms)) {
+    invalidGlossary("forms must be an array.");
+  }
+
+  const canonicalSurface = validateGlossarySurface(
+    value.canonicalSurface,
+    "canonicalSurface"
+  );
+  const forms = value.forms.map((form, index) =>
+    validateGlossaryFormInput(form, `forms[${index}]`)
+  );
+
+  assertNoDuplicateGlossarySurfaces(canonicalSurface, forms);
+
   return {
     id: validateGlossaryEntryId(value.id, "id"),
     kind: validateGlossaryEntryKind(value.kind, "kind"),
-    description: validateString(value.description, "description")
+    description: validateString(value.description, "description"),
+    canonicalSurface,
+    forms
   };
 }
 
@@ -348,6 +438,6 @@ export function validateGlossarySurfaceLookupInput(
   }
 
   return {
-    surface: validateNonEmptyString(value.surface, "surface")
+    surface: validateGlossarySurface(value.surface, "surface")
   };
 }

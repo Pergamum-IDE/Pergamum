@@ -61,7 +61,15 @@ describe("glossary preload API", () => {
     await api.glossary.update({
       id: entryId,
       kind: "concept",
-      description: "魔力を大量生成する技術"
+      description: "魔力を大量生成する技術",
+      canonicalSurface: "魔導炉",
+      forms: [
+        {
+          surface: "魔力炉",
+          relation: "alias",
+          warningPolicy: "default"
+        }
+      ]
     });
     await api.glossary.delete(entryId);
 
@@ -92,7 +100,15 @@ describe("glossary preload API", () => {
         {
           id: entryId,
           kind: "concept",
-          description: "魔力を大量生成する技術"
+          description: "魔力を大量生成する技術",
+          canonicalSurface: "魔導炉",
+          forms: [
+            {
+              surface: "魔力炉",
+              relation: "alias",
+              warningPolicy: "default"
+            }
+          ]
         }
       ],
       [

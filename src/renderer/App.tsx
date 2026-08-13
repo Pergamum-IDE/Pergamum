@@ -19,7 +19,9 @@ import type {
   CreateGlossaryEntryInput,
   GlossaryEntry,
   GlossaryEntryId,
-  GlossaryEntryKind
+  GlossaryEntryKind,
+  GlossaryFormRelation,
+  GlossaryWarningPolicy
 } from "../shared/glossary";
 import {
   t,
@@ -57,11 +59,16 @@ import {
 } from "./editorNavigation";
 import {
   applyGlossaryEntryDraftSaveResult,
+  addGlossaryEntryDraftForm,
+  deleteGlossaryEntryDraftForm,
   glossaryEntryDraftUpdateInput,
   isGlossaryEntryDraftDirty,
   markGlossaryEntryDraftSaveFailed,
   markGlossaryEntryDraftSaving,
+  updateGlossaryEntryDraftCanonicalSurface,
   updateGlossaryEntryDraftDescription,
+  updateGlossaryEntryDraftFormSurface,
+  updateGlossaryEntryDraftFormWarningPolicy,
   updateGlossaryEntryDraftKind
 } from "./glossaryEntryDraft";
 import { canonicalGlossarySurface } from "./glossaryPresentation";
@@ -178,10 +185,14 @@ export function App(): JSX.Element {
   const isSavingGlossaryEntry =
     currentEditor.kind === "glossaryEntry" &&
     currentEditor.draft.saveState === "saving";
+  const canSaveGlossaryEntry =
+    currentEditor.kind === "glossaryEntry" &&
+    !isSavingGlossaryEntry &&
+    currentEditor.draft.canonicalSurface.trim().length > 0;
   const canSave =
     currentEditor.kind === "markdown"
       ? Boolean(activeMarkdownDocument)
-      : !isSavingGlossaryEntry;
+      : canSaveGlossaryEntry;
   const translate = useMemo(
     () => (key: TranslationKey, values?: TranslationValues) =>
       t(displayLanguage, key, values),
@@ -312,6 +323,90 @@ export function App(): JSX.Element {
                 editor.draft,
                 description
               )
+            }
+          : editor
+      )
+    );
+  }
+
+  function setActiveGlossaryEntryCanonicalSurface(surface: string): void {
+    setOpenDocumentsState((state) =>
+      updateActiveOpenEditor(state, (editor) =>
+        editor.kind === "glossaryEntry"
+          ? {
+              ...editor,
+              draft: updateGlossaryEntryDraftCanonicalSurface(
+                editor.draft,
+                surface
+              )
+            }
+          : editor
+      )
+    );
+  }
+
+  function addActiveGlossaryEntryForm(
+    relation: GlossaryFormRelation
+  ): void {
+    setOpenDocumentsState((state) =>
+      updateActiveOpenEditor(state, (editor) =>
+        editor.kind === "glossaryEntry"
+          ? {
+              ...editor,
+              draft: addGlossaryEntryDraftForm(editor.draft, relation)
+            }
+          : editor
+      )
+    );
+  }
+
+  function setActiveGlossaryEntryFormSurface(
+    formId: string,
+    surface: string
+  ): void {
+    setOpenDocumentsState((state) =>
+      updateActiveOpenEditor(state, (editor) =>
+        editor.kind === "glossaryEntry"
+          ? {
+              ...editor,
+              draft: updateGlossaryEntryDraftFormSurface(
+                editor.draft,
+                formId,
+                surface
+              )
+            }
+          : editor
+      )
+    );
+  }
+
+  function setActiveGlossaryEntryFormWarningPolicy(
+    formId: string,
+    warningPolicy: GlossaryWarningPolicy
+  ): void {
+    setOpenDocumentsState((state) =>
+      updateActiveOpenEditor(state, (editor) =>
+        editor.kind === "glossaryEntry"
+          ? {
+              ...editor,
+              draft: updateGlossaryEntryDraftFormWarningPolicy(
+                editor.draft,
+                formId,
+                warningPolicy
+              )
+            }
+          : editor
+      )
+    );
+  }
+
+  function deleteActiveGlossaryEntryForm(formId: string): void {
+    setOpenDocumentsState((state) =>
+      updateActiveOpenEditor(state, (editor) =>
+        editor.kind === "glossaryEntry"
+          ? {
+              ...editor,
+              draft: deleteGlossaryEntryDraftForm(editor.draft, formId)
             }
           : editor
       )
@@ -909,6 +1004,17 @@ export function App(): JSX.Element {
                   onChangeGlossaryEntryDescription={
                     setActiveGlossaryEntryDescription
                   }
+                  onChangeGlossaryEntryCanonicalSurface={
+                    setActiveGlossaryEntryCanonicalSurface
+                  }
+                  onAddGlossaryEntryForm={addActiveGlossaryEntryForm}
+                  onChangeGlossaryEntryFormSurface={
+                    setActiveGlossaryEntryFormSurface
+                  }
+                  onChangeGlossaryEntryFormWarningPolicy={
+                    setActiveGlossaryEntryFormWarningPolicy
+                  }
+                  onDeleteGlossaryEntryForm={deleteActiveGlossaryEntryForm}
                 />
               </section>
             </section>

@@ -103,7 +103,7 @@ describe("glossary store", () => {
     ]);
   });
 
-  it("updates glossary entry fields without changing forms", async () => {
+  it("updates glossary entry fields while preserving canonical surface", async () => {
     const entry = await createGlossaryEntry(database!, {
       kind: "term",
       canonicalSurface: "魔導炉",
@@ -112,15 +112,22 @@ describe("glossary store", () => {
     const updatedEntry = await updateGlossaryEntry(database!, {
       id: entry.id,
       kind: "concept",
-      description: "魔力を大量生成する技術"
+      description: "魔力を大量生成する技術",
+      canonicalSurface: "魔導炉",
+      forms: []
     });
 
     expect(updatedEntry).toMatchObject({
       id: entry.id,
       kind: "concept",
       description: "魔力を大量生成する技術",
-      forms: entry.forms,
       createdAt: entry.createdAt
+    });
+    expect(canonicalFormOf(updatedEntry)).toMatchObject({
+      surface: "魔導炉",
+      relation: null,
+      warningPolicy: null,
+      isCanonical: true
     });
     expect(Date.parse(updatedEntry.updatedAt)).not.toBeNaN();
 
@@ -162,7 +169,9 @@ describe("glossary store", () => {
       updateGlossaryEntry(database!, {
         id: missingEntryId,
         kind: "term",
-        description: "更新できない"
+        description: "更新できない",
+        canonicalSurface: "存在しない用語",
+        forms: []
       })
     ).rejects.toBeInstanceOf(GlossaryStoreError);
 
@@ -179,6 +188,155 @@ describe("glossary store", () => {
         description: "invalid"
       })
     ).rejects.toBeInstanceOf(GlossaryValidationError);
+  });
+
+  it("updates canonical, alias, variant, and warning policy forms", async () => {
+    const entry = await createGlossaryEntry(database!, {
+      kind: "term",
+      canonicalSurface: "魔導炉",
+      description: "旧式の説明"
+    });
+    const updatedEntry = await updateGlossaryEntry(database!, {
+      id: entry.id,
+      kind: "concept",
+      description: "魔力を大量生成する設備",
+      canonicalSurface: "新型魔導炉",
+      forms: [
+        {
+          surface: "魔力炉",
+          relation: "alias",
+          warningPolicy: "warn"
+        },
+        {
+          surface: "Magic Reactor",
+          relation: "variant",
+          warningPolicy: "ignore"
+        }
+      ]
+    });
+
+    expect(canonicalFormOf(updatedEntry)).toMatchObject({
+      surface: "新型魔導炉",
+      relation: null,
+      warningPolicy: null,
+      isCanonical: true
+    });
+    expect(nonCanonicalFormsOf(updatedEntry)).toHaveLength(2);
+    expect(nonCanonicalFormsOf(updatedEntry)).toEqual(
+      expect.arrayContaining([
+        expect.objectContaining({
+          surface: "Magic Reactor",
+          relation: "variant",
+          warningPolicy: "ignore",
+          isCanonical: false
+        }),
+        expect.objectContaining({
+          surface: "魔力炉",
+          relation: "alias",
+          warningPolicy: "warn",
+          isCanonical: false
+        })
+      ])
+    );
+
+    await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
+      updatedEntry
+    );
+  });
+
+  it("rebuilds non-canonical forms without auto-aliasing the old canonical surface", async () => {
+    const entry = await createGlossaryEntry(database!, {
+      kind: "person",
+      canonicalSurface: "アルベルト",
+      description: "王国の騎士"
+    });
+    const firstUpdate = await updateGlossaryEntry(database!, {
+      id: entry.id,
+      kind: "person",
+      description: "王国の騎士",
+      canonicalSurface: "アルベルト",
+      forms: [
+        {
+          surface: "アル",
+          relation: "alias",
+          warningPolicy: "default"
+        },
+        {
+          surface: "Albert",
+          relation: "variant",
+          warningPolicy: "warn"
+        }
+      ]
+    });
+    const savedAlias = nonCanonicalFormsOf(firstUpdate).find(
+      (form) => form.surface === "アル"
+    );
+
+    expect(savedAlias).toBeDefined();
+
+    const secondUpdate = await updateGlossaryEntry(database!, {
+      id: entry.id,
+      kind: "person",
+      description: "王国の騎士",
+      canonicalSurface: "アルバート",
+      forms: [
+        {
+          id: savedAlias?.id,
+          surface: "アル",
+          relation: "alias",
+          warningPolicy: "ignore"
+        }
+      ]
+    });
+
+    expect(canonicalFormOf(secondUpdate).surface).toBe("アルバート");
+    expect(secondUpdate.forms.map((form) => form.surface)).not.toContain(
+      "アルベルト"
+    );
+    expect(nonCanonicalFormsOf(secondUpdate)).toEqual([
+      expect.objectContaining({
+        surface: "アル",
+        relation: "alias",
+        warningPolicy: "ignore"
+      })
+    ]);
+    expect(canonicalFormOf(secondUpdate)).toBeTruthy();
+  });
+
+  it("rolls back entry and forms when a form insert fails inside update", async () => {
+    const entry = await createGlossaryEntry(database!, {
+      kind: "term",
+      canonicalSurface: "魔導炉",
+      description: "旧式の説明"
+    });
+    const duplicateFormId = "018f4b8c-7a2b-7c3d-8e4f-623456789abc";
+
+    await expect(
+      updateGlossaryEntry(database!, {
+        id: entry.id,
+        kind: "concept",
+        description: "途中で失敗する説明",
+        canonicalSurface: "新型魔導炉",
+        forms: [
+          {
+            id: duplicateFormId,
+            surface: "魔力炉",
+            relation: "alias",
+            warningPolicy: "default"
+          },
+          {
+            id: duplicateFormId,
+            surface: "Magic Reactor",
+            relation: "variant",
+            warningPolicy: "warn"
+          }
+        ]
+      })
+    ).rejects.toThrow();
+
+    await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
+      entry
+    );
   });
 
   it("allows exact surface lookup with none, unique, and ambiguous results", async () => {
@@ -268,4 +426,8 @@ function canonicalFormOf(entry: GlossaryEntry): GlossaryForm {
   expect(canonicalForms).toHaveLength(1);
 
   return canonicalForms[0];
+}
+
+function nonCanonicalFormsOf(entry: GlossaryEntry): GlossaryForm[] {
+  return entry.forms.filter((form) => !form.isCanonical);
 }

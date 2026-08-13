@@ -878,28 +878,70 @@ button:active {
   text-transform: uppercase;
 }
 
-.glossaryEditorForms {
-  display: flex;
-  flex-direction: column;
-  gap: 6px;
-  margin: 0;
-  padding: 0;
-}
-
-.glossaryEditorForms li {
+.glossaryEditorCanonicalField,
+.glossaryEditorFormRow {
   display: flex;
   min-width: 0;
   align-items: center;
   gap: 8px;
   color: #25313d;
   font-size: 14px;
-  list-style: none;
 }
 
-.glossaryEditorFormRelation {
-  flex: 0 0 auto;
-  color: #6b7785;
+.glossaryEditorCanonicalField {
+  margin-bottom: 16px;
+}
+
+.glossaryEditorCanonicalField span {
+  flex: 0 0 128px;
+  color: #52616f;
   font-size: 12px;
+  font-weight: 600;
+}
+
+.glossaryEditorCanonicalField input,
+.glossaryEditorFormRow input {
+  min-width: 0;
+  flex: 1 1 auto;
+  border: 1px solid #cbd5df;
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.glossaryEditorFormRow select {
+  flex: 0 0 132px;
+  border: 1px solid #cbd5df;
+  border-radius: 4px;
+  padding: 6px 8px;
+}
+
+.glossaryEditorFormRow button,
+.glossaryEditorAddForm {
+  flex: 0 0 auto;
+  border: 1px solid #cbd5df;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #25313d;
+  cursor: pointer;
+  padding: 6px 10px;
+}
+
+.glossaryEditorFormGroup {
+  margin-top: 14px;
+}
+
+.glossaryEditorFormGroup h3 {
+  margin: 0 0 8px;
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.glossaryEditorForms {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin-bottom: 8px;
 }
 
 .glossaryDescriptionPreview {

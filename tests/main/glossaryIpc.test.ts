@@ -98,15 +98,17 @@ describe("glossary IPC", () => {
     const updatedEntry = await handlers.update({
       id: createdEntry.id,
       kind: "concept",
-      description: "改稿後の首都設定"
+      description: "改稿後の首都設定",
+      canonicalSurface: "王都アルセリア",
+      forms: []
     });
 
     expect(updatedEntry).toMatchObject({
       id: createdEntry.id,
       kind: "concept",
-      description: "改稿後の首都設定",
-      forms: createdEntry.forms
+      description: "改稿後の首都設定"
     });
+    expect(canonicalFormOf(updatedEntry).surface).toBe("王都アルセリア");
 
     await handlers.delete({
       id: createdEntry.id

@@ -382,29 +382,90 @@ export async function updateGlossaryEntry(
 ): Promise<GlossaryEntry> {
   const entry = validateUpdateGlossaryEntryInput(input);
   const timestamp = nowTimestamp();
-  const result = await database.run(
-    `
-      UPDATE glossary_entries
-      SET
-        kind = ?,
-        description = ?,
-        updated_at = ?
-      WHERE id = ?
-    `,
-    [entry.kind, entry.description, timestamp, entry.id]
-  );
 
-  if (result.changes === 0) {
+  if (!(await getGlossaryEntryById(database, entry.id))) {
     throw notFound(entry.id);
   }
 
-  const updatedEntry = await getGlossaryEntryById(database, entry.id);
+  return database.transaction(async () => {
+    const entryResult = await database.run(
+      `
+        UPDATE glossary_entries
+        SET
+          kind = ?,
+          description = ?,
+          updated_at = ?
+        WHERE id = ?
+      `,
+      [entry.kind, entry.description, timestamp, entry.id]
+    );
 
-  if (!updatedEntry) {
-    throw notFound(entry.id);
-  }
+    if (entryResult.changes === 0) {
+      throw notFound(entry.id);
+    }
 
-  return updatedEntry;
+    await database.run(
+      `
+        DELETE FROM glossary_forms
+        WHERE entry_id = ?
+          AND is_canonical = 0
+      `,
+      [entry.id]
+    );
+
+    const canonicalResult = await database.run(
+      `
+        UPDATE glossary_forms
+        SET
+          surface = ?,
+          updated_at = ?
+        WHERE entry_id = ?
+          AND is_canonical = 1
+      `,
+      [entry.canonicalSurface, timestamp, entry.id]
+    );
+
+    if (canonicalResult.changes !== 1) {
+      throw new GlossaryValidationError(
+        "Glossary entry must contain exactly one canonical form."
+      );
+    }
+
+    for (const form of entry.forms) {
+      await database.run(
+        `
+          INSERT INTO glossary_forms (
+            id,
+            entry_id,
+            surface,
+            relation,
+            warning_policy,
+            is_canonical,
+            created_at,
+            updated_at
+          )
+          VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+        `,
+        [
+          form.id ?? createUuidv7(),
+          entry.id,
+          form.surface,
+          form.relation,
+          form.warningPolicy,
+          timestamp,
+          timestamp
+        ]
+      );
+    }
+
+    const updatedEntry = await getGlossaryEntryById(database, entry.id);
+
+    if (!updatedEntry) {
+      throw notFound(entry.id);
+    }
+
+    return updatedEntry;
+  });
 }
 
 export async function deleteGlossaryEntry(

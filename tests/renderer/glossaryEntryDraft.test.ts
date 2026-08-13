@@ -1,13 +1,19 @@
 import { describe, expect, it } from "vitest";
 import type { GlossaryEntry } from "../../src/shared/glossary";
 import {
+  addGlossaryEntryDraftForm,
   applyGlossaryEntryDraftSaveResult,
   createGlossaryEntryDraft,
+  deleteGlossaryEntryDraftForm,
   glossaryEntryDraftUpdateInput,
   isGlossaryEntryDraftDirty,
+  isLocalGlossaryFormId,
   markGlossaryEntryDraftSaveFailed,
   markGlossaryEntryDraftSaving,
+  updateGlossaryEntryDraftCanonicalSurface,
   updateGlossaryEntryDraftDescription,
+  updateGlossaryEntryDraftFormSurface,
+  updateGlossaryEntryDraftFormWarningPolicy,
   updateGlossaryEntryDraftKind
 } from "../../src/renderer/glossaryEntryDraft";
 
@@ -27,6 +33,26 @@ const savedEntry: GlossaryEntry = {
       isCanonical: true,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
+    },
+    {
+      id: "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
+      entryId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
+      surface: "首都",
+      relation: "alias",
+      warningPolicy: "default",
+      isCanonical: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
+    },
+    {
+      id: "018f4b8c-7a2b-7c3d-8e4f-423456789abc",
+      entryId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
+      surface: "王都",
+      relation: "variant",
+      warningPolicy: "warn",
+      isCanonical: false,
+      createdAt: "2026-01-01T00:00:00.000Z",
+      updatedAt: "2026-01-01T00:00:00.000Z"
     }
   ]
 };
@@ -37,8 +63,23 @@ describe("GlossaryEntryDraft", () => {
 
     expect(draft.saveState).toBe("clean");
     expect(isGlossaryEntryDraftDirty(draft)).toBe(false);
+    expect(draft.canonicalSurface).toBe("王都");
     expect(draft.kind).toBe("place");
     expect(draft.description).toBe("王国の首都");
+    expect(draft.forms).toEqual([
+      {
+        id: "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
+        surface: "首都",
+        relation: "alias",
+        warningPolicy: "default"
+      },
+      {
+        id: "018f4b8c-7a2b-7c3d-8e4f-423456789abc",
+        surface: "王都",
+        relation: "variant",
+        warningPolicy: "warn"
+      }
+    ]);
   });
 
   it("becomes dirty when kind changes from the saved snapshot", () => {
@@ -55,6 +96,79 @@ describe("GlossaryEntryDraft", () => {
     const draft = updateGlossaryEntryDraftDescription(
       createGlossaryEntryDraft(savedEntry),
       "新しい説明"
+    );
+
+    expect(isGlossaryEntryDraftDirty(draft)).toBe(true);
+    expect(draft.saveState).toBe("dirty");
+  });
+
+  it("becomes dirty when canonical surface changes from the saved snapshot", () => {
+    const draft = updateGlossaryEntryDraftCanonicalSurface(
+      createGlossaryEntryDraft(savedEntry),
+      "新王都"
+    );
+
+    expect(isGlossaryEntryDraftDirty(draft)).toBe(true);
+    expect(draft.saveState).toBe("dirty");
+  });
+
+  it("becomes dirty when an alias is added, edited, or deleted", () => {
+    const addedDraft = addGlossaryEntryDraftForm(
+      createGlossaryEntryDraft(savedEntry),
+      "alias"
+    );
+
+    expect(isLocalGlossaryFormId(addedDraft.forms.at(-1)?.id ?? "")).toBe(true);
+    expect(isGlossaryEntryDraftDirty(addedDraft)).toBe(true);
+    expect(addedDraft.saveState).toBe("dirty");
+
+    const editedDraft = updateGlossaryEntryDraftFormSurface(
+      createGlossaryEntryDraft(savedEntry),
+      "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
+      "王都アルセリア"
+    );
+
+    expect(isGlossaryEntryDraftDirty(editedDraft)).toBe(true);
+    expect(editedDraft.saveState).toBe("dirty");
+
+    const deletedDraft = deleteGlossaryEntryDraftForm(
+      createGlossaryEntryDraft(savedEntry),
+      "018f4b8c-7a2b-7c3d-8e4f-323456789abc"
+    );
+
+    expect(isGlossaryEntryDraftDirty(deletedDraft)).toBe(true);
+    expect(deletedDraft.saveState).toBe("dirty");
+  });
+
+  it("becomes dirty when a variant is added, edited, or deleted", () => {
+    const addedDraft = addGlossaryEntryDraftForm(
+      createGlossaryEntryDraft(savedEntry),
+      "variant"
+    );
+
+    expect(isGlossaryEntryDraftDirty(addedDraft)).toBe(true);
+
+    const editedDraft = updateGlossaryEntryDraftFormSurface(
+      createGlossaryEntryDraft(savedEntry),
+      "018f4b8c-7a2b-7c3d-8e4f-423456789abc",
+      "王都アルセリア"
+    );
+
+    expect(isGlossaryEntryDraftDirty(editedDraft)).toBe(true);
+
+    const deletedDraft = deleteGlossaryEntryDraftForm(
+      createGlossaryEntryDraft(savedEntry),
+      "018f4b8c-7a2b-7c3d-8e4f-423456789abc"
+    );
+
+    expect(isGlossaryEntryDraftDirty(deletedDraft)).toBe(true);
+  });
+
+  it("becomes dirty when a form warning policy changes", () => {
+    const draft = updateGlossaryEntryDraftFormWarningPolicy(
+      createGlossaryEntryDraft(savedEntry),
+      "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
+      "warn"
     );
 
     expect(isGlossaryEntryDraftDirty(draft)).toBe(true);
@@ -113,6 +227,42 @@ describe("GlossaryEntryDraft", () => {
     expect(editedWhileSaving.description).toBe("保存中に加えた編集");
   });
 
+  it("keeps saveState as saving while editing forms mid-save", () => {
+    const savingDraft = markGlossaryEntryDraftSaving(
+      createGlossaryEntryDraft(savedEntry)
+    );
+
+    expect(
+      addGlossaryEntryDraftForm(savingDraft, "alias").saveState
+    ).toBe("saving");
+    expect(
+      updateGlossaryEntryDraftFormSurface(
+        savingDraft,
+        "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
+        "保存中の別名"
+      ).saveState
+    ).toBe("saving");
+    expect(
+      updateGlossaryEntryDraftFormWarningPolicy(
+        savingDraft,
+        "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
+        "warn"
+      ).saveState
+    ).toBe("saving");
+    expect(
+      deleteGlossaryEntryDraftForm(
+        savingDraft,
+        "018f4b8c-7a2b-7c3d-8e4f-423456789abc"
+      ).saveState
+    ).toBe("saving");
+    expect(
+      updateGlossaryEntryDraftCanonicalSurface(
+        savingDraft,
+        "保存中の代表表記"
+      ).saveState
+    ).toBe("saving");
+  });
+
   it("preserves edits made during a save and marks the draft dirty when they differ from the new snapshot", () => {
     const savingDraft = markGlossaryEntryDraftSaving(
       createGlossaryEntryDraft(savedEntry)
@@ -156,6 +306,93 @@ describe("GlossaryEntryDraft", () => {
     expect(isGlossaryEntryDraftDirty(savedDraft)).toBe(false);
   });
 
+  it("marks the draft dirty when forms edited during save differ from the new snapshot", () => {
+    const savingDraft = markGlossaryEntryDraftSaving(
+      createGlossaryEntryDraft(savedEntry)
+    );
+    const editedWhileSaving = updateGlossaryEntryDraftFormWarningPolicy(
+      savingDraft,
+      "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
+      "warn"
+    );
+
+    const savedDraft = applyGlossaryEntryDraftSaveResult(
+      editedWhileSaving,
+      savedEntry
+    );
+
+    expect(savedDraft.saveState).toBe("dirty");
+    expect(isGlossaryEntryDraftDirty(savedDraft)).toBe(true);
+    expect(savedDraft.forms).toContainEqual({
+      id: "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
+      surface: "首都",
+      relation: "alias",
+      warningPolicy: "warn"
+    });
+  });
+
+  it("ignores local and database ID differences in dirty comparison", () => {
+    const draft = createGlossaryEntryDraft(savedEntry);
+    const draftWithLocalId = {
+      ...draft,
+      forms: [
+        {
+          ...draft.forms[0],
+          id: "local:018f4b8c-7a2b-7c3d-8e4f-523456789abc"
+        },
+        draft.forms[1]
+      ]
+    };
+
+    expect(isGlossaryEntryDraftDirty(draftWithLocalId)).toBe(false);
+  });
+
+  it("reconciles local form IDs by trimmed surface and relation after save", () => {
+    const localAliasId = "local:alias-b";
+    const savingDraft = markGlossaryEntryDraftSaving({
+      ...createGlossaryEntryDraft(savedEntry),
+      forms: [
+        ...createGlossaryEntryDraft(savedEntry).forms,
+        {
+          id: localAliasId,
+          surface: " alias B ",
+          relation: "alias",
+          warningPolicy: "warn"
+        }
+      ]
+    });
+    const savedEntryWithAlias: GlossaryEntry = {
+      ...savedEntry,
+      updatedAt: "2026-01-02T00:00:00.000Z",
+      forms: [
+        ...savedEntry.forms,
+        {
+          id: "018f4b8c-7a2b-7c3d-8e4f-523456789abc",
+          entryId: savedEntry.id,
+          surface: "alias B",
+          relation: "alias",
+          warningPolicy: "default",
+          isCanonical: false,
+          createdAt: "2026-01-02T00:00:00.000Z",
+          updatedAt: "2026-01-02T00:00:00.000Z"
+        }
+      ]
+    };
+
+    const savedDraft = applyGlossaryEntryDraftSaveResult(
+      savingDraft,
+      savedEntryWithAlias
+    );
+
+    expect(savedDraft.forms).toContainEqual({
+      id: "018f4b8c-7a2b-7c3d-8e4f-523456789abc",
+      surface: " alias B ",
+      relation: "alias",
+      warningPolicy: "warn"
+    });
+    expect(savedDraft.saveState).toBe("dirty");
+  });
+
   it("keeps the draft's edits and marks saveFailed when save fails", () => {
     const dirtyDraft = updateGlossaryEntryDraftDescription(
       createGlossaryEntryDraft(savedEntry),
@@ -170,7 +407,7 @@ describe("GlossaryEntryDraft", () => {
     expect(isGlossaryEntryDraftDirty(failedDraft)).toBe(true);
   });
 
-  it("builds the UpdateGlossaryEntryInput from the draft's id, kind, and description", () => {
+  it("builds the UpdateGlossaryEntryInput from the draft's editable fields", () => {
     const draft = updateGlossaryEntryDraftDescription(
       updateGlossaryEntryDraftKind(
         createGlossaryEntryDraft(savedEntry),
@@ -182,7 +419,57 @@ describe("GlossaryEntryDraft", () => {
     expect(glossaryEntryDraftUpdateInput(draft)).toEqual({
       id: savedEntry.id,
       kind: "person",
-      description: "更新後の説明"
+      description: "更新後の説明",
+      canonicalSurface: "王都",
+      forms: [
+        {
+          id: "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
+          surface: "首都",
+          relation: "alias",
+          warningPolicy: "default"
+        },
+        {
+          id: "018f4b8c-7a2b-7c3d-8e4f-423456789abc",
+          surface: "王都",
+          relation: "variant",
+          warningPolicy: "warn"
+        }
+      ]
+    });
+  });
+
+  it("omits blank and local form IDs from the update input", () => {
+    const draft = {
+      ...createGlossaryEntryDraft(savedEntry),
+      forms: [
+        {
+          id: "local:new-alias",
+          surface: "新しい別名",
+          relation: "alias" as const,
+          warningPolicy: "default" as const
+        },
+        {
+          id: "local:blank",
+          surface: " ",
+          relation: "variant" as const,
+          warningPolicy: "default" as const
+        }
+      ]
+    };
+
+    expect(glossaryEntryDraftUpdateInput(draft)).toEqual({
+      id: savedEntry.id,
+      kind: "place",
+      description: "王国の首都",
+      canonicalSurface: "王都",
+      forms: [
+        {
+          id: undefined,
+          surface: "新しい別名",
+          relation: "alias",
+          warningPolicy: "default"
+        }
+      ]
     });
   });
 });
