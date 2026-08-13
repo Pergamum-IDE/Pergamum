@@ -1,4 +1,5 @@
 import {
+  DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
   GlossaryValidationError,
   validateCreateGlossaryEntryInput,
   validateGlossaryEntry,
@@ -42,6 +43,8 @@ interface GlossaryFormRow extends Record<string, unknown> {
   surface: unknown;
   relation: unknown;
   warning_policy: unknown;
+  match_boundary_left: unknown;
+  match_boundary_right: unknown;
   is_canonical: unknown;
   created_at: unknown;
   updated_at: unknown;
@@ -58,6 +61,8 @@ interface GlossarySurfaceMatchRow extends Record<string, unknown> {
   form_surface: unknown;
   form_relation: unknown;
   form_warning_policy: unknown;
+  form_match_boundary_left: unknown;
+  form_match_boundary_right: unknown;
   form_is_canonical: unknown;
   form_created_at: unknown;
   form_updated_at: unknown;
@@ -114,6 +119,14 @@ export function glossaryFormFromDatabaseRow(
       row.warning_policy,
       "warning_policy"
     ),
+    matchBoundaryLeft: stringColumn(
+      row.match_boundary_left,
+      "match_boundary_left"
+    ),
+    matchBoundaryRight: stringColumn(
+      row.match_boundary_right,
+      "match_boundary_right"
+    ),
     isCanonical: booleanColumn(row.is_canonical, "is_canonical"),
     createdAt: stringColumn(row.created_at, "created_at"),
     updatedAt: stringColumn(row.updated_at, "updated_at")
@@ -149,6 +162,8 @@ async function listFormsForEntry(
         surface,
         relation,
         warning_policy,
+        match_boundary_left,
+        match_boundary_right,
         is_canonical,
         created_at,
         updated_at
@@ -183,6 +198,8 @@ async function listFormsForEntries(
         surface,
         relation,
         warning_policy,
+        match_boundary_left,
+        match_boundary_right,
         is_canonical,
         created_at,
         updated_at
@@ -222,6 +239,8 @@ function formRowFromSurfaceMatchRow(
     surface: row.form_surface,
     relation: row.form_relation,
     warning_policy: row.form_warning_policy,
+    match_boundary_left: row.form_match_boundary_left,
+    match_boundary_right: row.form_match_boundary_right,
     is_canonical: row.form_is_canonical,
     created_at: row.form_created_at,
     updated_at: row.form_updated_at
@@ -245,6 +264,8 @@ async function listSurfaceMatchRows(
         forms.surface AS form_surface,
         forms.relation AS form_relation,
         forms.warning_policy AS form_warning_policy,
+        forms.match_boundary_left AS form_match_boundary_left,
+        forms.match_boundary_right AS form_match_boundary_right,
         forms.is_canonical AS form_is_canonical,
         forms.created_at AS form_created_at,
         forms.updated_at AS form_updated_at
@@ -295,16 +316,22 @@ export async function createGlossaryEntry(
           surface,
           relation,
           warning_policy,
+          match_boundary_left,
+          match_boundary_right,
           is_canonical,
           created_at,
           updated_at
         )
-        VALUES (?, ?, ?, NULL, NULL, 1, ?, ?)
+        VALUES (?, ?, ?, NULL, NULL, ?, ?, 1, ?, ?)
       `,
       [
         canonicalFormId,
         entryId,
         validatedInput.canonicalSurface,
+        validatedInput.matchBoundaryLeft ??
+          DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
+        validatedInput.matchBoundaryRight ??
+          DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
         timestamp,
         timestamp
       ]
@@ -440,11 +467,13 @@ export async function updateGlossaryEntry(
             surface,
             relation,
             warning_policy,
+            match_boundary_left,
+            match_boundary_right,
             is_canonical,
             created_at,
             updated_at
           )
-          VALUES (?, ?, ?, ?, ?, 0, ?, ?)
+          VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
         `,
         [
           form.id ?? createUuidv7(),
@@ -452,6 +481,8 @@ export async function updateGlossaryEntry(
           form.surface,
           form.relation,
           form.warningPolicy,
+          form.matchBoundaryLeft,
+          form.matchBoundaryRight,
           timestamp,
           timestamp
         ]

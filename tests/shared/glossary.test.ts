@@ -1,11 +1,13 @@
 import { describe, expect, it } from "vitest";
 import {
+  DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
   GlossaryValidationError,
   validateCreateGlossaryEntryInput,
   validateGlossaryEntry,
   validateGlossaryEntryId,
   validateGlossaryEntryKind,
   validateGlossaryForm,
+  validateGlossaryFormMatchBoundary,
   validateGlossarySurfaceLookupInput,
   validateUpdateGlossaryEntryInput
 } from "../../src/shared/glossary";
@@ -28,6 +30,8 @@ describe("glossary validation", () => {
             surface: "王都アルセリア",
             relation: null,
             warningPolicy: null,
+            matchBoundaryLeft: "strict",
+            matchBoundaryRight: "none",
             isCanonical: true,
             createdAt: "2026-08-11T12:00:00.000Z",
             updatedAt: "2026-08-11T12:00:00.000Z"
@@ -38,6 +42,8 @@ describe("glossary validation", () => {
             surface: "アルセリア",
             relation: "alias",
             warningPolicy: "warn",
+            matchBoundaryLeft: "auto",
+            matchBoundaryRight: "strict",
             isCanonical: false,
             createdAt: "2026-08-11T12:00:00.000Z",
             updatedAt: "2026-08-11T12:00:00.000Z"
@@ -63,7 +69,9 @@ describe("glossary validation", () => {
     ).toEqual({
       kind: "item",
       canonicalSurface: "魔導炉",
-      description: ""
+      description: "",
+      matchBoundaryLeft: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
+      matchBoundaryRight: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY
     });
 
     expect(
@@ -76,7 +84,9 @@ describe("glossary validation", () => {
           {
             surface: "旧式魔導炉",
             relation: "alias",
-            warningPolicy: "default"
+            warningPolicy: "default",
+            matchBoundaryLeft: "strict",
+            matchBoundaryRight: "none"
           }
         ]
       })
@@ -89,7 +99,9 @@ describe("glossary validation", () => {
         {
           surface: "旧式魔導炉",
           relation: "alias",
-          warningPolicy: "default"
+          warningPolicy: "default",
+          matchBoundaryLeft: "strict",
+          matchBoundaryRight: "none"
         }
       ]
     });
@@ -111,6 +123,15 @@ describe("glossary validation", () => {
     expect(() =>
       validateGlossaryEntryId("018F4B8C-7A2B-7C3D-8E4F-123456789ABC")
     ).toThrow(GlossaryValidationError);
+  });
+
+  it("validates glossary form match boundaries", () => {
+    expect(validateGlossaryFormMatchBoundary("auto")).toBe("auto");
+    expect(validateGlossaryFormMatchBoundary("strict")).toBe("strict");
+    expect(validateGlossaryFormMatchBoundary("none")).toBe("none");
+    expect(() => validateGlossaryFormMatchBoundary("word")).toThrow(
+      GlossaryValidationError
+    );
   });
 
   it("rejects invalid entry kinds and required textual fields", () => {
@@ -148,7 +169,27 @@ describe("glossary validation", () => {
           {
             surface: "旧式魔導炉",
             relation: "alias",
-            warningPolicy: "block"
+            warningPolicy: "block",
+            matchBoundaryLeft: "auto",
+            matchBoundaryRight: "auto"
+          }
+        ]
+      })
+    ).toThrow(GlossaryValidationError);
+  });
+
+  it("requires match boundaries for update input forms", () => {
+    expect(() =>
+      validateUpdateGlossaryEntryInput({
+        id: entryId,
+        kind: "term",
+        description: "invalid",
+        canonicalSurface: "魔導炉",
+        forms: [
+          {
+            surface: "旧式魔導炉",
+            relation: "alias",
+            warningPolicy: "default"
           }
         ]
       })
@@ -166,7 +207,9 @@ describe("glossary validation", () => {
           {
             surface: " 魔導炉 ",
             relation: "variant",
-            warningPolicy: "warn"
+            warningPolicy: "warn",
+            matchBoundaryLeft: "auto",
+            matchBoundaryRight: "auto"
           }
         ]
       })
@@ -194,6 +237,8 @@ describe("glossary validation", () => {
         surface: "王都アルセリア",
         relation: "alias",
         warningPolicy: null,
+        matchBoundaryLeft: "auto",
+        matchBoundaryRight: "auto",
         isCanonical: true,
         createdAt: "2026-08-11T12:00:00.000Z",
         updatedAt: "2026-08-11T12:00:00.000Z"
@@ -207,6 +252,8 @@ describe("glossary validation", () => {
         surface: "王都アルセリア",
         relation: null,
         warningPolicy: "default",
+        matchBoundaryLeft: "auto",
+        matchBoundaryRight: "auto",
         isCanonical: true,
         createdAt: "2026-08-11T12:00:00.000Z",
         updatedAt: "2026-08-11T12:00:00.000Z"
@@ -222,6 +269,8 @@ describe("glossary validation", () => {
         surface: "アルセリア",
         relation: null,
         warningPolicy: "default",
+        matchBoundaryLeft: "auto",
+        matchBoundaryRight: "auto",
         isCanonical: false,
         createdAt: "2026-08-11T12:00:00.000Z",
         updatedAt: "2026-08-11T12:00:00.000Z"
@@ -235,6 +284,8 @@ describe("glossary validation", () => {
         surface: "アルセリア",
         relation: "alias",
         warningPolicy: null,
+        matchBoundaryLeft: "auto",
+        matchBoundaryRight: "auto",
         isCanonical: false,
         createdAt: "2026-08-11T12:00:00.000Z",
         updatedAt: "2026-08-11T12:00:00.000Z"
@@ -249,6 +300,8 @@ describe("glossary validation", () => {
       surface: "王都アルセリア",
       relation: null,
       warningPolicy: null,
+      matchBoundaryLeft: "auto",
+      matchBoundaryRight: "auto",
       isCanonical: true,
       createdAt: "2026-08-11T12:00:00.000Z",
       updatedAt: "2026-08-11T12:00:00.000Z"
@@ -287,7 +340,9 @@ describe("glossary validation", () => {
     ).toEqual({
       kind: "item",
       canonicalSurface: "魔導炉",
-      description: "  説明文  "
+      description: "  説明文  ",
+      matchBoundaryLeft: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
+      matchBoundaryRight: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY
     });
 
     expect(
@@ -300,7 +355,9 @@ describe("glossary validation", () => {
           {
             surface: "  旧式魔導炉  ",
             relation: "alias",
-            warningPolicy: "default"
+            warningPolicy: "default",
+            matchBoundaryLeft: "auto",
+            matchBoundaryRight: "strict"
           }
         ]
       })
@@ -313,7 +370,9 @@ describe("glossary validation", () => {
         {
           surface: "旧式魔導炉",
           relation: "alias",
-          warningPolicy: "default"
+          warningPolicy: "default",
+          matchBoundaryLeft: "auto",
+          matchBoundaryRight: "strict"
         }
       ]
     });

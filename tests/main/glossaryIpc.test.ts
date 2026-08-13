@@ -141,6 +141,15 @@ describe("glossary IPC", () => {
         description: "invalid"
       })
     ).rejects.toBeInstanceOf(GlossaryValidationError);
+
+    await expect(
+      handlers.create({
+        kind: "term",
+        canonicalSurface: "魔導炉",
+        description: "invalid",
+        matchBoundaryLeft: "word"
+      })
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
   });
 
   it("propagates glossary store errors", async () => {

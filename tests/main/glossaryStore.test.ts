@@ -73,6 +73,8 @@ describe("glossary store", () => {
       surface: "エリシア・フォン・アルセリア",
       relation: null,
       warningPolicy: null,
+      matchBoundaryLeft: "auto",
+      matchBoundaryRight: "auto",
       isCanonical: true
     });
     expect(Date.parse(entry.createdAt)).not.toBeNaN();
@@ -80,6 +82,25 @@ describe("glossary store", () => {
     expect(Date.parse(canonicalForm.createdAt)).not.toBeNaN();
     expect(Date.parse(canonicalForm.updatedAt)).not.toBeNaN();
 
+    await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
+      entry
+    );
+  });
+
+  it("creates an entry with explicit canonical match boundaries", async () => {
+    const entry = await createGlossaryEntry(database!, {
+      kind: "person",
+      canonicalSurface: "オーダ",
+      description: "千年領主制度",
+      matchBoundaryLeft: "strict",
+      matchBoundaryRight: "none"
+    });
+
+    expect(canonicalFormOf(entry)).toMatchObject({
+      surface: "オーダ",
+      matchBoundaryLeft: "strict",
+      matchBoundaryRight: "none"
+    });
     await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
       entry
     );
@@ -107,7 +128,9 @@ describe("glossary store", () => {
     const entry = await createGlossaryEntry(database!, {
       kind: "term",
       canonicalSurface: "魔導炉",
-      description: "旧式の説明"
+      description: "旧式の説明",
+      matchBoundaryLeft: "strict",
+      matchBoundaryRight: "none"
     });
     const updatedEntry = await updateGlossaryEntry(database!, {
       id: entry.id,
@@ -127,6 +150,8 @@ describe("glossary store", () => {
       surface: "魔導炉",
       relation: null,
       warningPolicy: null,
+      matchBoundaryLeft: "strict",
+      matchBoundaryRight: "none",
       isCanonical: true
     });
     expect(Date.parse(updatedEntry.updatedAt)).not.toBeNaN();
@@ -188,6 +213,39 @@ describe("glossary store", () => {
         description: "invalid"
       })
     ).rejects.toBeInstanceOf(GlossaryValidationError);
+
+    await expect(
+      createGlossaryEntry(database!, {
+        kind: "term",
+        canonicalSurface: "魔導炉",
+        description: "invalid",
+        matchBoundaryLeft: "word" as never
+      })
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
+
+    const entry = await createGlossaryEntry(database!, {
+      kind: "term",
+      canonicalSurface: "魔導炉",
+      description: "valid"
+    });
+
+    await expect(
+      updateGlossaryEntry(database!, {
+        id: entry.id,
+        kind: "term",
+        description: "invalid",
+        canonicalSurface: "魔導炉",
+        forms: [
+          {
+            surface: "魔力炉",
+            relation: "alias",
+            warningPolicy: "default",
+            matchBoundaryLeft: "word" as never,
+            matchBoundaryRight: "auto"
+          }
+        ]
+      })
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
   });
 
   it("updates canonical, alias, variant, and warning policy forms", async () => {
@@ -205,12 +263,16 @@ describe("glossary store", () => {
         {
           surface: "魔力炉",
           relation: "alias",
-          warningPolicy: "warn"
+          warningPolicy: "warn",
+          matchBoundaryLeft: "strict",
+          matchBoundaryRight: "none"
         },
         {
           surface: "Magic Reactor",
           relation: "variant",
-          warningPolicy: "ignore"
+          warningPolicy: "ignore",
+          matchBoundaryLeft: "none",
+          matchBoundaryRight: "strict"
         }
       ]
     });
@@ -228,12 +290,16 @@ describe("glossary store", () => {
           surface: "Magic Reactor",
           relation: "variant",
           warningPolicy: "ignore",
+          matchBoundaryLeft: "none",
+          matchBoundaryRight: "strict",
           isCanonical: false
         }),
         expect.objectContaining({
           surface: "魔力炉",
           relation: "alias",
           warningPolicy: "warn",
+          matchBoundaryLeft: "strict",
+          matchBoundaryRight: "none",
           isCanonical: false
         })
       ])
@@ -259,12 +325,16 @@ describe("glossary store", () => {
         {
           surface: "アル",
           relation: "alias",
-          warningPolicy: "default"
+          warningPolicy: "default",
+          matchBoundaryLeft: "strict",
+          matchBoundaryRight: "none"
         },
         {
           surface: "Albert",
           relation: "variant",
-          warningPolicy: "warn"
+          warningPolicy: "warn",
+          matchBoundaryLeft: "none",
+          matchBoundaryRight: "strict"
         }
       ]
     });
@@ -284,7 +354,9 @@ describe("glossary store", () => {
           id: savedAlias?.id,
           surface: "アル",
           relation: "alias",
-          warningPolicy: "ignore"
+          warningPolicy: "ignore",
+          matchBoundaryLeft: savedAlias?.matchBoundaryLeft ?? "strict",
+          matchBoundaryRight: savedAlias?.matchBoundaryRight ?? "none"
         }
       ]
     });
@@ -297,7 +369,9 @@ describe("glossary store", () => {
       expect.objectContaining({
         surface: "アル",
         relation: "alias",
-        warningPolicy: "ignore"
+        warningPolicy: "ignore",
+        matchBoundaryLeft: "strict",
+        matchBoundaryRight: "none"
       })
     ]);
     expect(canonicalFormOf(secondUpdate)).toBeTruthy();
@@ -322,13 +396,17 @@ describe("glossary store", () => {
             id: duplicateFormId,
             surface: "魔力炉",
             relation: "alias",
-            warningPolicy: "default"
+            warningPolicy: "default",
+            matchBoundaryLeft: "auto",
+            matchBoundaryRight: "auto"
           },
           {
             id: duplicateFormId,
             surface: "Magic Reactor",
             relation: "variant",
-            warningPolicy: "warn"
+            warningPolicy: "warn",
+            matchBoundaryLeft: "auto",
+            matchBoundaryRight: "auto"
           }
         ]
       })
@@ -410,6 +488,8 @@ describe("glossary store", () => {
             surface: "王都アルセリア",
             relation: null,
             warning_policy: null,
+            match_boundary_left: "auto",
+            match_boundary_right: "auto",
             is_canonical: 1,
             created_at: "2026-08-11T12:00:00.000Z",
             updated_at: "2026-08-11T12:00:00.000Z"
