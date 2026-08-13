@@ -92,6 +92,8 @@ export interface UpdateGlossaryEntryInput {
   kind: GlossaryEntryKind;
   description: string;
   canonicalSurface: string;
+  matchBoundaryStart?: GlossaryFormMatchBoundary;
+  matchBoundaryEnd?: GlossaryFormMatchBoundary;
   forms: GlossaryFormInput[];
 }
 
@@ -264,6 +266,17 @@ function validateGlossaryFormMatchBoundaryOrDefault(
 ): GlossaryFormMatchBoundary {
   if (value === undefined) {
     return DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY;
+  }
+
+  return validateGlossaryFormMatchBoundary(value, path);
+}
+
+function validateOptionalGlossaryFormMatchBoundary(
+  value: unknown,
+  path: string
+): GlossaryFormMatchBoundary | undefined {
+  if (value === undefined) {
+    return undefined;
   }
 
   return validateGlossaryFormMatchBoundary(value, path);
@@ -481,11 +494,22 @@ export function validateUpdateGlossaryEntryInput(
 
   assertNoDuplicateGlossarySurfaces(canonicalSurface, forms);
 
+  const matchBoundaryStart = validateOptionalGlossaryFormMatchBoundary(
+    value.matchBoundaryStart,
+    "matchBoundaryStart"
+  );
+  const matchBoundaryEnd = validateOptionalGlossaryFormMatchBoundary(
+    value.matchBoundaryEnd,
+    "matchBoundaryEnd"
+  );
+
   return {
     id: validateGlossaryEntryId(value.id, "id"),
     kind: validateGlossaryEntryKind(value.kind, "kind"),
     description: validateString(value.description, "description"),
     canonicalSurface,
+    ...(matchBoundaryStart === undefined ? {} : { matchBoundaryStart }),
+    ...(matchBoundaryEnd === undefined ? {} : { matchBoundaryEnd }),
     forms
   };
 }

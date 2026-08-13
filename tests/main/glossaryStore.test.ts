@@ -161,6 +161,35 @@ describe("glossary store", () => {
     );
   });
 
+  it("updates the canonical match boundaries when explicitly provided", async () => {
+    const entry = await createGlossaryEntry(database!, {
+      kind: "term",
+      canonicalSurface: "メイド",
+      description: "使用人",
+      matchBoundaryStart: "auto",
+      matchBoundaryEnd: "auto"
+    });
+    const updatedEntry = await updateGlossaryEntry(database!, {
+      id: entry.id,
+      kind: "term",
+      description: "使用人",
+      canonicalSurface: "メイド",
+      matchBoundaryStart: "none",
+      matchBoundaryEnd: "auto",
+      forms: []
+    });
+
+    expect(canonicalFormOf(updatedEntry)).toMatchObject({
+      surface: "メイド",
+      matchBoundaryStart: "none",
+      matchBoundaryEnd: "auto"
+    });
+
+    await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
+      updatedEntry
+    );
+  });
+
   it("deletes a glossary entry", async () => {
     const entry = await createGlossaryEntry(database!, {
       kind: "organization",

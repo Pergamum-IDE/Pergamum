@@ -20,6 +20,7 @@ import type {
   GlossaryEntry,
   GlossaryEntryId,
   GlossaryEntryKind,
+  GlossaryFormMatchBoundary,
   GlossaryFormRelation,
   GlossaryWarningPolicy
 } from "../shared/glossary";
@@ -65,8 +66,12 @@ import {
   isGlossaryEntryDraftDirty,
   markGlossaryEntryDraftSaveFailed,
   markGlossaryEntryDraftSaving,
+  updateGlossaryEntryDraftCanonicalMatchBoundaryEnd,
+  updateGlossaryEntryDraftCanonicalMatchBoundaryStart,
   updateGlossaryEntryDraftCanonicalSurface,
   updateGlossaryEntryDraftDescription,
+  updateGlossaryEntryDraftFormMatchBoundaryEnd,
+  updateGlossaryEntryDraftFormMatchBoundaryStart,
   updateGlossaryEntryDraftFormSurface,
   updateGlossaryEntryDraftFormWarningPolicy,
   updateGlossaryEntryDraftKind
@@ -345,6 +350,42 @@ export function App(): JSX.Element {
     );
   }
 
+  function setActiveGlossaryEntryCanonicalMatchBoundaryStart(
+    matchBoundaryStart: GlossaryFormMatchBoundary
+  ): void {
+    setOpenDocumentsState((state) =>
+      updateActiveOpenEditor(state, (editor) =>
+        editor.kind === "glossaryEntry"
+          ? {
+              ...editor,
+              draft: updateGlossaryEntryDraftCanonicalMatchBoundaryStart(
+                editor.draft,
+                matchBoundaryStart
+              )
+            }
+          : editor
+      )
+    );
+  }
+
+  function setActiveGlossaryEntryCanonicalMatchBoundaryEnd(
+    matchBoundaryEnd: GlossaryFormMatchBoundary
+  ): void {
+    setOpenDocumentsState((state) =>
+      updateActiveOpenEditor(state, (editor) =>
+        editor.kind === "glossaryEntry"
+          ? {
+              ...editor,
+              draft: updateGlossaryEntryDraftCanonicalMatchBoundaryEnd(
+                editor.draft,
+                matchBoundaryEnd
+              )
+            }
+          : editor
+      )
+    );
+  }
+
   function addActiveGlossaryEntryForm(
     relation: GlossaryFormRelation
   ): void {
@@ -393,6 +434,46 @@ export function App(): JSX.Element {
                 editor.draft,
                 formId,
                 warningPolicy
+              )
+            }
+          : editor
+      )
+    );
+  }
+
+  function setActiveGlossaryEntryFormMatchBoundaryStart(
+    formId: string,
+    matchBoundaryStart: GlossaryFormMatchBoundary
+  ): void {
+    setOpenDocumentsState((state) =>
+      updateActiveOpenEditor(state, (editor) =>
+        editor.kind === "glossaryEntry"
+          ? {
+              ...editor,
+              draft: updateGlossaryEntryDraftFormMatchBoundaryStart(
+                editor.draft,
+                formId,
+                matchBoundaryStart
+              )
+            }
+          : editor
+      )
+    );
+  }
+
+  function setActiveGlossaryEntryFormMatchBoundaryEnd(
+    formId: string,
+    matchBoundaryEnd: GlossaryFormMatchBoundary
+  ): void {
+    setOpenDocumentsState((state) =>
+      updateActiveOpenEditor(state, (editor) =>
+        editor.kind === "glossaryEntry"
+          ? {
+              ...editor,
+              draft: updateGlossaryEntryDraftFormMatchBoundaryEnd(
+                editor.draft,
+                formId,
+                matchBoundaryEnd
               )
             }
           : editor
@@ -1009,12 +1090,24 @@ export function App(): JSX.Element {
                   onChangeGlossaryEntryCanonicalSurface={
                     setActiveGlossaryEntryCanonicalSurface
                   }
+                  onChangeGlossaryEntryCanonicalMatchBoundaryStart={
+                    setActiveGlossaryEntryCanonicalMatchBoundaryStart
+                  }
+                  onChangeGlossaryEntryCanonicalMatchBoundaryEnd={
+                    setActiveGlossaryEntryCanonicalMatchBoundaryEnd
+                  }
                   onAddGlossaryEntryForm={addActiveGlossaryEntryForm}
                   onChangeGlossaryEntryFormSurface={
                     setActiveGlossaryEntryFormSurface
                   }
                   onChangeGlossaryEntryFormWarningPolicy={
                     setActiveGlossaryEntryFormWarningPolicy
+                  }
+                  onChangeGlossaryEntryFormMatchBoundaryStart={
+                    setActiveGlossaryEntryFormMatchBoundaryStart
+                  }
+                  onChangeGlossaryEntryFormMatchBoundaryEnd={
+                    setActiveGlossaryEntryFormMatchBoundaryEnd
                   }
                   onDeleteGlossaryEntryForm={deleteActiveGlossaryEntryForm}
                 />

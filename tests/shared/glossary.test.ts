@@ -115,6 +115,41 @@ describe("glossary validation", () => {
     });
   });
 
+  it("accepts an explicit canonical match boundary on update input", () => {
+    expect(
+      validateUpdateGlossaryEntryInput({
+        id: entryId,
+        kind: "term",
+        description: "使用人",
+        canonicalSurface: "メイド",
+        matchBoundaryStart: "none",
+        matchBoundaryEnd: "auto",
+        forms: []
+      })
+    ).toEqual({
+      id: entryId,
+      kind: "term",
+      description: "使用人",
+      canonicalSurface: "メイド",
+      matchBoundaryStart: "none",
+      matchBoundaryEnd: "auto",
+      forms: []
+    });
+  });
+
+  it("rejects an invalid canonical match boundary on update input", () => {
+    expect(() =>
+      validateUpdateGlossaryEntryInput({
+        id: entryId,
+        kind: "term",
+        description: "使用人",
+        canonicalSurface: "メイド",
+        matchBoundaryStart: "word",
+        forms: []
+      })
+    ).toThrow(GlossaryValidationError);
+  });
+
   it("rejects non-v7 and non-lowercase IDs", () => {
     expect(() => validateGlossaryEntryId(1)).toThrow(GlossaryValidationError);
     expect(() =>

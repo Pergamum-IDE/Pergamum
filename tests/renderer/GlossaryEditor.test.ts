@@ -4,6 +4,7 @@ import { describe, expect, it, vi } from "vitest";
 import type { GlossaryEntry } from "../../src/shared/glossary";
 import type { Translate } from "../../src/shared/i18n";
 import { GlossaryEditor } from "../../src/renderer/GlossaryEditor";
+import { GlossaryFormAdvancedMatchingSettings } from "../../src/renderer/GlossaryFormAdvancedMatchingSettings";
 import { createGlossaryEntryDraft } from "../../src/renderer/glossaryEntryDraft";
 
 const translate: Translate = (key) => key;
@@ -22,6 +23,8 @@ const entry: GlossaryEntry = {
       relation: null,
       warningPolicy: null,
       isCanonical: true,
+      matchBoundaryStart: "auto",
+      matchBoundaryEnd: "auto",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
     },
@@ -32,6 +35,8 @@ const entry: GlossaryEntry = {
       relation: "alias",
       warningPolicy: "default",
       isCanonical: false,
+      matchBoundaryStart: "strict",
+      matchBoundaryEnd: "none",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
     },
@@ -42,6 +47,8 @@ const entry: GlossaryEntry = {
       relation: "variant",
       warningPolicy: "warn",
       isCanonical: false,
+      matchBoundaryStart: "none",
+      matchBoundaryEnd: "strict",
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
     }
@@ -84,9 +91,13 @@ function glossaryEditorProps(
     onChangeKind: () => undefined,
     onChangeDescription: () => undefined,
     onChangeCanonicalSurface: () => undefined,
+    onChangeCanonicalMatchBoundaryStart: () => undefined,
+    onChangeCanonicalMatchBoundaryEnd: () => undefined,
     onAddForm: () => undefined,
     onChangeFormSurface: () => undefined,
     onChangeFormWarningPolicy: () => undefined,
+    onChangeFormMatchBoundaryStart: () => undefined,
+    onChangeFormMatchBoundaryEnd: () => undefined,
     onDeleteForm: () => undefined,
     ...overrides
   };
@@ -184,6 +195,83 @@ describe("GlossaryEditor", () => {
     expect(onChangeFormWarningPolicy).toHaveBeenCalledWith(
       "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
       "ignore"
+    );
+  });
+
+  it("renders an advanced matching settings control for the canonical surface and per form", () => {
+    const element = GlossaryEditor(glossaryEditorProps());
+    const advancedSettings = collectElements(
+      element,
+      (child) => child.type === GlossaryFormAdvancedMatchingSettings
+    );
+
+    expect(advancedSettings).toHaveLength(3);
+    expect(advancedSettings[0].props.matchBoundaryStart).toBe("auto");
+    expect(advancedSettings[0].props.matchBoundaryEnd).toBe("auto");
+    expect(advancedSettings[1].props.matchBoundaryStart).toBe("strict");
+    expect(advancedSettings[1].props.matchBoundaryEnd).toBe("none");
+    expect(advancedSettings[2].props.matchBoundaryStart).toBe("none");
+    expect(advancedSettings[2].props.matchBoundaryEnd).toBe("strict");
+  });
+
+  it("reports canonical match boundary changes through the canonical callbacks", () => {
+    const onChangeCanonicalMatchBoundaryStart = vi.fn();
+    const onChangeCanonicalMatchBoundaryEnd = vi.fn();
+    const element = GlossaryEditor(
+      glossaryEditorProps({
+        onChangeCanonicalMatchBoundaryStart,
+        onChangeCanonicalMatchBoundaryEnd
+      })
+    );
+    const advancedSettings = collectElements(
+      element,
+      (child) => child.type === GlossaryFormAdvancedMatchingSettings
+    );
+
+    (
+      advancedSettings[0].props.onChangeMatchBoundaryStart as (
+        value: string
+      ) => void
+    )("none");
+    (
+      advancedSettings[0].props.onChangeMatchBoundaryEnd as (
+        value: string
+      ) => void
+    )("strict");
+
+    expect(onChangeCanonicalMatchBoundaryStart).toHaveBeenCalledWith("none");
+    expect(onChangeCanonicalMatchBoundaryEnd).toHaveBeenCalledWith("strict");
+  });
+
+  it("reports form match boundary changes scoped to the edited form", () => {
+    const onChangeFormMatchBoundaryStart = vi.fn();
+    const onChangeFormMatchBoundaryEnd = vi.fn();
+    const element = GlossaryEditor(
+      glossaryEditorProps({
+        onChangeFormMatchBoundaryStart,
+        onChangeFormMatchBoundaryEnd
+      })
+    );
+    const advancedSettings = collectElements(
+      element,
+      (child) => child.type === GlossaryFormAdvancedMatchingSettings
+    );
+
+    const onChangeMatchBoundaryStart = advancedSettings[2].props
+      .onChangeMatchBoundaryStart as (value: string) => void;
+    const onChangeMatchBoundaryEnd = advancedSettings[2].props
+      .onChangeMatchBoundaryEnd as (value: string) => void;
+
+    onChangeMatchBoundaryStart("auto");
+    onChangeMatchBoundaryEnd("none");
+
+    expect(onChangeFormMatchBoundaryStart).toHaveBeenCalledWith(
+      "018f4b8c-7a2b-7c3d-8e4f-423456789abc",
+      "auto"
+    );
+    expect(onChangeFormMatchBoundaryEnd).toHaveBeenCalledWith(
+      "018f4b8c-7a2b-7c3d-8e4f-423456789abc",
+      "none"
     );
   });
 

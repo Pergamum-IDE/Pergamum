@@ -24,6 +24,8 @@ function glossaryEntry(description: string): GlossaryEntry {
         relation: null,
         warningPolicy: null,
         isCanonical: true,
+        matchBoundaryStart: "auto",
+        matchBoundaryEnd: "auto",
         createdAt: timestamp,
         updatedAt: timestamp
       },
@@ -34,6 +36,8 @@ function glossaryEntry(description: string): GlossaryEntry {
         relation: "alias",
         warningPolicy: "default",
         isCanonical: false,
+        matchBoundaryStart: "auto",
+        matchBoundaryEnd: "auto",
         createdAt: timestamp,
         updatedAt: timestamp
       }
@@ -50,9 +54,13 @@ describe("GlossaryEditor", () => {
         onChangeKind: () => undefined,
         onChangeDescription: () => undefined,
         onChangeCanonicalSurface: () => undefined,
+        onChangeCanonicalMatchBoundaryStart: () => undefined,
+        onChangeCanonicalMatchBoundaryEnd: () => undefined,
         onAddForm: () => undefined,
         onChangeFormSurface: () => undefined,
         onChangeFormWarningPolicy: () => undefined,
+        onChangeFormMatchBoundaryStart: () => undefined,
+        onChangeFormMatchBoundaryEnd: () => undefined,
         onDeleteForm: () => undefined
       })
     );
@@ -72,9 +80,13 @@ describe("GlossaryEditor", () => {
         onChangeKind: () => undefined,
         onChangeDescription: () => undefined,
         onChangeCanonicalSurface: () => undefined,
+        onChangeCanonicalMatchBoundaryStart: () => undefined,
+        onChangeCanonicalMatchBoundaryEnd: () => undefined,
         onAddForm: () => undefined,
         onChangeFormSurface: () => undefined,
         onChangeFormWarningPolicy: () => undefined,
+        onChangeFormMatchBoundaryStart: () => undefined,
+        onChangeFormMatchBoundaryEnd: () => undefined,
         onDeleteForm: () => undefined
       })
     );
@@ -91,9 +103,13 @@ describe("GlossaryEditor", () => {
         onChangeKind: () => undefined,
         onChangeDescription: () => undefined,
         onChangeCanonicalSurface: () => undefined,
+        onChangeCanonicalMatchBoundaryStart: () => undefined,
+        onChangeCanonicalMatchBoundaryEnd: () => undefined,
         onAddForm: () => undefined,
         onChangeFormSurface: () => undefined,
         onChangeFormWarningPolicy: () => undefined,
+        onChangeFormMatchBoundaryStart: () => undefined,
+        onChangeFormMatchBoundaryEnd: () => undefined,
         onDeleteForm: () => undefined
       })
     );
