@@ -10,11 +10,15 @@ import {
 } from "./currentDocument";
 import type { CurrentEditor } from "./currentEditor";
 import { GlossaryEditor } from "./GlossaryEditor";
+import { GlossaryPreviewDecorator } from "./GlossaryPreviewDecorator";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
+import { useGlossaryEntriesForMatching } from "./useGlossaryEntriesForMatching";
 
 interface EditorSurfaceProps {
   editor: CurrentEditor;
+  projectRootPath: string | null;
+  glossaryRefreshToken: number;
   translate: Translate;
   onChangeMarkdownContent: (content: string) => void;
   onChangeGlossaryEntryKind: (kind: GlossaryEntryKind) => void;
@@ -34,6 +38,8 @@ interface EditorSurfaceProps {
 
 export function EditorSurface({
   editor,
+  projectRootPath,
+  glossaryRefreshToken,
   translate,
   onChangeMarkdownContent,
   onChangeGlossaryEntryKind,
@@ -49,6 +55,8 @@ export function EditorSurface({
       return (
         <MarkdownEditorSurface
           document={editor.document}
+          projectRootPath={projectRootPath}
+          glossaryRefreshToken={glossaryRefreshToken}
           translate={translate}
           onChangeMarkdownContent={onChangeMarkdownContent}
         />
@@ -74,17 +82,25 @@ export function EditorSurface({
 
 interface MarkdownEditorSurfaceProps {
   document: CurrentDocument;
+  projectRootPath: string | null;
+  glossaryRefreshToken: number;
   translate: Translate;
   onChangeMarkdownContent: (content: string) => void;
 }
 
 function MarkdownEditorSurface({
   document,
+  projectRootPath,
+  glossaryRefreshToken,
   translate,
   onChangeMarkdownContent
 }: MarkdownEditorSurfaceProps): JSX.Element {
   const content = currentDocumentContent(document);
   const previewHtml = markdownPreviewRenderer.render(content);
+  const { entries, surfaceIndex } = useGlossaryEntriesForMatching(
+    projectRootPath,
+    glossaryRefreshToken
+  );
 
   return (
     <section
@@ -111,9 +127,10 @@ function MarkdownEditorSurface({
         <div className="paneHeader">
           {translate("workspace.preview")}
         </div>
-        <article
-          className="preview"
-          dangerouslySetInnerHTML={{ __html: previewHtml }}
+        <GlossaryPreviewDecorator
+          previewHtml={previewHtml}
+          entries={entries}
+          surfaceIndex={surfaceIndex}
         />
       </section>
     </section>
