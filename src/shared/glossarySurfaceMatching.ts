@@ -3,8 +3,10 @@ import type {
   GlossaryEntryId,
   GlossaryForm,
   GlossaryFormId,
+  GlossaryFormMatchBoundary,
   GlossaryWarningPolicy
 } from "./glossary";
+import { shouldAcceptGlossarySurfaceBoundary } from "./glossarySurfaceBoundary";
 
 export type GlossarySurfaceMatchRelation =
   | "canonical"
@@ -21,6 +23,8 @@ export interface GlossarySurfaceIndexEntry {
   surface: string;
   relation: GlossarySurfaceMatchRelation;
   warningPolicy: GlossaryWarningPolicy | null;
+  matchBoundaryLeft: GlossaryFormMatchBoundary;
+  matchBoundaryRight: GlossaryFormMatchBoundary;
 }
 
 export interface GlossarySurfaceIndex {
@@ -51,6 +55,12 @@ const relationSortRank: Record<GlossarySurfaceMatchRelation, number> = {
   alias: 1,
   variant: 2
 };
+
+interface RawGlossarySurfaceMatch {
+  start: number;
+  end: number;
+  entry: GlossarySurfaceIndexEntry;
+}
 
 function normalizedMinimumSurfaceLength(
   options?: GlossarySurfaceMatchingOptions
@@ -134,7 +144,9 @@ export function buildGlossarySurfaceIndex(
         formId: form.id,
         surface,
         relation: relationForForm(form),
-        warningPolicy: warningPolicyForForm(form)
+        warningPolicy: warningPolicyForForm(form),
+        matchBoundaryLeft: form.matchBoundaryLeft,
+        matchBoundaryRight: form.matchBoundaryRight
       });
     }
   }
@@ -144,29 +156,89 @@ export function buildGlossarySurfaceIndex(
   };
 }
 
-export function matchGlossarySurfacesInText(
+function collectRawGlossarySurfaceMatches(
   text: string,
   index: GlossarySurfaceIndex
-): GlossarySurfaceTextMatch[] {
-  const matches: GlossarySurfaceTextMatch[] = [];
-  let cursor = 0;
+): RawGlossarySurfaceMatch[] {
+  const rawMatches: RawGlossarySurfaceMatch[] = [];
 
-  while (cursor < text.length) {
-    let longestSurfaceLength = 0;
-    const matchingEntries: GlossarySurfaceIndexEntry[] = [];
-
+  for (let cursor = 0; cursor < text.length; cursor += 1) {
     for (const entry of index.entries) {
       if (!text.startsWith(entry.surface, cursor)) {
         continue;
       }
 
-      if (entry.surface.length > longestSurfaceLength) {
-        longestSurfaceLength = entry.surface.length;
-        matchingEntries.length = 0;
+      rawMatches.push({
+        start: cursor,
+        end: cursor + entry.surface.length,
+        entry
+      });
+    }
+  }
+
+  return rawMatches;
+}
+
+function isBoundaryAcceptedRawMatch(
+  text: string,
+  rawMatch: RawGlossarySurfaceMatch
+): boolean {
+  return shouldAcceptGlossarySurfaceBoundary({
+    text,
+    start: rawMatch.start,
+    end: rawMatch.end,
+    matchBoundaryLeft: rawMatch.entry.matchBoundaryLeft,
+    matchBoundaryRight: rawMatch.entry.matchBoundaryRight
+  });
+}
+
+function groupAcceptedRawMatches(
+  rawMatches: readonly RawGlossarySurfaceMatch[]
+): Map<string, RawGlossarySurfaceMatch[]> {
+  const matchesByRange = new Map<string, RawGlossarySurfaceMatch[]>();
+
+  for (const rawMatch of rawMatches) {
+    const rangeKey = `${rawMatch.start}:${rawMatch.end}`;
+    const rangeMatches = matchesByRange.get(rangeKey);
+
+    if (rangeMatches) {
+      rangeMatches.push(rawMatch);
+    } else {
+      matchesByRange.set(rangeKey, [rawMatch]);
+    }
+  }
+
+  return matchesByRange;
+}
+
+export function matchGlossarySurfacesInText(
+  text: string,
+  index: GlossarySurfaceIndex
+): GlossarySurfaceTextMatch[] {
+  const matches: GlossarySurfaceTextMatch[] = [];
+  const matchesByRange = groupAcceptedRawMatches(
+    collectRawGlossarySurfaceMatches(text, index).filter((rawMatch) =>
+      isBoundaryAcceptedRawMatch(text, rawMatch)
+    )
+  );
+  let cursor = 0;
+
+  while (cursor < text.length) {
+    let longestSurfaceLength = 0;
+    let matchingEntries: GlossarySurfaceIndexEntry[] = [];
+
+    for (const rangeMatches of matchesByRange.values()) {
+      const [firstMatch] = rangeMatches;
+
+      if (!firstMatch || firstMatch.start !== cursor) {
+        continue;
       }
 
-      if (entry.surface.length === longestSurfaceLength) {
-        matchingEntries.push(entry);
+      const surfaceLength = firstMatch.end - firstMatch.start;
+
+      if (surfaceLength > longestSurfaceLength) {
+        longestSurfaceLength = surfaceLength;
+        matchingEntries = rangeMatches.map((rawMatch) => rawMatch.entry);
       }
     }
 

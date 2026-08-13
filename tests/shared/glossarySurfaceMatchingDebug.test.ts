@@ -26,6 +26,8 @@ function canonicalForm(
     id,
     entryId,
     surface,
+    matchBoundaryLeft: "auto",
+    matchBoundaryRight: "auto",
     relation: null,
     warningPolicy: null,
     isCanonical: true,
@@ -47,6 +49,8 @@ function nonCanonicalForm(
     surface,
     relation,
     warningPolicy,
+    matchBoundaryLeft: "auto",
+    matchBoundaryRight: "auto",
     isCanonical: false,
     createdAt: timestamp,
     updatedAt: timestamp
@@ -136,6 +140,27 @@ describe("glossary surface matching debug helper", () => {
 
     expect(renderGlossaryMatchesForDebug(fixtureText, matches)).toBe(
       "[アルベルト]は[アル]と呼ばれていた。[蝕]の夜、[アルベルト卿]は[Albert]と署名した。"
+    );
+  });
+
+  it("renders boundary-filtered matches", () => {
+    const text = "PergamumIDE ではなく Pergamum is an IDE.";
+    const entryId = "018f4b8c-7a2b-7c3d-8e4f-300000000003";
+    const matches = matchGlossarySurfacesInText(
+      text,
+      buildGlossarySurfaceIndex([
+        glossaryEntry(entryId, [
+          canonicalForm(
+            entryId,
+            "018f4b8c-7a2b-7c3d-8e4f-400000000007",
+            "Pergamum"
+          )
+        ])
+      ])
+    );
+
+    expect(renderGlossaryMatchesForDebug(text, matches)).toBe(
+      "PergamumIDE ではなく [Pergamum] is an IDE."
     );
   });
 

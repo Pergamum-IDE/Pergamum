@@ -23,6 +23,8 @@ function canonicalForm(
     id,
     entryId,
     surface,
+    matchBoundaryLeft: "auto",
+    matchBoundaryRight: "auto",
     relation: null,
     warningPolicy: null,
     isCanonical: true,
@@ -44,6 +46,8 @@ function nonCanonicalForm(
     surface,
     relation,
     warningPolicy,
+    matchBoundaryLeft: "auto",
+    matchBoundaryRight: "auto",
     isCanonical: false,
     createdAt: timestamp,
     updatedAt: timestamp
