@@ -1,0 +1,431 @@
+import { describe, expect, it } from "vitest";
+import type {
+  GlossaryEntry,
+  GlossaryForm,
+  GlossaryFormRelation,
+  GlossaryWarningPolicy
+} from "../../src/shared/glossary";
+import {
+  buildGlossarySurfaceIndex,
+  isAmbiguousGlossarySurfaceTextMatch,
+  matchGlossarySurfacesInText,
+  type GlossarySurfaceTextMatch
+} from "../../src/shared/glossarySurfaceMatching";
+
+const timestamp = "2026-08-13T00:00:00.000Z";
+
+const albertEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000001";
+const eclipseEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000002";
+const duplicateCanonicalEntryId =
+  "018f4b8c-7a2b-7c3d-8e4f-100000000003";
+const duplicateAliasEntryId =
+  "018f4b8c-7a2b-7c3d-8e4f-100000000004";
+const duplicateVariantEntryId =
+  "018f4b8c-7a2b-7c3d-8e4f-100000000005";
+
+function canonicalForm(
+  entryId: string,
+  id: string,
+  surface: string
+): GlossaryForm {
+  return {
+    id,
+    entryId,
+    surface,
+    relation: null,
+    warningPolicy: null,
+    isCanonical: true,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+}
+
+function nonCanonicalForm(
+  entryId: string,
+  id: string,
+  surface: string,
+  relation: GlossaryFormRelation,
+  warningPolicy: GlossaryWarningPolicy
+): GlossaryForm {
+  return {
+    id,
+    entryId,
+    surface,
+    relation,
+    warningPolicy,
+    isCanonical: false,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+}
+
+function glossaryEntry(
+  id: string,
+  forms: GlossaryForm[]
+): GlossaryEntry {
+  return {
+    id,
+    kind: "term",
+    description: "",
+    forms,
+    createdAt: timestamp,
+    updatedAt: timestamp
+  };
+}
+
+function fixtureEntries(): GlossaryEntry[] {
+  return [
+    glossaryEntry(albertEntryId, [
+      canonicalForm(
+        albertEntryId,
+        "018f4b8c-7a2b-7c3d-8e4f-200000000001",
+        "アルベルト"
+      ),
+      nonCanonicalForm(
+        albertEntryId,
+        "018f4b8c-7a2b-7c3d-8e4f-200000000002",
+        "アル",
+        "alias",
+        "default"
+      ),
+      nonCanonicalForm(
+        albertEntryId,
+        "018f4b8c-7a2b-7c3d-8e4f-200000000003",
+        "アルベルト卿",
+        "alias",
+        "warn"
+      ),
+      nonCanonicalForm(
+        albertEntryId,
+        "018f4b8c-7a2b-7c3d-8e4f-200000000004",
+        "Albert",
+        "variant",
+        "ignore"
+      )
+    ]),
+    glossaryEntry(eclipseEntryId, [
+      canonicalForm(
+        eclipseEntryId,
+        "018f4b8c-7a2b-7c3d-8e4f-200000000005",
+        "蝕"
+      ),
+      nonCanonicalForm(
+        eclipseEntryId,
+        "018f4b8c-7a2b-7c3d-8e4f-200000000006",
+        "トータル・エクリプス",
+        "alias",
+        "default"
+      )
+    ])
+  ];
+}
+
+function assertSlicesMatch(
+  text: string,
+  matches: readonly GlossarySurfaceTextMatch[]
+): void {
+  for (const match of matches) {
+    expect(text.slice(match.range.start, match.range.end)).toBe(
+      match.matchedText
+    );
+    expect(match.candidates.length).toBeGreaterThan(0);
+  }
+}
+
+describe("glossary surface matching", () => {
+  it("detects canonical, alias, and variant surfaces with UTF-16 ranges", () => {
+    const text =
+      "アルベルトはアルと呼ばれていた。蝕の夜、アルベルト卿はAlbertと署名した。";
+    const index = buildGlossarySurfaceIndex(fixtureEntries());
+    const matches = matchGlossarySurfacesInText(text, index);
+
+    expect(matches.map((match) => match.matchedText)).toEqual([
+      "アルベルト",
+      "アル",
+      "アルベルト卿",
+      "Albert"
+    ]);
+    assertSlicesMatch(text, matches);
+
+    expect(matches[0]).toMatchObject({
+      matchedText: "アルベルト",
+      range: {
+        start: text.indexOf("アルベルト"),
+        end: text.indexOf("アルベルト") + "アルベルト".length
+      },
+      candidates: [
+        {
+          entryId: albertEntryId,
+          formId: "018f4b8c-7a2b-7c3d-8e4f-200000000001",
+          surface: "アルベルト",
+          relation: "canonical",
+          warningPolicy: null
+        }
+      ]
+    });
+    expect(matches[1].candidates[0]).toMatchObject({
+      surface: "アル",
+      relation: "alias",
+      warningPolicy: "default"
+    });
+    expect(matches[2].candidates[0]).toMatchObject({
+      surface: "アルベルト卿",
+      relation: "alias",
+      warningPolicy: "warn"
+    });
+    expect(matches[3].candidates[0]).toMatchObject({
+      surface: "Albert",
+      relation: "variant",
+      warningPolicy: "ignore"
+    });
+  });
+
+  it("applies minimumSurfaceLength at index construction time", () => {
+    const text = "アルと蝕とAlbert";
+    const defaultIndex = buildGlossarySurfaceIndex(fixtureEntries());
+    const oneCharacterIndex = buildGlossarySurfaceIndex(fixtureEntries(), {
+      minimumSurfaceLength: 1
+    });
+    const threeCharacterIndex = buildGlossarySurfaceIndex(fixtureEntries(), {
+      minimumSurfaceLength: 3
+    });
+
+    expect(defaultIndex.entries.map((entry) => entry.surface)).not.toContain(
+      "蝕"
+    );
+    expect(
+      matchGlossarySurfacesInText(text, defaultIndex).map(
+        (match) => match.matchedText
+      )
+    ).toEqual(["アル", "Albert"]);
+    expect(
+      matchGlossarySurfacesInText(text, oneCharacterIndex).map(
+        (match) => match.matchedText
+      )
+    ).toEqual(["アル", "蝕", "Albert"]);
+    expect(
+      matchGlossarySurfacesInText(text, threeCharacterIndex).map(
+        (match) => match.matchedText
+      )
+    ).toEqual(["Albert"]);
+  });
+
+  it("uses Array.from-style character length for minimumSurfaceLength", () => {
+    const emojiEntry = glossaryEntry(
+      "018f4b8c-7a2b-7c3d-8e4f-100000000006",
+      [
+        canonicalForm(
+          "018f4b8c-7a2b-7c3d-8e4f-100000000006",
+          "018f4b8c-7a2b-7c3d-8e4f-200000000007",
+          "😀"
+        )
+      ]
+    );
+    const defaultIndex = buildGlossarySurfaceIndex([emojiEntry]);
+    const oneCharacterIndex = buildGlossarySurfaceIndex([emojiEntry], {
+      minimumSurfaceLength: 1
+    });
+
+    expect("😀".length).toBe(2);
+    expect(Array.from("😀")).toHaveLength(1);
+    expect(defaultIndex.entries).toEqual([]);
+    expect(oneCharacterIndex.entries).toHaveLength(1);
+  });
+
+  it("uses leftmost-longest matching and advances the cursor to range.end", () => {
+    const index = buildGlossarySurfaceIndex(fixtureEntries());
+
+    expect(
+      matchGlossarySurfacesInText("アルベルト卿は笑った。", index).map(
+        (match) => match.matchedText
+      )
+    ).toEqual(["アルベルト卿"]);
+
+    const overlappingEntry = glossaryEntry(
+      "018f4b8c-7a2b-7c3d-8e4f-100000000007",
+      [
+        canonicalForm(
+          "018f4b8c-7a2b-7c3d-8e4f-100000000007",
+          "018f4b8c-7a2b-7c3d-8e4f-200000000008",
+          "abcd"
+        ),
+        nonCanonicalForm(
+          "018f4b8c-7a2b-7c3d-8e4f-100000000007",
+          "018f4b8c-7a2b-7c3d-8e4f-200000000009",
+          "cdef",
+          "alias",
+          "default"
+        )
+      ]
+    );
+
+    expect(
+      matchGlossarySurfacesInText(
+        "abcdef",
+        buildGlossarySurfaceIndex([overlappingEntry])
+      ).map((match) => match.matchedText)
+    ).toEqual(["abcd"]);
+  });
+
+  it("represents ambiguous matches as sorted candidates without dropping any", () => {
+    const entries = [
+      glossaryEntry(duplicateVariantEntryId, [
+        canonicalForm(
+          duplicateVariantEntryId,
+          "018f4b8c-7a2b-7c3d-8e4f-200000000010",
+          "別候補"
+        ),
+        nonCanonicalForm(
+          duplicateVariantEntryId,
+          "018f4b8c-7a2b-7c3d-8e4f-200000000011",
+          "重複",
+          "variant",
+          "warn"
+        )
+      ]),
+      glossaryEntry(duplicateAliasEntryId, [
+        canonicalForm(
+          duplicateAliasEntryId,
+          "018f4b8c-7a2b-7c3d-8e4f-200000000012",
+          "別名候補"
+        ),
+        nonCanonicalForm(
+          duplicateAliasEntryId,
+          "018f4b8c-7a2b-7c3d-8e4f-200000000013",
+          "重複",
+          "alias",
+          "default"
+        )
+      ]),
+      glossaryEntry(duplicateCanonicalEntryId, [
+        canonicalForm(
+          duplicateCanonicalEntryId,
+          "018f4b8c-7a2b-7c3d-8e4f-200000000014",
+          "重複"
+        )
+      ])
+    ];
+    const matches = matchGlossarySurfacesInText(
+      "重複している",
+      buildGlossarySurfaceIndex(entries)
+    );
+
+    expect(matches).toHaveLength(1);
+    expect(isAmbiguousGlossarySurfaceTextMatch(matches[0])).toBe(true);
+    expect(matches[0].candidates).toEqual([
+      {
+        entryId: duplicateCanonicalEntryId,
+        formId: "018f4b8c-7a2b-7c3d-8e4f-200000000014",
+        surface: "重複",
+        relation: "canonical",
+        warningPolicy: null
+      },
+      {
+        entryId: duplicateAliasEntryId,
+        formId: "018f4b8c-7a2b-7c3d-8e4f-200000000013",
+        surface: "重複",
+        relation: "alias",
+        warningPolicy: "default"
+      },
+      {
+        entryId: duplicateVariantEntryId,
+        formId: "018f4b8c-7a2b-7c3d-8e4f-200000000011",
+        surface: "重複",
+        relation: "variant",
+        warningPolicy: "warn"
+      }
+    ]);
+  });
+
+  it("trims surfaces and excludes trim-empty surfaces", () => {
+    const entry = glossaryEntry(
+      "018f4b8c-7a2b-7c3d-8e4f-100000000008",
+      [
+        canonicalForm(
+          "018f4b8c-7a2b-7c3d-8e4f-100000000008",
+          "018f4b8c-7a2b-7c3d-8e4f-200000000015",
+          "  Trim  "
+        ),
+        nonCanonicalForm(
+          "018f4b8c-7a2b-7c3d-8e4f-100000000008",
+          "018f4b8c-7a2b-7c3d-8e4f-200000000016",
+          "   ",
+          "alias",
+          "default"
+        )
+      ]
+    );
+    const index = buildGlossarySurfaceIndex([entry]);
+
+    expect(index.entries.map((indexEntry) => indexEntry.surface)).toEqual([
+      "Trim"
+    ]);
+    expect(
+      matchGlossarySurfacesInText("Trim is trimmed", index).map(
+        (match) => match.matchedText
+      )
+    ).toEqual(["Trim"]);
+  });
+
+  it("is case-sensitive and does not check word boundaries", () => {
+    const index = buildGlossarySurfaceIndex(fixtureEntries());
+    const text = "Albert albert ALBERT Albertine";
+    const matches = matchGlossarySurfacesInText(text, index);
+
+    expect(matches.map((match) => match.matchedText)).toEqual([
+      "Albert",
+      "Albert"
+    ]);
+    expect(matches[0].range.start).toBe(text.indexOf("Albert"));
+    expect(matches[1].range.start).toBe(text.indexOf("Albertine"));
+    assertSlicesMatch(text, matches);
+  });
+
+  it("returns an empty array for empty text, empty entries, and no matches", () => {
+    const index = buildGlossarySurfaceIndex(fixtureEntries());
+
+    expect(matchGlossarySurfacesInText("", index)).toEqual([]);
+    expect(
+      matchGlossarySurfacesInText(
+        "アルベルト",
+        buildGlossarySurfaceIndex([])
+      )
+    ).toEqual([]);
+    expect(matchGlossarySurfacesInText("一致しない本文", index)).toEqual([]);
+  });
+
+  it("keeps correct UTF-16 ranges across newlines and surrogate pairs", () => {
+    const entryId = "018f4b8c-7a2b-7c3d-8e4f-100000000009";
+    const entry = glossaryEntry(entryId, [
+      canonicalForm(
+        entryId,
+        "018f4b8c-7a2b-7c3d-8e4f-200000000017",
+        "😀A"
+      ),
+      nonCanonicalForm(
+        entryId,
+        "018f4b8c-7a2b-7c3d-8e4f-200000000018",
+        "二行目",
+        "alias",
+        "default"
+      )
+    ]);
+    const text = "序\n二行目\n😀A";
+    const matches = matchGlossarySurfacesInText(
+      text,
+      buildGlossarySurfaceIndex([entry])
+    );
+
+    expect(matches.map((match) => match.matchedText)).toEqual([
+      "二行目",
+      "😀A"
+    ]);
+    assertSlicesMatch(text, matches);
+    expect(matches[1].range).toEqual({
+      start: text.indexOf("😀A"),
+      end: text.indexOf("😀A") + "😀A".length
+    });
+    expect("😀A".length).toBe(3);
+    expect(Array.from("😀A")).toHaveLength(2);
+  });
+});
