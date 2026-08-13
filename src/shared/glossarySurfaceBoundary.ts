@@ -4,8 +4,8 @@ export interface GlossaryBoundaryContext {
   text: string;
   start: number;
   end: number;
-  matchBoundaryLeft: GlossaryFormMatchBoundary;
-  matchBoundaryRight: GlossaryFormMatchBoundary;
+  matchBoundaryStart: GlossaryFormMatchBoundary;
+  matchBoundaryEnd: GlossaryFormMatchBoundary;
 }
 
 type GlossaryBoundaryCharacterClass = "asciiWord" | "katakana" | "other";
@@ -89,13 +89,13 @@ export function shouldAcceptGlossarySurfaceBoundary(
       context.text,
       context.start,
       context.start - 1,
-      context.matchBoundaryLeft
+      context.matchBoundaryStart
     ) &&
     shouldAcceptBoundaryEdge(
       context.text,
       context.end - 1,
       context.end,
-      context.matchBoundaryRight
+      context.matchBoundaryEnd
     )
   );
 }

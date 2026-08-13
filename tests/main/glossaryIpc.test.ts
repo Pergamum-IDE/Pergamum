@@ -147,7 +147,7 @@ describe("glossary IPC", () => {
         kind: "term",
         canonicalSurface: "魔導炉",
         description: "invalid",
-        matchBoundaryLeft: "word"
+        matchBoundaryStart: "word"
       })
     ).rejects.toBeInstanceOf(GlossaryValidationError);
   });

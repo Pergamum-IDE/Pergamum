@@ -39,8 +39,8 @@ interface BaseGlossaryForm {
   id: GlossaryFormId;
   entryId: GlossaryEntryId;
   surface: string;
-  matchBoundaryLeft: GlossaryFormMatchBoundary;
-  matchBoundaryRight: GlossaryFormMatchBoundary;
+  matchBoundaryStart: GlossaryFormMatchBoundary;
+  matchBoundaryEnd: GlossaryFormMatchBoundary;
   createdAt: string;
   updatedAt: string;
 }
@@ -74,8 +74,8 @@ export interface CreateGlossaryEntryInput {
   kind: GlossaryEntryKind;
   canonicalSurface: string;
   description: string;
-  matchBoundaryLeft?: GlossaryFormMatchBoundary;
-  matchBoundaryRight?: GlossaryFormMatchBoundary;
+  matchBoundaryStart?: GlossaryFormMatchBoundary;
+  matchBoundaryEnd?: GlossaryFormMatchBoundary;
 }
 
 export interface GlossaryFormInput {
@@ -83,8 +83,8 @@ export interface GlossaryFormInput {
   surface: string;
   relation: GlossaryFormRelation;
   warningPolicy: GlossaryWarningPolicy;
-  matchBoundaryLeft: GlossaryFormMatchBoundary;
-  matchBoundaryRight: GlossaryFormMatchBoundary;
+  matchBoundaryStart: GlossaryFormMatchBoundary;
+  matchBoundaryEnd: GlossaryFormMatchBoundary;
 }
 
 export interface UpdateGlossaryEntryInput {
@@ -285,13 +285,13 @@ export function validateGlossaryForm(
     id: validateGlossaryFormId(value.id, `${path}.id`),
     entryId: validateGlossaryEntryId(value.entryId, `${path}.entryId`),
     surface: validateNonEmptyString(value.surface, `${path}.surface`),
-    matchBoundaryLeft: validateGlossaryFormMatchBoundary(
-      value.matchBoundaryLeft,
-      `${path}.matchBoundaryLeft`
+    matchBoundaryStart: validateGlossaryFormMatchBoundary(
+      value.matchBoundaryStart,
+      `${path}.matchBoundaryStart`
     ),
-    matchBoundaryRight: validateGlossaryFormMatchBoundary(
-      value.matchBoundaryRight,
-      `${path}.matchBoundaryRight`
+    matchBoundaryEnd: validateGlossaryFormMatchBoundary(
+      value.matchBoundaryEnd,
+      `${path}.matchBoundaryEnd`
     ),
     createdAt: validateTimestamp(value.createdAt, `${path}.createdAt`),
     updatedAt: validateTimestamp(value.updatedAt, `${path}.updatedAt`)
@@ -353,13 +353,13 @@ function validateGlossaryFormInput(
       value.warningPolicy,
       `${path}.warningPolicy`
     ),
-    matchBoundaryLeft: validateGlossaryFormMatchBoundary(
-      value.matchBoundaryLeft,
-      `${path}.matchBoundaryLeft`
+    matchBoundaryStart: validateGlossaryFormMatchBoundary(
+      value.matchBoundaryStart,
+      `${path}.matchBoundaryStart`
     ),
-    matchBoundaryRight: validateGlossaryFormMatchBoundary(
-      value.matchBoundaryRight,
-      `${path}.matchBoundaryRight`
+    matchBoundaryEnd: validateGlossaryFormMatchBoundary(
+      value.matchBoundaryEnd,
+      `${path}.matchBoundaryEnd`
     )
   };
 
@@ -449,13 +449,13 @@ export function validateCreateGlossaryEntryInput(
       "canonicalSurface"
     ),
     description: validateString(value.description, "description"),
-    matchBoundaryLeft: validateGlossaryFormMatchBoundaryOrDefault(
-      value.matchBoundaryLeft,
-      "matchBoundaryLeft"
+    matchBoundaryStart: validateGlossaryFormMatchBoundaryOrDefault(
+      value.matchBoundaryStart,
+      "matchBoundaryStart"
     ),
-    matchBoundaryRight: validateGlossaryFormMatchBoundaryOrDefault(
-      value.matchBoundaryRight,
-      "matchBoundaryRight"
+    matchBoundaryEnd: validateGlossaryFormMatchBoundaryOrDefault(
+      value.matchBoundaryEnd,
+      "matchBoundaryEnd"
     )
   };
 }

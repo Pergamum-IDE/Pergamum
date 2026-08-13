@@ -16,8 +16,8 @@ export interface GlossaryFormDraft {
   surface: string;
   relation: GlossaryFormRelation;
   warningPolicy: GlossaryWarningPolicy;
-  matchBoundaryLeft: GlossaryFormMatchBoundary;
-  matchBoundaryRight: GlossaryFormMatchBoundary;
+  matchBoundaryStart: GlossaryFormMatchBoundary;
+  matchBoundaryEnd: GlossaryFormMatchBoundary;
 }
 
 export interface GlossaryEntryDraft {
@@ -33,8 +33,8 @@ export interface NormalizedGlossaryFormForComparison {
   surface: string;
   relation: GlossaryFormRelation;
   warningPolicy: GlossaryWarningPolicy;
-  matchBoundaryLeft: GlossaryFormMatchBoundary;
-  matchBoundaryRight: GlossaryFormMatchBoundary;
+  matchBoundaryStart: GlossaryFormMatchBoundary;
+  matchBoundaryEnd: GlossaryFormMatchBoundary;
 }
 
 function fallbackRandomId(): string {
@@ -76,8 +76,8 @@ function glossaryFormDraftsFromEntry(
       surface: form.surface,
       relation: form.relation,
       warningPolicy: form.warningPolicy,
-      matchBoundaryLeft: form.matchBoundaryLeft,
-      matchBoundaryRight: form.matchBoundaryRight
+      matchBoundaryStart: form.matchBoundaryStart,
+      matchBoundaryEnd: form.matchBoundaryEnd
     }));
 }
 
@@ -89,8 +89,8 @@ function compareNormalizedGlossaryForms(
     left.relation.localeCompare(right.relation) ||
     left.surface.localeCompare(right.surface) ||
     left.warningPolicy.localeCompare(right.warningPolicy) ||
-    left.matchBoundaryLeft.localeCompare(right.matchBoundaryLeft) ||
-    left.matchBoundaryRight.localeCompare(right.matchBoundaryRight)
+    left.matchBoundaryStart.localeCompare(right.matchBoundaryStart) ||
+    left.matchBoundaryEnd.localeCompare(right.matchBoundaryEnd)
   );
 }
 
@@ -99,8 +99,8 @@ export function normalizeGlossaryFormsForComparison(
     surface: string;
     relation: GlossaryFormRelation;
     warningPolicy: GlossaryWarningPolicy;
-    matchBoundaryLeft: GlossaryFormMatchBoundary;
-    matchBoundaryRight: GlossaryFormMatchBoundary;
+    matchBoundaryStart: GlossaryFormMatchBoundary;
+    matchBoundaryEnd: GlossaryFormMatchBoundary;
   }[]
 ): NormalizedGlossaryFormForComparison[] {
   return forms
@@ -108,8 +108,8 @@ export function normalizeGlossaryFormsForComparison(
       surface: form.surface.trim(),
       relation: form.relation,
       warningPolicy: form.warningPolicy,
-      matchBoundaryLeft: form.matchBoundaryLeft,
-      matchBoundaryRight: form.matchBoundaryRight
+      matchBoundaryStart: form.matchBoundaryStart,
+      matchBoundaryEnd: form.matchBoundaryEnd
     }))
     .sort(compareNormalizedGlossaryForms);
 }
@@ -129,8 +129,8 @@ function areNormalizedGlossaryFormsEqual(
       leftForm.surface === rightForm.surface &&
       leftForm.relation === rightForm.relation &&
       leftForm.warningPolicy === rightForm.warningPolicy &&
-      leftForm.matchBoundaryLeft === rightForm.matchBoundaryLeft &&
-      leftForm.matchBoundaryRight === rightForm.matchBoundaryRight
+      leftForm.matchBoundaryStart === rightForm.matchBoundaryStart &&
+      leftForm.matchBoundaryEnd === rightForm.matchBoundaryEnd
     );
   });
 }
@@ -248,8 +248,8 @@ export function addGlossaryEntryDraftForm(
         surface: "",
         relation,
         warningPolicy: "default",
-        matchBoundaryLeft: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
-        matchBoundaryRight: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY
+        matchBoundaryStart: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
+        matchBoundaryEnd: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY
       }
     ]
   });
@@ -338,8 +338,8 @@ export function glossaryEntryDraftUpdateInput(
         surface: form.surface,
         relation: form.relation,
         warningPolicy: form.warningPolicy,
-        matchBoundaryLeft: form.matchBoundaryLeft,
-        matchBoundaryRight: form.matchBoundaryRight
+        matchBoundaryStart: form.matchBoundaryStart,
+        matchBoundaryEnd: form.matchBoundaryEnd
       }))
   };
 }

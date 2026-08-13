@@ -43,8 +43,8 @@ interface GlossaryFormRow extends Record<string, unknown> {
   surface: unknown;
   relation: unknown;
   warning_policy: unknown;
-  match_boundary_left: unknown;
-  match_boundary_right: unknown;
+  match_boundary_start: unknown;
+  match_boundary_end: unknown;
   is_canonical: unknown;
   created_at: unknown;
   updated_at: unknown;
@@ -61,8 +61,8 @@ interface GlossarySurfaceMatchRow extends Record<string, unknown> {
   form_surface: unknown;
   form_relation: unknown;
   form_warning_policy: unknown;
-  form_match_boundary_left: unknown;
-  form_match_boundary_right: unknown;
+  form_match_boundary_start: unknown;
+  form_match_boundary_end: unknown;
   form_is_canonical: unknown;
   form_created_at: unknown;
   form_updated_at: unknown;
@@ -119,13 +119,13 @@ export function glossaryFormFromDatabaseRow(
       row.warning_policy,
       "warning_policy"
     ),
-    matchBoundaryLeft: stringColumn(
-      row.match_boundary_left,
-      "match_boundary_left"
+    matchBoundaryStart: stringColumn(
+      row.match_boundary_start,
+      "match_boundary_start"
     ),
-    matchBoundaryRight: stringColumn(
-      row.match_boundary_right,
-      "match_boundary_right"
+    matchBoundaryEnd: stringColumn(
+      row.match_boundary_end,
+      "match_boundary_end"
     ),
     isCanonical: booleanColumn(row.is_canonical, "is_canonical"),
     createdAt: stringColumn(row.created_at, "created_at"),
@@ -162,8 +162,8 @@ async function listFormsForEntry(
         surface,
         relation,
         warning_policy,
-        match_boundary_left,
-        match_boundary_right,
+        match_boundary_start,
+        match_boundary_end,
         is_canonical,
         created_at,
         updated_at
@@ -198,8 +198,8 @@ async function listFormsForEntries(
         surface,
         relation,
         warning_policy,
-        match_boundary_left,
-        match_boundary_right,
+        match_boundary_start,
+        match_boundary_end,
         is_canonical,
         created_at,
         updated_at
@@ -239,8 +239,8 @@ function formRowFromSurfaceMatchRow(
     surface: row.form_surface,
     relation: row.form_relation,
     warning_policy: row.form_warning_policy,
-    match_boundary_left: row.form_match_boundary_left,
-    match_boundary_right: row.form_match_boundary_right,
+    match_boundary_start: row.form_match_boundary_start,
+    match_boundary_end: row.form_match_boundary_end,
     is_canonical: row.form_is_canonical,
     created_at: row.form_created_at,
     updated_at: row.form_updated_at
@@ -264,8 +264,8 @@ async function listSurfaceMatchRows(
         forms.surface AS form_surface,
         forms.relation AS form_relation,
         forms.warning_policy AS form_warning_policy,
-        forms.match_boundary_left AS form_match_boundary_left,
-        forms.match_boundary_right AS form_match_boundary_right,
+        forms.match_boundary_start AS form_match_boundary_start,
+        forms.match_boundary_end AS form_match_boundary_end,
         forms.is_canonical AS form_is_canonical,
         forms.created_at AS form_created_at,
         forms.updated_at AS form_updated_at
@@ -316,8 +316,8 @@ export async function createGlossaryEntry(
           surface,
           relation,
           warning_policy,
-          match_boundary_left,
-          match_boundary_right,
+          match_boundary_start,
+          match_boundary_end,
           is_canonical,
           created_at,
           updated_at
@@ -328,9 +328,9 @@ export async function createGlossaryEntry(
         canonicalFormId,
         entryId,
         validatedInput.canonicalSurface,
-        validatedInput.matchBoundaryLeft ??
+        validatedInput.matchBoundaryStart ??
           DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
-        validatedInput.matchBoundaryRight ??
+        validatedInput.matchBoundaryEnd ??
           DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
         timestamp,
         timestamp
@@ -467,8 +467,8 @@ export async function updateGlossaryEntry(
             surface,
             relation,
             warning_policy,
-            match_boundary_left,
-            match_boundary_right,
+            match_boundary_start,
+            match_boundary_end,
             is_canonical,
             created_at,
             updated_at
@@ -481,8 +481,8 @@ export async function updateGlossaryEntry(
           form.surface,
           form.relation,
           form.warningPolicy,
-          form.matchBoundaryLeft,
-          form.matchBoundaryRight,
+          form.matchBoundaryStart,
+          form.matchBoundaryEnd,
           timestamp,
           timestamp
         ]
