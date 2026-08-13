@@ -998,6 +998,8 @@ export function App(): JSX.Element {
 
                 <EditorSurface
                   editor={currentEditor}
+                  projectRootPath={project?.rootPath ?? null}
+                  glossaryRefreshToken={glossaryRefreshToken}
                   translate={translate}
                   onChangeMarkdownContent={setActiveDocumentContent}
                   onChangeGlossaryEntryKind={setActiveGlossaryEntryKind}

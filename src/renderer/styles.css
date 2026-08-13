@@ -808,6 +808,86 @@ button:active {
   padding-left: 12px;
 }
 
+.glossarySurfaceDecoration {
+  border-bottom: 1px dotted #326da8;
+  background: rgba(50, 109, 168, 0.08);
+  cursor: help;
+}
+
+.glossaryHoverCardLayer {
+  position: fixed;
+  z-index: 30;
+  width: min(320px, calc(100vw - 16px));
+  pointer-events: none;
+}
+
+.glossaryHoverCard {
+  border: 1px solid var(--workspace-sidebar-border);
+  border-radius: 6px;
+  background: #ffffff;
+  box-shadow: 0 10px 28px rgba(15, 36, 56, 0.18);
+  color: #25313d;
+  font-size: 12px;
+  line-height: 1.45;
+  max-height: min(360px, calc(100vh - 16px));
+  overflow: auto;
+  padding: 10px 12px;
+}
+
+.glossaryHoverCardTitle,
+.glossaryHoverCardCandidateTitle {
+  color: #17212b;
+  font-size: 14px;
+  font-weight: 700;
+  overflow-wrap: anywhere;
+}
+
+.glossaryHoverCardCount {
+  color: var(--workspace-sidebar-muted-foreground);
+  margin-top: 2px;
+}
+
+.glossaryHoverCardMeta {
+  display: grid;
+  gap: 3px;
+  margin-top: 6px;
+}
+
+.glossaryHoverCardMetaRow {
+  display: grid;
+  grid-template-columns: 72px minmax(0, 1fr);
+  gap: 8px;
+}
+
+.glossaryHoverCardMetaLabel {
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
+.glossaryHoverCardMetaValue {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+
+.glossaryHoverCardDescription {
+  margin: 8px 0 0;
+  color: #52616f;
+  overflow-wrap: anywhere;
+}
+
+.glossaryHoverCardCandidates {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  list-style: none;
+  margin: 10px 0 0;
+  padding: 0;
+}
+
+.glossaryHoverCardCandidate + .glossaryHoverCardCandidate {
+  border-top: 1px solid var(--workspace-sidebar-divider);
+  padding-top: 8px;
+}
+
 .glossaryEditor {
   flex: 1;
   min-width: 0;
