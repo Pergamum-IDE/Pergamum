@@ -1,5 +1,8 @@
 import { describe, expect, it } from "vitest";
-import type { GlossaryEntry } from "../../src/shared/glossary";
+import {
+  DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
+  type GlossaryEntry
+} from "../../src/shared/glossary";
 import {
   addGlossaryEntryDraftForm,
   applyGlossaryEntryDraftSaveResult,
@@ -30,6 +33,8 @@ const savedEntry: GlossaryEntry = {
       surface: "王都",
       relation: null,
       warningPolicy: null,
+      matchBoundaryLeft: "strict",
+      matchBoundaryRight: "none",
       isCanonical: true,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
@@ -40,6 +45,8 @@ const savedEntry: GlossaryEntry = {
       surface: "首都",
       relation: "alias",
       warningPolicy: "default",
+      matchBoundaryLeft: "strict",
+      matchBoundaryRight: "none",
       isCanonical: false,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
@@ -50,6 +57,8 @@ const savedEntry: GlossaryEntry = {
       surface: "王都",
       relation: "variant",
       warningPolicy: "warn",
+      matchBoundaryLeft: "none",
+      matchBoundaryRight: "strict",
       isCanonical: false,
       createdAt: "2026-01-01T00:00:00.000Z",
       updatedAt: "2026-01-01T00:00:00.000Z"
@@ -71,13 +80,17 @@ describe("GlossaryEntryDraft", () => {
         id: "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
         surface: "首都",
         relation: "alias",
-        warningPolicy: "default"
+        warningPolicy: "default",
+        matchBoundaryLeft: "strict",
+        matchBoundaryRight: "none"
       },
       {
         id: "018f4b8c-7a2b-7c3d-8e4f-423456789abc",
         surface: "王都",
         relation: "variant",
-        warningPolicy: "warn"
+        warningPolicy: "warn",
+        matchBoundaryLeft: "none",
+        matchBoundaryRight: "strict"
       }
     ]);
   });
@@ -119,6 +132,10 @@ describe("GlossaryEntryDraft", () => {
     );
 
     expect(isLocalGlossaryFormId(addedDraft.forms.at(-1)?.id ?? "")).toBe(true);
+    expect(addedDraft.forms.at(-1)).toMatchObject({
+      matchBoundaryLeft: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
+      matchBoundaryRight: DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY
+    });
     expect(isGlossaryEntryDraftDirty(addedDraft)).toBe(true);
     expect(addedDraft.saveState).toBe("dirty");
 
@@ -327,7 +344,9 @@ describe("GlossaryEntryDraft", () => {
       id: "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
       surface: "首都",
       relation: "alias",
-      warningPolicy: "warn"
+      warningPolicy: "warn",
+      matchBoundaryLeft: "strict",
+      matchBoundaryRight: "none"
     });
   });
 
@@ -357,7 +376,9 @@ describe("GlossaryEntryDraft", () => {
           id: localAliasId,
           surface: " alias B ",
           relation: "alias",
-          warningPolicy: "warn"
+          warningPolicy: "warn",
+          matchBoundaryLeft: "none",
+          matchBoundaryRight: "strict"
         }
       ]
     });
@@ -372,6 +393,8 @@ describe("GlossaryEntryDraft", () => {
           surface: "alias B",
           relation: "alias",
           warningPolicy: "default",
+          matchBoundaryLeft: "none",
+          matchBoundaryRight: "strict",
           isCanonical: false,
           createdAt: "2026-01-02T00:00:00.000Z",
           updatedAt: "2026-01-02T00:00:00.000Z"
@@ -388,7 +411,9 @@ describe("GlossaryEntryDraft", () => {
       id: "018f4b8c-7a2b-7c3d-8e4f-523456789abc",
       surface: " alias B ",
       relation: "alias",
-      warningPolicy: "warn"
+      warningPolicy: "warn",
+      matchBoundaryLeft: "none",
+      matchBoundaryRight: "strict"
     });
     expect(savedDraft.saveState).toBe("dirty");
   });
@@ -426,16 +451,46 @@ describe("GlossaryEntryDraft", () => {
           id: "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
           surface: "首都",
           relation: "alias",
-          warningPolicy: "default"
+          warningPolicy: "default",
+          matchBoundaryLeft: "strict",
+          matchBoundaryRight: "none"
         },
         {
           id: "018f4b8c-7a2b-7c3d-8e4f-423456789abc",
           surface: "王都",
           relation: "variant",
-          warningPolicy: "warn"
+          warningPolicy: "warn",
+          matchBoundaryLeft: "none",
+          matchBoundaryRight: "strict"
         }
       ]
     });
+  });
+
+  it("does not roll saved match boundaries back to auto while saving unrelated edits", () => {
+    const draft = updateGlossaryEntryDraftDescription(
+      createGlossaryEntryDraft(savedEntry),
+      "境界とは無関係な説明変更"
+    );
+
+    expect(glossaryEntryDraftUpdateInput(draft).forms).toEqual([
+      {
+        id: "018f4b8c-7a2b-7c3d-8e4f-323456789abc",
+        surface: "首都",
+        relation: "alias",
+        warningPolicy: "default",
+        matchBoundaryLeft: "strict",
+        matchBoundaryRight: "none"
+      },
+      {
+        id: "018f4b8c-7a2b-7c3d-8e4f-423456789abc",
+        surface: "王都",
+        relation: "variant",
+        warningPolicy: "warn",
+        matchBoundaryLeft: "none",
+        matchBoundaryRight: "strict"
+      }
+    ]);
   });
 
   it("omits blank and local form IDs from the update input", () => {
@@ -446,13 +501,17 @@ describe("GlossaryEntryDraft", () => {
           id: "local:new-alias",
           surface: "新しい別名",
           relation: "alias" as const,
-          warningPolicy: "default" as const
+          warningPolicy: "default" as const,
+          matchBoundaryLeft: "strict" as const,
+          matchBoundaryRight: "none" as const
         },
         {
           id: "local:blank",
           surface: " ",
           relation: "variant" as const,
-          warningPolicy: "default" as const
+          warningPolicy: "default" as const,
+          matchBoundaryLeft: "none" as const,
+          matchBoundaryRight: "strict" as const
         }
       ]
     };
@@ -467,7 +526,9 @@ describe("GlossaryEntryDraft", () => {
           id: undefined,
           surface: "新しい別名",
           relation: "alias",
-          warningPolicy: "default"
+          warningPolicy: "default",
+          matchBoundaryLeft: "strict",
+          matchBoundaryRight: "none"
         }
       ]
     });

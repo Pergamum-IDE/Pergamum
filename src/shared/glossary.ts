@@ -15,10 +15,22 @@ export const glossaryWarningPolicies = [
   "warn"
 ] as const;
 
+export const glossaryFormMatchBoundaries = [
+  "auto",
+  "strict",
+  "none"
+] as const;
+
+// auto is a dispatcher input for the future boundary resolver.
+// It is not a third boundary checking algorithm.
+export const DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY = "auto" as const;
+
 export type GlossaryEntryKind = (typeof glossaryEntryKinds)[number];
 export type GlossaryFormRelation = (typeof glossaryFormRelations)[number];
 export type GlossaryWarningPolicy =
   (typeof glossaryWarningPolicies)[number];
+export type GlossaryFormMatchBoundary =
+  (typeof glossaryFormMatchBoundaries)[number];
 
 export type GlossaryEntryId = string;
 export type GlossaryFormId = string;
@@ -27,6 +39,8 @@ interface BaseGlossaryForm {
   id: GlossaryFormId;
   entryId: GlossaryEntryId;
   surface: string;
+  matchBoundaryLeft: GlossaryFormMatchBoundary;
+  matchBoundaryRight: GlossaryFormMatchBoundary;
   createdAt: string;
   updatedAt: string;
 }
@@ -60,6 +74,8 @@ export interface CreateGlossaryEntryInput {
   kind: GlossaryEntryKind;
   canonicalSurface: string;
   description: string;
+  matchBoundaryLeft?: GlossaryFormMatchBoundary;
+  matchBoundaryRight?: GlossaryFormMatchBoundary;
 }
 
 export interface GlossaryFormInput {
@@ -67,6 +83,8 @@ export interface GlossaryFormInput {
   surface: string;
   relation: GlossaryFormRelation;
   warningPolicy: GlossaryWarningPolicy;
+  matchBoundaryLeft: GlossaryFormMatchBoundary;
+  matchBoundaryRight: GlossaryFormMatchBoundary;
 }
 
 export interface UpdateGlossaryEntryInput {
@@ -233,6 +251,24 @@ export function validateGlossaryWarningPolicy(
   return validateEnum(value, glossaryWarningPolicies, path);
 }
 
+export function validateGlossaryFormMatchBoundary(
+  value: unknown,
+  path = "matchBoundary"
+): GlossaryFormMatchBoundary {
+  return validateEnum(value, glossaryFormMatchBoundaries, path);
+}
+
+function validateGlossaryFormMatchBoundaryOrDefault(
+  value: unknown,
+  path: string
+): GlossaryFormMatchBoundary {
+  if (value === undefined) {
+    return DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY;
+  }
+
+  return validateGlossaryFormMatchBoundary(value, path);
+}
+
 export function validateGlossaryForm(
   value: unknown,
   path = "form"
@@ -249,6 +285,14 @@ export function validateGlossaryForm(
     id: validateGlossaryFormId(value.id, `${path}.id`),
     entryId: validateGlossaryEntryId(value.entryId, `${path}.entryId`),
     surface: validateNonEmptyString(value.surface, `${path}.surface`),
+    matchBoundaryLeft: validateGlossaryFormMatchBoundary(
+      value.matchBoundaryLeft,
+      `${path}.matchBoundaryLeft`
+    ),
+    matchBoundaryRight: validateGlossaryFormMatchBoundary(
+      value.matchBoundaryRight,
+      `${path}.matchBoundaryRight`
+    ),
     createdAt: validateTimestamp(value.createdAt, `${path}.createdAt`),
     updatedAt: validateTimestamp(value.updatedAt, `${path}.updatedAt`)
   };
@@ -308,6 +352,14 @@ function validateGlossaryFormInput(
     warningPolicy: validateGlossaryWarningPolicy(
       value.warningPolicy,
       `${path}.warningPolicy`
+    ),
+    matchBoundaryLeft: validateGlossaryFormMatchBoundary(
+      value.matchBoundaryLeft,
+      `${path}.matchBoundaryLeft`
+    ),
+    matchBoundaryRight: validateGlossaryFormMatchBoundary(
+      value.matchBoundaryRight,
+      `${path}.matchBoundaryRight`
     )
   };
 
@@ -396,7 +448,15 @@ export function validateCreateGlossaryEntryInput(
       value.canonicalSurface,
       "canonicalSurface"
     ),
-    description: validateString(value.description, "description")
+    description: validateString(value.description, "description"),
+    matchBoundaryLeft: validateGlossaryFormMatchBoundaryOrDefault(
+      value.matchBoundaryLeft,
+      "matchBoundaryLeft"
+    ),
+    matchBoundaryRight: validateGlossaryFormMatchBoundaryOrDefault(
+      value.matchBoundaryRight,
+      "matchBoundaryRight"
+    )
   };
 }
 

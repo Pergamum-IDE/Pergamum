@@ -29,6 +29,7 @@ export type {
   GlossaryForm,
   GlossaryFormId,
   GlossaryFormInput,
+  GlossaryFormMatchBoundary,
   GlossaryFormRelation,
   GlossarySurfaceLookupInput,
   GlossarySurfaceLookupResult,

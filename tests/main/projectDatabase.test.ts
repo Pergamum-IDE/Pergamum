@@ -81,6 +81,8 @@ describe("project database", () => {
       ["surface", "TEXT"],
       ["relation", "TEXT"],
       ["warning_policy", "TEXT"],
+      ["match_boundary_left", "TEXT"],
+      ["match_boundary_right", "TEXT"],
       ["is_canonical", "INTEGER"],
       ["created_at", "TEXT"],
       ["updated_at", "TEXT"]
@@ -201,6 +203,62 @@ describe("project database", () => {
           VALUES (?, ?, ?, ?, NULL, 0, ?, ?)
         `,
         [formId, entryId, "アルセリア", "alias", timestamp, timestamp]
+      )
+    ).rejects.toMatchObject({
+      code: "PROJECT_DATABASE_QUERY_ERROR"
+    });
+  });
+
+  it("defaults and validates glossary form match boundary columns", async () => {
+    database = await openProjectDatabase(projectRootPath);
+    await insertEntry(database, entryId);
+    await insertCanonicalForm(database, formId, entryId, "王都アルセリア");
+
+    const defaultedForm = await database.get<{
+      match_boundary_left: string;
+      match_boundary_right: string;
+    }>(
+      `
+        SELECT match_boundary_left, match_boundary_right
+        FROM glossary_forms
+        WHERE id = ?
+      `,
+      [formId]
+    );
+
+    expect(defaultedForm).toEqual({
+      match_boundary_left: "auto",
+      match_boundary_right: "auto"
+    });
+
+    await expect(
+      database.run(
+        `
+          INSERT INTO glossary_forms (
+            id,
+            entry_id,
+            surface,
+            relation,
+            warning_policy,
+            match_boundary_left,
+            match_boundary_right,
+            is_canonical,
+            created_at,
+            updated_at
+          )
+          VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+        `,
+        [
+          otherFormId,
+          entryId,
+          "アルセリア",
+          "alias",
+          "default",
+          "word",
+          "auto",
+          timestamp,
+          timestamp
+        ]
       )
     ).rejects.toMatchObject({
       code: "PROJECT_DATABASE_QUERY_ERROR"
