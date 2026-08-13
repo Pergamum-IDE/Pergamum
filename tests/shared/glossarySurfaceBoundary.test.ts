@@ -5,8 +5,8 @@ import { shouldAcceptGlossarySurfaceBoundary } from "../../src/shared/glossarySu
 function acceptBoundary(
   text: string,
   matchedText: string,
-  matchBoundaryLeft: GlossaryFormMatchBoundary = "auto",
-  matchBoundaryRight: GlossaryFormMatchBoundary = "auto",
+  matchBoundaryStart: GlossaryFormMatchBoundary = "auto",
+  matchBoundaryEnd: GlossaryFormMatchBoundary = "auto",
   occurrence = 0
 ): boolean {
   let start = -1;
@@ -23,8 +23,8 @@ function acceptBoundary(
     text,
     start,
     end: start + matchedText.length,
-    matchBoundaryLeft,
-    matchBoundaryRight
+    matchBoundaryStart,
+    matchBoundaryEnd
   });
 }
 
@@ -52,7 +52,7 @@ describe("glossary surface boundary resolver", () => {
     expect(acceptBoundary("ジャン゠ヴァルジャン", "ジャン")).toBe(true);
   });
 
-  it("rejects a later Katakana occurrence with a Katakana left continuation", () => {
+  it("rejects a later Katakana occurrence with a Katakana start continuation", () => {
     expect(
       acceptBoundary("ジャン・ヴァルジャン", "ジャン", "auto", "auto", 1)
     ).toBe(false);

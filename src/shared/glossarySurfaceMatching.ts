@@ -23,8 +23,8 @@ export interface GlossarySurfaceIndexEntry {
   surface: string;
   relation: GlossarySurfaceMatchRelation;
   warningPolicy: GlossaryWarningPolicy | null;
-  matchBoundaryLeft: GlossaryFormMatchBoundary;
-  matchBoundaryRight: GlossaryFormMatchBoundary;
+  matchBoundaryStart: GlossaryFormMatchBoundary;
+  matchBoundaryEnd: GlossaryFormMatchBoundary;
 }
 
 export interface GlossarySurfaceIndex {
@@ -145,8 +145,8 @@ export function buildGlossarySurfaceIndex(
         surface,
         relation: relationForForm(form),
         warningPolicy: warningPolicyForForm(form),
-        matchBoundaryLeft: form.matchBoundaryLeft,
-        matchBoundaryRight: form.matchBoundaryRight
+        matchBoundaryStart: form.matchBoundaryStart,
+        matchBoundaryEnd: form.matchBoundaryEnd
       });
     }
   }
@@ -187,8 +187,8 @@ function isBoundaryAcceptedRawMatch(
     text,
     start: rawMatch.start,
     end: rawMatch.end,
-    matchBoundaryLeft: rawMatch.entry.matchBoundaryLeft,
-    matchBoundaryRight: rawMatch.entry.matchBoundaryRight
+    matchBoundaryStart: rawMatch.entry.matchBoundaryStart,
+    matchBoundaryEnd: rawMatch.entry.matchBoundaryEnd
   });
 }
 

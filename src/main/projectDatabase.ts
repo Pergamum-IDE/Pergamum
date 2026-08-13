@@ -314,11 +314,11 @@ async function migrateToVersionOne(database: ProjectDatabase): Promise<void> {
       warning_policy TEXT CHECK (
         warning_policy IS NULL OR warning_policy IN ('default', 'ignore', 'warn')
       ),
-      match_boundary_left TEXT NOT NULL DEFAULT 'auto' CHECK (
-        match_boundary_left IN ('auto', 'strict', 'none')
+      match_boundary_start TEXT NOT NULL DEFAULT 'auto' CHECK (
+        match_boundary_start IN ('auto', 'strict', 'none')
       ),
-      match_boundary_right TEXT NOT NULL DEFAULT 'auto' CHECK (
-        match_boundary_right IN ('auto', 'strict', 'none')
+      match_boundary_end TEXT NOT NULL DEFAULT 'auto' CHECK (
+        match_boundary_end IN ('auto', 'strict', 'none')
       ),
       is_canonical INTEGER NOT NULL CHECK (is_canonical IN (0, 1)),
       created_at TEXT NOT NULL,
@@ -446,8 +446,8 @@ async function validateProjectDatabaseSchema(
     ["surface", "TEXT", 0],
     ["relation", "TEXT", 0],
     ["warning_policy", "TEXT", 0],
-    ["match_boundary_left", "TEXT", 0],
-    ["match_boundary_right", "TEXT", 0],
+    ["match_boundary_start", "TEXT", 0],
+    ["match_boundary_end", "TEXT", 0],
     ["is_canonical", "INTEGER", 0],
     ["created_at", "TEXT", 0],
     ["updated_at", "TEXT", 0]

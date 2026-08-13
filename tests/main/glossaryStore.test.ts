@@ -73,8 +73,8 @@ describe("glossary store", () => {
       surface: "エリシア・フォン・アルセリア",
       relation: null,
       warningPolicy: null,
-      matchBoundaryLeft: "auto",
-      matchBoundaryRight: "auto",
+      matchBoundaryStart: "auto",
+      matchBoundaryEnd: "auto",
       isCanonical: true
     });
     expect(Date.parse(entry.createdAt)).not.toBeNaN();
@@ -92,14 +92,14 @@ describe("glossary store", () => {
       kind: "person",
       canonicalSurface: "オーダ",
       description: "千年領主制度",
-      matchBoundaryLeft: "strict",
-      matchBoundaryRight: "none"
+      matchBoundaryStart: "strict",
+      matchBoundaryEnd: "none"
     });
 
     expect(canonicalFormOf(entry)).toMatchObject({
       surface: "オーダ",
-      matchBoundaryLeft: "strict",
-      matchBoundaryRight: "none"
+      matchBoundaryStart: "strict",
+      matchBoundaryEnd: "none"
     });
     await expect(getGlossaryEntryById(database!, entry.id)).resolves.toEqual(
       entry
@@ -129,8 +129,8 @@ describe("glossary store", () => {
       kind: "term",
       canonicalSurface: "魔導炉",
       description: "旧式の説明",
-      matchBoundaryLeft: "strict",
-      matchBoundaryRight: "none"
+      matchBoundaryStart: "strict",
+      matchBoundaryEnd: "none"
     });
     const updatedEntry = await updateGlossaryEntry(database!, {
       id: entry.id,
@@ -150,8 +150,8 @@ describe("glossary store", () => {
       surface: "魔導炉",
       relation: null,
       warningPolicy: null,
-      matchBoundaryLeft: "strict",
-      matchBoundaryRight: "none",
+      matchBoundaryStart: "strict",
+      matchBoundaryEnd: "none",
       isCanonical: true
     });
     expect(Date.parse(updatedEntry.updatedAt)).not.toBeNaN();
@@ -219,7 +219,7 @@ describe("glossary store", () => {
         kind: "term",
         canonicalSurface: "魔導炉",
         description: "invalid",
-        matchBoundaryLeft: "word" as never
+        matchBoundaryStart: "word" as never
       })
     ).rejects.toBeInstanceOf(GlossaryValidationError);
 
@@ -240,8 +240,8 @@ describe("glossary store", () => {
             surface: "魔力炉",
             relation: "alias",
             warningPolicy: "default",
-            matchBoundaryLeft: "word" as never,
-            matchBoundaryRight: "auto"
+            matchBoundaryStart: "word" as never,
+            matchBoundaryEnd: "auto"
           }
         ]
       })
@@ -264,15 +264,15 @@ describe("glossary store", () => {
           surface: "魔力炉",
           relation: "alias",
           warningPolicy: "warn",
-          matchBoundaryLeft: "strict",
-          matchBoundaryRight: "none"
+          matchBoundaryStart: "strict",
+          matchBoundaryEnd: "none"
         },
         {
           surface: "Magic Reactor",
           relation: "variant",
           warningPolicy: "ignore",
-          matchBoundaryLeft: "none",
-          matchBoundaryRight: "strict"
+          matchBoundaryStart: "none",
+          matchBoundaryEnd: "auto"
         }
       ]
     });
@@ -290,16 +290,16 @@ describe("glossary store", () => {
           surface: "Magic Reactor",
           relation: "variant",
           warningPolicy: "ignore",
-          matchBoundaryLeft: "none",
-          matchBoundaryRight: "strict",
+          matchBoundaryStart: "none",
+          matchBoundaryEnd: "auto",
           isCanonical: false
         }),
         expect.objectContaining({
           surface: "魔力炉",
           relation: "alias",
           warningPolicy: "warn",
-          matchBoundaryLeft: "strict",
-          matchBoundaryRight: "none",
+          matchBoundaryStart: "strict",
+          matchBoundaryEnd: "none",
           isCanonical: false
         })
       ])
@@ -326,15 +326,15 @@ describe("glossary store", () => {
           surface: "アル",
           relation: "alias",
           warningPolicy: "default",
-          matchBoundaryLeft: "strict",
-          matchBoundaryRight: "none"
+          matchBoundaryStart: "strict",
+          matchBoundaryEnd: "none"
         },
         {
           surface: "Albert",
           relation: "variant",
           warningPolicy: "warn",
-          matchBoundaryLeft: "none",
-          matchBoundaryRight: "strict"
+          matchBoundaryStart: "none",
+          matchBoundaryEnd: "strict"
         }
       ]
     });
@@ -355,8 +355,8 @@ describe("glossary store", () => {
           surface: "アル",
           relation: "alias",
           warningPolicy: "ignore",
-          matchBoundaryLeft: savedAlias?.matchBoundaryLeft ?? "strict",
-          matchBoundaryRight: savedAlias?.matchBoundaryRight ?? "none"
+          matchBoundaryStart: savedAlias?.matchBoundaryStart ?? "strict",
+          matchBoundaryEnd: savedAlias?.matchBoundaryEnd ?? "none"
         }
       ]
     });
@@ -370,8 +370,8 @@ describe("glossary store", () => {
         surface: "アル",
         relation: "alias",
         warningPolicy: "ignore",
-        matchBoundaryLeft: "strict",
-        matchBoundaryRight: "none"
+        matchBoundaryStart: "strict",
+        matchBoundaryEnd: "none"
       })
     ]);
     expect(canonicalFormOf(secondUpdate)).toBeTruthy();
@@ -397,16 +397,16 @@ describe("glossary store", () => {
             surface: "魔力炉",
             relation: "alias",
             warningPolicy: "default",
-            matchBoundaryLeft: "auto",
-            matchBoundaryRight: "auto"
+            matchBoundaryStart: "auto",
+            matchBoundaryEnd: "auto"
           },
           {
             id: duplicateFormId,
             surface: "Magic Reactor",
             relation: "variant",
             warningPolicy: "warn",
-            matchBoundaryLeft: "auto",
-            matchBoundaryRight: "auto"
+            matchBoundaryStart: "auto",
+            matchBoundaryEnd: "auto"
           }
         ]
       })
@@ -488,8 +488,8 @@ describe("glossary store", () => {
             surface: "王都アルセリア",
             relation: null,
             warning_policy: null,
-            match_boundary_left: "auto",
-            match_boundary_right: "auto",
+            match_boundary_start: "auto",
+            match_boundary_end: "auto",
             is_canonical: 1,
             created_at: "2026-08-11T12:00:00.000Z",
             updated_at: "2026-08-11T12:00:00.000Z"

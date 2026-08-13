@@ -28,15 +28,15 @@ function canonicalForm(
   entryId: string,
   id: string,
   surface: string,
-  matchBoundaryLeft: GlossaryFormMatchBoundary = "auto",
-  matchBoundaryRight: GlossaryFormMatchBoundary = "auto"
+  matchBoundaryStart: GlossaryFormMatchBoundary = "auto",
+  matchBoundaryEnd: GlossaryFormMatchBoundary = "auto"
 ): GlossaryForm {
   return {
     id,
     entryId,
     surface,
-    matchBoundaryLeft,
-    matchBoundaryRight,
+    matchBoundaryStart,
+    matchBoundaryEnd,
     relation: null,
     warningPolicy: null,
     isCanonical: true,
@@ -51,8 +51,8 @@ function nonCanonicalForm(
   surface: string,
   relation: GlossaryFormRelation,
   warningPolicy: GlossaryWarningPolicy,
-  matchBoundaryLeft: GlossaryFormMatchBoundary = "auto",
-  matchBoundaryRight: GlossaryFormMatchBoundary = "auto"
+  matchBoundaryStart: GlossaryFormMatchBoundary = "auto",
+  matchBoundaryEnd: GlossaryFormMatchBoundary = "auto"
 ): GlossaryForm {
   return {
     id,
@@ -60,8 +60,8 @@ function nonCanonicalForm(
     surface,
     relation,
     warningPolicy,
-    matchBoundaryLeft,
-    matchBoundaryRight,
+    matchBoundaryStart,
+    matchBoundaryEnd,
     isCanonical: false,
     createdAt: timestamp,
     updatedAt: timestamp
@@ -517,6 +517,46 @@ describe("glossary surface matching", () => {
     ]);
   });
 
+  it("uses asymmetric start/end policies without swapping them", () => {
+    const acceptedEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000052";
+    const rejectedEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000053";
+    const text = "オーダーメイド";
+
+    expect(
+      matchGlossarySurfacesInText(
+        text,
+        buildGlossarySurfaceIndex([
+          glossaryEntry(acceptedEntryId, [
+            canonicalForm(
+              acceptedEntryId,
+              "018f4b8c-7a2b-7c3d-8e4f-200000000052",
+              "メイド",
+              "none",
+              "auto"
+            )
+          ])
+        ])
+      ).map((match) => match.matchedText)
+    ).toEqual(["メイド"]);
+
+    expect(
+      matchGlossarySurfacesInText(
+        text,
+        buildGlossarySurfaceIndex([
+          glossaryEntry(rejectedEntryId, [
+            canonicalForm(
+              rejectedEntryId,
+              "018f4b8c-7a2b-7c3d-8e4f-200000000053",
+              "メイド",
+              "auto",
+              "none"
+            )
+          ])
+        ])
+      )
+    ).toEqual([]);
+  });
+
   it("drops a range when all ambiguous candidates are boundary-rejected", () => {
     const firstEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000017";
     const secondEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000018";
@@ -577,8 +617,8 @@ describe("glossary surface matching", () => {
     const cases: Array<{
       surface: string;
       text: string;
-      left?: GlossaryFormMatchBoundary;
-      right?: GlossaryFormMatchBoundary;
+      start?: GlossaryFormMatchBoundary;
+      end?: GlossaryFormMatchBoundary;
       expectedMatchedTexts: string[];
     }> = [
       {
@@ -594,7 +634,7 @@ describe("glossary surface matching", () => {
       {
         surface: "オーダ",
         text: "オーダーメイド",
-        right: "none",
+        end: "none",
         expectedMatchedTexts: ["オーダ"]
       },
       {
@@ -605,7 +645,7 @@ describe("glossary surface matching", () => {
       {
         surface: "メイド",
         text: "オーダーメイド",
-        left: "none",
+        start: "none",
         expectedMatchedTexts: ["メイド"]
       },
       {
@@ -690,8 +730,8 @@ describe("glossary surface matching", () => {
               entryId,
               formId,
               testCase.surface,
-              testCase.left ?? "auto",
-              testCase.right ?? "auto"
+              testCase.start ?? "auto",
+              testCase.end ?? "auto"
             )
           ])
         ])
@@ -701,6 +741,49 @@ describe("glossary surface matching", () => {
         testCase.expectedMatchedTexts
       );
     });
+  });
+
+  it("keeps the Issue 66 dogfood matching results after start/end rename", () => {
+    const maidEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000054";
+    const jeanEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000055";
+    const matches = matchGlossarySurfacesInText(
+      [
+        "メイドさんはオーダーメイドの品を受け取った。",
+        "",
+        "ジャン・ヴァルジャンは沈黙した。",
+        "",
+        "ジャンは黙々と仕事をしている。"
+      ].join("\n"),
+      buildGlossarySurfaceIndex([
+        glossaryEntry(maidEntryId, [
+          canonicalForm(
+            maidEntryId,
+            "018f4b8c-7a2b-7c3d-8e4f-200000000054",
+            "メイド"
+          )
+        ]),
+        glossaryEntry(jeanEntryId, [
+          canonicalForm(
+            jeanEntryId,
+            "018f4b8c-7a2b-7c3d-8e4f-200000000055",
+            "ジャン"
+          ),
+          nonCanonicalForm(
+            jeanEntryId,
+            "018f4b8c-7a2b-7c3d-8e4f-200000000056",
+            "ジャン・ヴァルジャン",
+            "alias",
+            "default"
+          )
+        ])
+      ])
+    );
+
+    expect(matches.map((match) => match.matchedText)).toEqual([
+      "メイド",
+      "ジャン・ヴァルジャン",
+      "ジャン"
+    ]);
   });
 
   it("keeps leftmost-longest when boundary accepts multiple Kanji matches", () => {

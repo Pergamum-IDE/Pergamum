@@ -81,8 +81,8 @@ describe("project database", () => {
       ["surface", "TEXT"],
       ["relation", "TEXT"],
       ["warning_policy", "TEXT"],
-      ["match_boundary_left", "TEXT"],
-      ["match_boundary_right", "TEXT"],
+      ["match_boundary_start", "TEXT"],
+      ["match_boundary_end", "TEXT"],
       ["is_canonical", "INTEGER"],
       ["created_at", "TEXT"],
       ["updated_at", "TEXT"]
@@ -215,11 +215,11 @@ describe("project database", () => {
     await insertCanonicalForm(database, formId, entryId, "王都アルセリア");
 
     const defaultedForm = await database.get<{
-      match_boundary_left: string;
-      match_boundary_right: string;
+      match_boundary_start: string;
+      match_boundary_end: string;
     }>(
       `
-        SELECT match_boundary_left, match_boundary_right
+        SELECT match_boundary_start, match_boundary_end
         FROM glossary_forms
         WHERE id = ?
       `,
@@ -227,8 +227,8 @@ describe("project database", () => {
     );
 
     expect(defaultedForm).toEqual({
-      match_boundary_left: "auto",
-      match_boundary_right: "auto"
+      match_boundary_start: "auto",
+      match_boundary_end: "auto"
     });
 
     await expect(
@@ -240,8 +240,8 @@ describe("project database", () => {
             surface,
             relation,
             warning_policy,
-            match_boundary_left,
-            match_boundary_right,
+            match_boundary_start,
+            match_boundary_end,
             is_canonical,
             created_at,
             updated_at

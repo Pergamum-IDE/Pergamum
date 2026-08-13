@@ -67,7 +67,9 @@ describe("glossary preload API", () => {
         {
           surface: "魔力炉",
           relation: "alias",
-          warningPolicy: "default"
+          warningPolicy: "default",
+          matchBoundaryStart: "auto",
+          matchBoundaryEnd: "auto"
         }
       ]
     });
@@ -106,7 +108,9 @@ describe("glossary preload API", () => {
             {
               surface: "魔力炉",
               relation: "alias",
-              warningPolicy: "default"
+              warningPolicy: "default",
+              matchBoundaryStart: "auto",
+              matchBoundaryEnd: "auto"
             }
           ]
         }
