@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import type {
   GlossaryEntry,
   GlossaryForm,
+  GlossaryFormMatchBoundary,
   GlossaryFormRelation,
   GlossaryWarningPolicy
 } from "../../src/shared/glossary";
@@ -26,12 +27,16 @@ const duplicateVariantEntryId =
 function canonicalForm(
   entryId: string,
   id: string,
-  surface: string
+  surface: string,
+  matchBoundaryLeft: GlossaryFormMatchBoundary = "auto",
+  matchBoundaryRight: GlossaryFormMatchBoundary = "auto"
 ): GlossaryForm {
   return {
     id,
     entryId,
     surface,
+    matchBoundaryLeft,
+    matchBoundaryRight,
     relation: null,
     warningPolicy: null,
     isCanonical: true,
@@ -45,7 +50,9 @@ function nonCanonicalForm(
   id: string,
   surface: string,
   relation: GlossaryFormRelation,
-  warningPolicy: GlossaryWarningPolicy
+  warningPolicy: GlossaryWarningPolicy,
+  matchBoundaryLeft: GlossaryFormMatchBoundary = "auto",
+  matchBoundaryRight: GlossaryFormMatchBoundary = "auto"
 ): GlossaryForm {
   return {
     id,
@@ -53,6 +60,8 @@ function nonCanonicalForm(
     surface,
     relation,
     warningPolicy,
+    matchBoundaryLeft,
+    matchBoundaryRight,
     isCanonical: false,
     createdAt: timestamp,
     updatedAt: timestamp
@@ -247,14 +256,18 @@ describe("glossary surface matching", () => {
         canonicalForm(
           "018f4b8c-7a2b-7c3d-8e4f-100000000007",
           "018f4b8c-7a2b-7c3d-8e4f-200000000008",
-          "abcd"
+          "abcd",
+          "none",
+          "none"
         ),
         nonCanonicalForm(
           "018f4b8c-7a2b-7c3d-8e4f-100000000007",
           "018f4b8c-7a2b-7c3d-8e4f-200000000009",
           "cdef",
           "alias",
-          "default"
+          "default",
+          "none",
+          "none"
         )
       ]
     );
@@ -367,18 +380,354 @@ describe("glossary surface matching", () => {
     ).toEqual(["Trim"]);
   });
 
-  it("is case-sensitive and does not check word boundaries", () => {
+  it("is case-sensitive and applies the default ASCII boundary policy", () => {
     const index = buildGlossarySurfaceIndex(fixtureEntries());
     const text = "Albert albert ALBERT Albertine";
     const matches = matchGlossarySurfacesInText(text, index);
 
-    expect(matches.map((match) => match.matchedText)).toEqual([
-      "Albert",
-      "Albert"
-    ]);
+    expect(matches.map((match) => match.matchedText)).toEqual(["Albert"]);
     expect(matches[0].range.start).toBe(text.indexOf("Albert"));
-    expect(matches[1].range.start).toBe(text.indexOf("Albertine"));
     assertSlicesMatch(text, matches);
+  });
+
+  it("keeps case-sensitive matching unchanged", () => {
+    const entryId = "018f4b8c-7a2b-7c3d-8e4f-100000000010";
+    const index = buildGlossarySurfaceIndex([
+      glossaryEntry(entryId, [
+        canonicalForm(
+          entryId,
+          "018f4b8c-7a2b-7c3d-8e4f-200000000019",
+          "Pergamum"
+        )
+      ])
+    ]);
+
+    expect(matchGlossarySurfacesInText("pergamum", index)).toEqual([]);
+  });
+
+  it("treats boundary resolver as identity when every form is none / none", () => {
+    const orderEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000011";
+    const maidEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000012";
+    const index = buildGlossarySurfaceIndex([
+      glossaryEntry(orderEntryId, [
+        canonicalForm(
+          orderEntryId,
+          "018f4b8c-7a2b-7c3d-8e4f-200000000020",
+          "オーダ",
+          "none",
+          "none"
+        )
+      ]),
+      glossaryEntry(maidEntryId, [
+        canonicalForm(
+          maidEntryId,
+          "018f4b8c-7a2b-7c3d-8e4f-200000000021",
+          "メイド",
+          "none",
+          "none"
+        )
+      ])
+    ]);
+
+    expect(
+      matchGlossarySurfacesInText("オーダーメイド", index).map(
+        (match) => match.matchedText
+      )
+    ).toEqual(["オーダ", "メイド"]);
+  });
+
+  it("runs boundary resolver before leftmost-longest selection", () => {
+    const longEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000013";
+    const shortEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000014";
+    const text = "Pergamum.IDEX";
+    const matches = matchGlossarySurfacesInText(
+      text,
+      buildGlossarySurfaceIndex([
+        glossaryEntry(longEntryId, [
+          canonicalForm(
+            longEntryId,
+            "018f4b8c-7a2b-7c3d-8e4f-200000000022",
+            "Pergamum.IDE"
+          )
+        ]),
+        glossaryEntry(shortEntryId, [
+          canonicalForm(
+            shortEntryId,
+            "018f4b8c-7a2b-7c3d-8e4f-200000000023",
+            "Pergamum"
+          )
+        ])
+      ])
+    );
+
+    expect(matches).toHaveLength(1);
+    expect(matches[0]).toMatchObject({
+      matchedText: "Pergamum",
+      range: {
+        start: 0,
+        end: "Pergamum".length
+      },
+      candidates: [
+        {
+          entryId: shortEntryId,
+          formId: "018f4b8c-7a2b-7c3d-8e4f-200000000023",
+          surface: "Pergamum",
+          relation: "canonical",
+          warningPolicy: null
+        }
+      ]
+    });
+  });
+
+  it("filters ambiguous candidates at candidate level", () => {
+    const rejectedEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000015";
+    const acceptedEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000016";
+    const matches = matchGlossarySurfacesInText(
+      "オーダーメイド",
+      buildGlossarySurfaceIndex([
+        glossaryEntry(rejectedEntryId, [
+          canonicalForm(
+            rejectedEntryId,
+            "018f4b8c-7a2b-7c3d-8e4f-200000000024",
+            "オーダ"
+          )
+        ]),
+        glossaryEntry(acceptedEntryId, [
+          canonicalForm(
+            acceptedEntryId,
+            "018f4b8c-7a2b-7c3d-8e4f-200000000025",
+            "オーダ",
+            "auto",
+            "none"
+          )
+        ])
+      ])
+    );
+
+    expect(matches).toHaveLength(1);
+    expect(isAmbiguousGlossarySurfaceTextMatch(matches[0])).toBe(false);
+    expect(matches[0].candidates).toEqual([
+      {
+        entryId: acceptedEntryId,
+        formId: "018f4b8c-7a2b-7c3d-8e4f-200000000025",
+        surface: "オーダ",
+        relation: "canonical",
+        warningPolicy: null
+      }
+    ]);
+  });
+
+  it("drops a range when all ambiguous candidates are boundary-rejected", () => {
+    const firstEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000017";
+    const secondEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000018";
+
+    expect(
+      matchGlossarySurfacesInText(
+        "オーダーメイド",
+        buildGlossarySurfaceIndex([
+          glossaryEntry(firstEntryId, [
+            canonicalForm(
+              firstEntryId,
+              "018f4b8c-7a2b-7c3d-8e4f-200000000026",
+              "オーダ"
+            )
+          ]),
+          glossaryEntry(secondEntryId, [
+            canonicalForm(
+              secondEntryId,
+              "018f4b8c-7a2b-7c3d-8e4f-200000000027",
+              "オーダ"
+            )
+          ])
+        ])
+      )
+    ).toEqual([]);
+  });
+
+  it("keeps the public match result shape unchanged", () => {
+    const entryId = "018f4b8c-7a2b-7c3d-8e4f-100000000019";
+    const [match] = matchGlossarySurfacesInText(
+      "Pergamum is an IDE.",
+      buildGlossarySurfaceIndex([
+        glossaryEntry(entryId, [
+          canonicalForm(
+            entryId,
+            "018f4b8c-7a2b-7c3d-8e4f-200000000028",
+            "Pergamum"
+          )
+        ])
+      ])
+    );
+
+    expect(Object.keys(match).sort()).toEqual([
+      "candidates",
+      "matchedText",
+      "range"
+    ]);
+    expect(Object.keys(match.candidates[0]).sort()).toEqual([
+      "entryId",
+      "formId",
+      "relation",
+      "surface",
+      "warningPolicy"
+    ]);
+  });
+
+  it("covers boundary-aware matching fixtures", () => {
+    const cases: Array<{
+      surface: string;
+      text: string;
+      left?: GlossaryFormMatchBoundary;
+      right?: GlossaryFormMatchBoundary;
+      expectedMatchedTexts: string[];
+    }> = [
+      {
+        surface: "オーダ",
+        text: "オーダーメイド",
+        expectedMatchedTexts: []
+      },
+      {
+        surface: "オーダ",
+        text: "オーダは沈黙した。",
+        expectedMatchedTexts: ["オーダ"]
+      },
+      {
+        surface: "オーダ",
+        text: "オーダーメイド",
+        right: "none",
+        expectedMatchedTexts: ["オーダ"]
+      },
+      {
+        surface: "メイド",
+        text: "オーダーメイド",
+        expectedMatchedTexts: []
+      },
+      {
+        surface: "メイド",
+        text: "オーダーメイド",
+        left: "none",
+        expectedMatchedTexts: ["メイド"]
+      },
+      {
+        surface: "オーダー",
+        text: "オーダーメイド",
+        expectedMatchedTexts: []
+      },
+      {
+        surface: "オーダー",
+        text: "オーダーは沈黙した。",
+        expectedMatchedTexts: ["オーダー"]
+      },
+      {
+        surface: "ヤマダノ",
+        text: "ヤマダノヽ",
+        expectedMatchedTexts: ["ヤマダノ"]
+      },
+      {
+        surface: "ジャン",
+        text: "ジャン・ヴァルジャン",
+        expectedMatchedTexts: ["ジャン"]
+      },
+      {
+        surface: "Pergamum",
+        text: "PergamumIDE",
+        expectedMatchedTexts: []
+      },
+      {
+        surface: "Pergamum",
+        text: "Pergamum_IDE",
+        expectedMatchedTexts: []
+      },
+      {
+        surface: "Pergamum",
+        text: "Pergamum2",
+        expectedMatchedTexts: []
+      },
+      {
+        surface: "Pergamum",
+        text: "Pergamum is an IDE.",
+        expectedMatchedTexts: ["Pergamum"]
+      },
+      {
+        surface: "お館さま",
+        text: "お館さまがお呼びです。",
+        expectedMatchedTexts: ["お館さま"]
+      },
+      {
+        surface: "領主",
+        text: "領主館",
+        expectedMatchedTexts: ["領主"]
+      },
+      {
+        surface: "領主",
+        text: "オー領主",
+        expectedMatchedTexts: ["領主"]
+      },
+      {
+        surface: "山田",
+        text: "山田野々",
+        expectedMatchedTexts: ["山田"]
+      },
+      {
+        surface: "やまだの",
+        text: "やまだのゝ",
+        expectedMatchedTexts: ["やまだの"]
+      }
+    ];
+
+    cases.forEach((testCase, index) => {
+      const entryId = `018f4b8c-7a2b-7c3d-8e4f-100000000${(20 + index)
+        .toString()
+        .padStart(3, "0")}`;
+      const formId = `018f4b8c-7a2b-7c3d-8e4f-200000000${(29 + index)
+        .toString()
+        .padStart(3, "0")}`;
+      const matches = matchGlossarySurfacesInText(
+        testCase.text,
+        buildGlossarySurfaceIndex([
+          glossaryEntry(entryId, [
+            canonicalForm(
+              entryId,
+              formId,
+              testCase.surface,
+              testCase.left ?? "auto",
+              testCase.right ?? "auto"
+            )
+          ])
+        ])
+      );
+
+      expect(matches.map((match) => match.matchedText)).toEqual(
+        testCase.expectedMatchedTexts
+      );
+    });
+  });
+
+  it("keeps leftmost-longest when boundary accepts multiple Kanji matches", () => {
+    const shortEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000050";
+    const longEntryId = "018f4b8c-7a2b-7c3d-8e4f-100000000051";
+
+    expect(
+      matchGlossarySurfacesInText(
+        "山田野々",
+        buildGlossarySurfaceIndex([
+          glossaryEntry(shortEntryId, [
+            canonicalForm(
+              shortEntryId,
+              "018f4b8c-7a2b-7c3d-8e4f-200000000050",
+              "山田"
+            )
+          ]),
+          glossaryEntry(longEntryId, [
+            canonicalForm(
+              longEntryId,
+              "018f4b8c-7a2b-7c3d-8e4f-200000000051",
+              "山田野々"
+            )
+          ])
+        ])
+      ).map((match) => match.matchedText)
+    ).toEqual(["山田野々"]);
   });
 
   it("returns an empty array for empty text, empty entries, and no matches", () => {
