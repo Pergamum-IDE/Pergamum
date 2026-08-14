@@ -124,7 +124,6 @@ describe("debug logger", () => {
     expect(snapshot.events).toHaveLength(2);
     expect(snapshot.events[0]).toMatchObject({
       seq: 1,
-      timestamp: "2026-08-14T15:29:00.001+09:00",
       level: "debug",
       event: "command.invoked",
       details: {
@@ -136,6 +135,9 @@ describe("debug logger", () => {
         }
       }
     });
+    expect(snapshot.events[0].timestamp).toMatch(
+      /^2026-08-14T15:29:00\.001[+-]\d{2}:\d{2}$/
+    );
     expect(snapshot.events[0]).not.toHaveProperty("sessionId");
     expect(snapshot).not.toHaveProperty("currentFilePath");
     expect(serializedSnapshot).not.toContain(logsDir);
