@@ -73,7 +73,7 @@ describe("glossary preload API", () => {
         }
       ]
     });
-    await api.glossary.delete(entryId);
+    await api.glossary.delete(entryId, "この語彙を削除します。よろしいですか？");
 
     expect(electronMock.invoke.mock.calls).toEqual([
       [
@@ -118,7 +118,8 @@ describe("glossary preload API", () => {
       [
         GLOSSARY_CHANNELS.delete,
         {
-          id: entryId
+          id: entryId,
+          confirmMessage: "この語彙を削除します。よろしいですか？"
         }
       ]
     ]);

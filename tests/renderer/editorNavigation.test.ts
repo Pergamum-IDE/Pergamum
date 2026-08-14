@@ -184,6 +184,48 @@ describe("EditorNavigation", () => {
     ]);
   });
 
+  it("removes an EditorId from history via invalidateEditor without resolving it", async () => {
+    const navigation = new EditorNavigation<ResolvedEditor>({
+      resolveEditor: async (editorId) =>
+        createResolveResult(editorId, new Set()),
+      applyEditor: () => undefined
+    });
+
+    await navigation.openEditor(editorA);
+    await navigation.openEditor(editorB);
+    await navigation.openEditor(editorC);
+
+    navigation.invalidateEditor(editorB);
+
+    const snapshot = navigation.snapshot();
+    expect(snapshot.entries.length).toBe(2);
+    expect(
+      snapshot.entries.some((editorId) => editorIdEquals(editorId, editorB))
+    ).toBe(false);
+    expect(editorIdEquals(snapshot.entries[0], editorA)).toBe(true);
+    expect(editorIdEquals(snapshot.entries[1], editorC)).toBe(true);
+  });
+
+  it("skips a Back navigation target after it was invalidated ahead of time", async () => {
+    const appliedEditors: ResolvedEditor[] = [];
+    const navigation = new EditorNavigation<ResolvedEditor>({
+      resolveEditor: async (editorId) =>
+        createResolveResult(editorId, new Set()),
+      applyEditor: (_editorId, editor) => {
+        appliedEditors.push(editor);
+      }
+    });
+
+    await navigation.openEditor(editorA);
+    await navigation.openEditor(editorB);
+    await navigation.openEditor(editorC);
+
+    navigation.invalidateEditor(editorB);
+
+    await expect(navigation.navigateBack()).resolves.toBe(true);
+    expectAppliedEditors(appliedEditors, [editorA, editorB, editorC, editorA]);
+  });
+
   it("discards Forward history after normal navigation following Back", async () => {
     const navigation = new EditorNavigation<ResolvedEditor>({
       resolveEditor: async (editorId) =>

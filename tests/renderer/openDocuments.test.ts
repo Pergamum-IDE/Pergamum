@@ -11,6 +11,8 @@ import {
   findProjectDocumentByEditorId
 } from "../../src/renderer/projectDocumentResolution";
 import {
+  activateOpenDocument,
+  closeOpenEditor,
   createInitialOpenDocumentsState,
   createOpenDocumentsStateWithDocument,
   documentTabs,
@@ -413,5 +415,111 @@ describe("OpenDocumentsState", () => {
     expect(updatedState.documents[0].editor.document.content).toBe(
       "project content"
     );
+  });
+
+  it("does nothing when closing an EditorId that is not open", () => {
+    const state = createOpenDocumentsStateWithDocument(
+      createProjectDocument(firstProjectDocument, "project content"),
+      projectContext
+    );
+
+    const nextState = closeOpenEditor(
+      state,
+      createGlossaryEntryEditorId(glossaryEntry.id, projectContext)
+    );
+
+    expect(nextState).toBe(state);
+  });
+
+  it("closes an inactive tab without changing the active document", () => {
+    const projectDocument = createProjectDocument(
+      firstProjectDocument,
+      "project content"
+    );
+    let state = createOpenDocumentsStateWithDocument(
+      projectDocument,
+      projectContext
+    );
+    state = openOrActivateEditor(
+      state,
+      createGlossaryEntryCurrentEditor(glossaryEntry),
+      projectContext
+    );
+
+    const glossaryEditorId = createGlossaryEntryEditorId(
+      glossaryEntry.id,
+      projectContext
+    );
+    const projectDocumentEditorId = createProjectDocumentEditorId(
+      "chapter-01.md",
+      projectContext
+    );
+    state = activateOpenDocument(state, projectDocumentEditorId);
+
+    const nextState = closeOpenEditor(state, glossaryEditorId);
+
+    expect(nextState.documents).toHaveLength(1);
+    expect(editorIdEquals(nextState.activeDocumentId, projectDocumentEditorId)).toBe(
+      true
+    );
+  });
+
+  it("activates an adjacent tab when closing the active tab", () => {
+    const projectDocument = createProjectDocument(
+      firstProjectDocument,
+      "project content"
+    );
+    let state = createOpenDocumentsStateWithDocument(
+      projectDocument,
+      projectContext
+    );
+    state = openOrActivateEditor(
+      state,
+      createGlossaryEntryCurrentEditor(glossaryEntry),
+      projectContext
+    );
+
+    const projectDocumentEditorId = createProjectDocumentEditorId(
+      "chapter-01.md",
+      projectContext
+    );
+
+    expect(
+      editorIdEquals(
+        state.activeDocumentId,
+        createGlossaryEntryEditorId(glossaryEntry.id, projectContext)
+      )
+    ).toBe(true);
+
+    const nextState = closeOpenEditor(
+      state,
+      createGlossaryEntryEditorId(glossaryEntry.id, projectContext)
+    );
+
+    expect(nextState.documents).toHaveLength(1);
+    expect(editorIdEquals(nextState.activeDocumentId, projectDocumentEditorId)).toBe(
+      true
+    );
+  });
+
+  it("falls back to the existing initial state when closing the last open tab", () => {
+    const glossaryEditorId = createGlossaryEntryEditorId(
+      glossaryEntry.id,
+      projectContext
+    );
+    const seededState = openOrActivateEditor(
+      createInitialOpenDocumentsState(5),
+      createGlossaryEntryCurrentEditor(glossaryEntry),
+      projectContext
+    );
+
+    const nextState = closeOpenEditor(seededState, glossaryEditorId);
+
+    expect(nextState.documents).toHaveLength(1);
+    expect(nextState.documents[0].editor.kind).toBe("markdown");
+    expect(
+      editorIdEquals(nextState.activeDocumentId, createUntitledEditorId(6))
+    ).toBe(true);
+    expect(nextState.nextUntitledId).toBe(7);
   });
 });

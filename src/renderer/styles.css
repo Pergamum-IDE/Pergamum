@@ -939,6 +939,30 @@ button:active {
   padding: 5px 7px;
 }
 
+.glossaryEditorDeleteButton {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  margin-left: auto;
+  border: 1px solid #b3261e;
+  border-radius: 4px;
+  background: #ffffff;
+  color: #b3261e;
+  cursor: pointer;
+  padding: 6px;
+}
+
+.glossaryEditorDeleteButton:hover {
+  background: #fdecea;
+}
+
+.glossaryEditorDeleteButton svg {
+  display: block;
+  width: 16px;
+  height: 16px;
+}
+
 .glossaryEditorDescriptionWorkspace {
   height: 360px;
   border: 1px solid #e3e8ee;
@@ -1023,6 +1047,19 @@ button:active {
   color: #25313d;
   cursor: pointer;
   padding: 6px 10px;
+}
+
+.glossaryEditorRemoveFormButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 6px;
+}
+
+.glossaryEditorRemoveFormButton svg {
+  display: block;
+  width: 14px;
+  height: 14px;
 }
 
 .glossaryEditorAdvancedMatchingSettingsToggle {

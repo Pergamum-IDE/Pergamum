@@ -87,6 +87,10 @@ export class EditorNavigation<TEditor> {
     this.history.reset();
   }
 
+  invalidateEditor(editorId: EditorId): void {
+    this.history.invalidate(editorId);
+  }
+
   snapshot(): NavigationHistorySnapshot {
     return this.history.snapshot();
   }

@@ -99,6 +99,7 @@ function glossaryEditorProps(
     onChangeFormMatchBoundaryStart: () => undefined,
     onChangeFormMatchBoundaryEnd: () => undefined,
     onDeleteForm: () => undefined,
+    onDeleteEntry: () => undefined,
     ...overrides
   };
 }
@@ -287,7 +288,8 @@ describe("GlossaryEditor", () => {
     );
 
     const aliasRemoveButton = buttons.find(
-      (button) => button.props.children === "glossaryEditor.removeForm"
+      (button) =>
+        button.props.className === "glossaryEditorRemoveFormButton"
     );
     const aliasAddButton = buttons.find(
       (button) => button.props.children === "glossaryEditor.addAlias"
@@ -309,6 +311,79 @@ describe("GlossaryEditor", () => {
     );
     expect(onAddForm).toHaveBeenCalledWith("alias");
     expect(onAddForm).toHaveBeenCalledWith("variant");
+  });
+
+  it("renders a danger-styled delete-entry icon button with an i18n aria-label and title", () => {
+    const element = GlossaryEditor(glossaryEditorProps());
+    const buttons = collectElements(
+      element,
+      (child) => child.type === "button"
+    );
+    const deleteButton = buttons.find(
+      (button) => button.props.className === "glossaryEditorDeleteButton"
+    );
+
+    expect(deleteButton).toBeDefined();
+    expect(deleteButton?.props["aria-label"]).toBe(
+      "glossaryEditor.deleteEntry"
+    );
+    expect(deleteButton?.props.title).toBe("glossaryEditor.deleteEntry");
+  });
+
+  it("reports the delete-entry action through onDeleteEntry", () => {
+    const onDeleteEntry = vi.fn();
+    const element = GlossaryEditor(glossaryEditorProps({ onDeleteEntry }));
+    const buttons = collectElements(
+      element,
+      (child) => child.type === "button"
+    );
+    const deleteButton = buttons.find(
+      (button) => button.props.className === "glossaryEditorDeleteButton"
+    );
+
+    (deleteButton?.props.onClick as () => void)();
+
+    expect(onDeleteEntry).toHaveBeenCalledTimes(1);
+  });
+
+  it("renders the delete-entry button using the delete.svg icon markup", () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(GlossaryEditor, glossaryEditorProps())
+    );
+
+    expect(markup).toContain('class="glossaryEditorDeleteButton"');
+    expect(markup).toContain("feather-trash-2");
+  });
+
+  it("renders alias/variant remove buttons as delete.svg icon buttons with an i18n aria-label and title", () => {
+    const element = GlossaryEditor(glossaryEditorProps());
+    const buttons = collectElements(
+      element,
+      (child) =>
+        child.type === "button" &&
+        child.props.className === "glossaryEditorRemoveFormButton"
+    );
+
+    expect(buttons).toHaveLength(2);
+
+    for (const button of buttons) {
+      expect(button.props["aria-label"]).toBe("glossaryEditor.removeForm");
+      expect(button.props.title).toBe("glossaryEditor.removeForm");
+    }
+  });
+
+  it("does not use the entry-deletion danger style for alias/variant remove buttons", () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(GlossaryEditor, glossaryEditorProps())
+    );
+
+    expect(markup).toContain('class="glossaryEditorRemoveFormButton"');
+    expect(markup).not.toContain(
+      'class="glossaryEditorRemoveFormButton glossaryEditorDeleteButton"'
+    );
+    expect(markup).not.toContain(
+      'class="glossaryEditorDeleteButton glossaryEditorRemoveFormButton"'
+    );
   });
 
   it("passes the draft description to the Markdown editor for editing", () => {

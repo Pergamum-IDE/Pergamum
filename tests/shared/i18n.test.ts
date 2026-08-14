@@ -20,6 +20,19 @@ const disallowedBoundaryWords = [
   "right boundary"
 ];
 
+describe("glossary entry deletion translations", () => {
+  it("labels the delete button and its confirmation message for ja and en", () => {
+    expect(t("ja", "glossaryEditor.deleteEntry")).toBe("削除");
+    expect(t("en", "glossaryEditor.deleteEntry")).toBe("Delete");
+    expect(t("ja", "glossaryEditor.deleteEntryConfirmMessage")).toBe(
+      "この語彙を削除します。よろしいですか？"
+    );
+    expect(t("en", "glossaryEditor.deleteEntryConfirmMessage")).toBe(
+      "Delete this glossary entry?"
+    );
+  });
+});
+
 describe("glossary form match boundary translations", () => {
   it("defines every advanced matching settings key for ja and en", () => {
     for (const key of matchBoundaryKeys) {

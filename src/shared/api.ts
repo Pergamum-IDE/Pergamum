@@ -120,6 +120,15 @@ export interface GlossaryEntryIdRequest {
   id: string;
 }
 
+export interface DeleteGlossaryEntryRequest {
+  id: string;
+  confirmMessage: string;
+}
+
+export interface DeleteGlossaryEntryResult {
+  deleted: boolean;
+}
+
 export interface GlossarySurfaceLookupRequest {
   surface: string;
 }
@@ -155,6 +164,9 @@ export interface PergamumApi {
     list: () => Promise<GlossaryEntry[]>;
     lookupSurface: (surface: string) => Promise<GlossarySurfaceLookupResult>;
     update: (input: UpdateGlossaryEntryInput) => Promise<GlossaryEntry>;
-    delete: (id: string) => Promise<void>;
+    delete: (
+      id: string,
+      confirmMessage: string
+    ) => Promise<DeleteGlossaryEntryResult>;
   };
 }

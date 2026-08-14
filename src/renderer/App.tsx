@@ -86,6 +86,7 @@ import {
   activeCurrentEditor,
   activeOpenDocument,
   activateOpenDocument,
+  closeOpenEditor,
   createInitialOpenDocumentsState,
   documentTabs,
   editorIdForCurrentDocument,
@@ -720,6 +721,58 @@ export function App(): JSX.Element {
     }
   }
 
+  async function deleteActiveGlossaryEntry(): Promise<void> {
+    if (activeDocument.editor.kind !== "glossaryEntry") {
+      return;
+    }
+
+    const documentIdToDelete = activeDocument.id;
+    const entryIdToDelete = activeDocument.editor.draft.entry.id;
+    const confirmMessage = translate(
+      "glossaryEditor.deleteEntryConfirmMessage"
+    );
+    const projectGeneration =
+      projectActivationLifetimeRef.current.captureProjectActivationGeneration();
+
+    try {
+      const result = await window.pergamum.glossary.delete(
+        entryIdToDelete,
+        confirmMessage
+      );
+
+      if (
+        !projectActivationLifetimeRef.current.isProjectActivationCurrent(
+          projectGeneration
+        )
+      ) {
+        return;
+      }
+
+      if (!result.deleted) {
+        return;
+      }
+
+      editorNavigation.invalidateEditor(documentIdToDelete);
+      setOpenDocumentsState((state) =>
+        closeOpenEditor(state, documentIdToDelete)
+      );
+      setGlossaryRefreshToken((token) => token + 1);
+    } catch (error) {
+      if (
+        !projectActivationLifetimeRef.current.isProjectActivationCurrent(
+          projectGeneration
+        )
+      ) {
+        return;
+      }
+
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+    }
+  }
+
   async function saveFile(): Promise<void> {
     if (activeDocument.editor.kind === "glossaryEntry") {
       await saveGlossaryEntry();
@@ -1110,6 +1163,9 @@ export function App(): JSX.Element {
                     setActiveGlossaryEntryFormMatchBoundaryEnd
                   }
                   onDeleteGlossaryEntryForm={deleteActiveGlossaryEntryForm}
+                  onDeleteGlossaryEntry={() => {
+                    void deleteActiveGlossaryEntry();
+                  }}
                 />
               </section>
             </section>

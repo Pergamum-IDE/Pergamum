@@ -61,7 +61,8 @@ describe("GlossaryEditor", () => {
         onChangeFormWarningPolicy: () => undefined,
         onChangeFormMatchBoundaryStart: () => undefined,
         onChangeFormMatchBoundaryEnd: () => undefined,
-        onDeleteForm: () => undefined
+        onDeleteForm: () => undefined,
+        onDeleteEntry: () => undefined
       })
     );
 
@@ -87,7 +88,8 @@ describe("GlossaryEditor", () => {
         onChangeFormWarningPolicy: () => undefined,
         onChangeFormMatchBoundaryStart: () => undefined,
         onChangeFormMatchBoundaryEnd: () => undefined,
-        onDeleteForm: () => undefined
+        onDeleteForm: () => undefined,
+        onDeleteEntry: () => undefined
       })
     );
 
@@ -110,7 +112,8 @@ describe("GlossaryEditor", () => {
         onChangeFormWarningPolicy: () => undefined,
         onChangeFormMatchBoundaryStart: () => undefined,
         onChangeFormMatchBoundaryEnd: () => undefined,
-        onDeleteForm: () => undefined
+        onDeleteForm: () => undefined,
+        onDeleteEntry: () => undefined
       })
     );
 
