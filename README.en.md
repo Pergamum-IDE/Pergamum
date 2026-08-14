@@ -327,6 +327,8 @@ Pergamum is currently under development, and there are no general-use release bu
 
 For now, it can be tried by setting up the development environment from source.
 
+Development uses Node.js 24 LTS.
+
 ```bash
 npm install
 npm run dev

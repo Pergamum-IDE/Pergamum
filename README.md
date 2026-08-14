@@ -331,6 +331,8 @@ Pergamum は現在開発中であり、一般利用向けの配布物はまだ�
 
 現時点では、ソースコードから開発環境を構築して試すことができます。
 
+開発には Node.js 24 LTS を使用します。
+
 ```bash
 npm install
 npm run dev
