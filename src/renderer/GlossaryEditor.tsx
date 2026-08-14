@@ -54,6 +54,8 @@ interface GlossaryEditorProps {
   ) => void;
   onDeleteForm: (formId: string) => void;
   onDeleteEntry: () => void;
+  onNavigateToPreviousOccurrence: () => void;
+  onNavigateToNextOccurrence: () => void;
 }
 
 export function GlossaryEditor({
@@ -70,7 +72,9 @@ export function GlossaryEditor({
   onChangeFormMatchBoundaryStart,
   onChangeFormMatchBoundaryEnd,
   onDeleteForm,
-  onDeleteEntry
+  onDeleteEntry,
+  onNavigateToPreviousOccurrence,
+  onNavigateToNextOccurrence
 }: GlossaryEditorProps): JSX.Element {
   const entry = draft.entry;
   const title = draft.canonicalSurface.trim() || canonicalGlossarySurface(entry);
@@ -152,6 +156,24 @@ export function GlossaryEditor({
             ))}
           </select>
         </label>
+        <button
+          type="button"
+          className="glossaryEditorOccurrenceButton"
+          aria-label={translate("glossaryEditor.previousOccurrence")}
+          title={translate("glossaryEditor.previousOccurrence")}
+          onClick={onNavigateToPreviousOccurrence}
+        >
+          {translate("glossaryEditor.previousOccurrenceLabel")}
+        </button>
+        <button
+          type="button"
+          className="glossaryEditorOccurrenceButton"
+          aria-label={translate("glossaryEditor.nextOccurrence")}
+          title={translate("glossaryEditor.nextOccurrence")}
+          onClick={onNavigateToNextOccurrence}
+        >
+          {translate("glossaryEditor.nextOccurrenceLabel")}
+        </button>
         <button
           type="button"
           className="glossaryEditorDeleteButton"

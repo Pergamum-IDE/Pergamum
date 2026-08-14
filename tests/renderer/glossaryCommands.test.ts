@@ -7,27 +7,52 @@ import {
   registerGlossaryCommands
 } from "../../src/renderer/glossaryCommands";
 
-const bothCommandTitles = {
+const entryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abc";
+
+const allCommandTitles = {
   openEntry: "Open glossary entry",
-  createEntry: "Create glossary entry"
+  createEntry: "Create glossary entry",
+  previousOccurrence: "Previous occurrence",
+  nextOccurrence: "Next occurrence"
 };
 
+function registerAllGlossaryCommands(
+  registry: CommandRegistry,
+  overrides: Partial<{
+    openGlossaryEntry: () => boolean | Promise<boolean>;
+    createGlossaryEntry: () => boolean | Promise<boolean>;
+    navigateToPreviousGlossaryOccurrence: (
+      entryId: string
+    ) => boolean | Promise<boolean>;
+    navigateToNextGlossaryOccurrence: (
+      entryId: string
+    ) => boolean | Promise<boolean>;
+  }> = {}
+): void {
+  registerGlossaryCommands(
+    registry,
+    {
+      openGlossaryEntry: () => true,
+      createGlossaryEntry: () => true,
+      navigateToPreviousGlossaryOccurrence: () => true,
+      navigateToNextGlossaryOccurrence: () => true,
+      ...overrides
+    },
+    allCommandTitles
+  );
+}
+
 describe("glossary commands", () => {
-  it("registers the Glossary entry open and create commands", () => {
+  it("registers the Glossary entry open, create, and occurrence navigation commands", () => {
     const registry = new CommandRegistry();
 
-    registerGlossaryCommands(
-      registry,
-      {
-        openGlossaryEntry: () => true,
-        createGlossaryEntry: () => true
-      },
-      bothCommandTitles
-    );
+    registerAllGlossaryCommands(registry);
 
     expect(registry.list().map((command) => command.id)).toEqual([
       glossaryCommandIds.openEntry,
-      glossaryCommandIds.createEntry
+      glossaryCommandIds.createEntry,
+      glossaryCommandIds.previousOccurrence,
+      glossaryCommandIds.nextOccurrence
     ]);
     expect(registry.get(glossaryCommandIds.openEntry)?.title).toBe(
       "Open glossary entry"
@@ -35,30 +60,24 @@ describe("glossary commands", () => {
     expect(registry.get(glossaryCommandIds.createEntry)?.title).toBe(
       "Create glossary entry"
     );
+    expect(registry.get(glossaryCommandIds.previousOccurrence)?.title).toBe(
+      "Previous occurrence"
+    );
+    expect(registry.get(glossaryCommandIds.nextOccurrence)?.title).toBe(
+      "Next occurrence"
+    );
   });
 
   it("opens Glossary entries through a typed command argument", async () => {
     const registry = new CommandRegistry();
     const openGlossaryEntry = vi.fn(async () => true);
 
-    registerGlossaryCommands(
-      registry,
-      {
-        openGlossaryEntry,
-        createGlossaryEntry: () => true
-      },
-      bothCommandTitles
-    );
+    registerAllGlossaryCommands(registry, { openGlossaryEntry });
 
     await expect(
-      registry.execute(
-        glossaryCommandIds.openEntry,
-        "018f4b8c-7a2b-7c3d-8e4f-123456789abc"
-      )
+      registry.execute(glossaryCommandIds.openEntry, entryId)
     ).resolves.toBe(true);
-    expect(openGlossaryEntry).toHaveBeenCalledWith(
-      "018f4b8c-7a2b-7c3d-8e4f-123456789abc"
-    );
+    expect(openGlossaryEntry).toHaveBeenCalledWith(entryId);
   });
 
   it("creates Glossary entries through a typed command argument", async () => {
@@ -70,14 +89,7 @@ describe("glossary commands", () => {
       description: ""
     };
 
-    registerGlossaryCommands(
-      registry,
-      {
-        openGlossaryEntry: () => true,
-        createGlossaryEntry
-      },
-      bothCommandTitles
-    );
+    registerAllGlossaryCommands(registry, { createGlossaryEntry });
 
     await expect(
       registry.execute(glossaryCommandIds.createEntry, input)
@@ -85,12 +97,44 @@ describe("glossary commands", () => {
     expect(createGlossaryEntry).toHaveBeenCalledWith(input);
   });
 
+  it("navigates to the previous Glossary occurrence through a typed entryId command argument", async () => {
+    const registry = new CommandRegistry();
+    const navigateToPreviousGlossaryOccurrence = vi.fn(async () => true);
+
+    registerAllGlossaryCommands(registry, {
+      navigateToPreviousGlossaryOccurrence
+    });
+
+    await expect(
+      registry.execute(glossaryCommandIds.previousOccurrence, entryId)
+    ).resolves.toBe(true);
+    expect(navigateToPreviousGlossaryOccurrence).toHaveBeenCalledWith(
+      entryId
+    );
+  });
+
+  it("navigates to the next Glossary occurrence through a typed entryId command argument", async () => {
+    const registry = new CommandRegistry();
+    const navigateToNextGlossaryOccurrence = vi.fn(async () => true);
+
+    registerAllGlossaryCommands(registry, {
+      navigateToNextGlossaryOccurrence
+    });
+
+    await expect(
+      registry.execute(glossaryCommandIds.nextOccurrence, entryId)
+    ).resolves.toBe(true);
+    expect(navigateToNextGlossaryOccurrence).toHaveBeenCalledWith(entryId);
+  });
+
   it("creates localized command titles outside the registry", () => {
     const translate = vi.fn((key: string) => `translated:${key}`);
 
     expect(createGlossaryCommandTitles(translate)).toEqual({
       openEntry: "translated:command.glossary.entry.open",
-      createEntry: "translated:command.glossary.entry.create"
+      createEntry: "translated:command.glossary.entry.create",
+      previousOccurrence: "translated:glossaryEditor.previousOccurrence",
+      nextOccurrence: "translated:glossaryEditor.nextOccurrence"
     });
   });
 

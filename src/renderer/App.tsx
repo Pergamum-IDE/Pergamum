@@ -1,4 +1,4 @@
-import { useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import type {
   PergamumProject,
   ProjectDocument,
@@ -35,6 +35,7 @@ import { ActivityBar } from "./ActivityBar";
 import {
   applyStandaloneSaveResult,
   createProjectDocument,
+  currentDocumentContent,
   isProjectCurrentDocument,
   markCurrentDocumentSaved,
   standaloneSavePath,
@@ -83,6 +84,12 @@ import {
   registerGlossaryCommands
 } from "./glossaryCommands";
 import {
+  planGlossaryOccurrenceNavigation,
+  type GlossaryOccurrenceCursor,
+  type GlossaryOccurrenceDirection,
+  type GlossaryOccurrenceRange
+} from "./glossaryOccurrenceNavigation";
+import {
   activeCurrentEditor,
   activeOpenDocument,
   activateOpenDocument,
@@ -90,6 +97,7 @@ import {
   createInitialOpenDocumentsState,
   documentTabs,
   editorIdForCurrentDocument,
+  findOpenDocument,
   hasDirtyOpenDocuments,
   hasOpenDocument,
   isOnlyInitialUntitledDocument,
@@ -161,12 +169,24 @@ export function App(): JSX.Element {
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [status, setStatus] = useState<StatusMessage>({ key: "app.ready" });
   const [glossaryRefreshToken, setGlossaryRefreshToken] = useState(0);
+  const [pendingMarkdownSelection, setPendingMarkdownSelection] =
+    useState<GlossaryOccurrenceRange | null>(null);
   const editorNavigationRef = useRef<EditorNavigation<CurrentEditor> | null>(
     null
   );
   const projectActivationLifetimeRef = useRef(
     new ProjectActivationLifetime()
   );
+  const lastActiveMarkdownEditorIdRef = useRef<EditorId | null>(null);
+  const glossaryOccurrenceCursorRef = useRef<GlossaryOccurrenceCursor | null>(
+    null
+  );
+  const navigateGlossaryOccurrenceRef = useRef<
+    (
+      entryId: GlossaryEntryId,
+      direction: GlossaryOccurrenceDirection
+    ) => Promise<boolean>
+  >(() => Promise.resolve(false));
   const {
     settings,
     displayLanguage,
@@ -179,6 +199,12 @@ export function App(): JSX.Element {
   const activeDocument = activeOpenDocument(openDocumentsState);
   const currentEditor = activeCurrentEditor(openDocumentsState);
   const activeMarkdownDocument = markdownDocumentForEditor(currentEditor);
+
+  useEffect(() => {
+    if (currentEditor.kind === "markdown") {
+      lastActiveMarkdownEditorIdRef.current = activeDocument.id;
+    }
+  }, [currentEditor, activeDocument.id]);
   const activeProjectContext = useMemo(
     () => projectContextForProject(project),
     [project]
@@ -268,7 +294,11 @@ export function App(): JSX.Element {
             history: "record",
             resolvedEditor: createGlossaryEntryCurrentEditor(entry)
           });
-        }
+        },
+        navigateToPreviousGlossaryOccurrence: (entryId) =>
+          navigateGlossaryOccurrenceRef.current(entryId, "previous"),
+        navigateToNextGlossaryOccurrence: (entryId) =>
+          navigateGlossaryOccurrenceRef.current(entryId, "next")
       },
       createGlossaryCommandTitles(translate)
     );
@@ -773,6 +803,63 @@ export function App(): JSX.Element {
     }
   }
 
+  async function navigateGlossaryOccurrence(
+    entryId: GlossaryEntryId,
+    direction: GlossaryOccurrenceDirection
+  ): Promise<boolean> {
+    if (
+      activeDocument.editor.kind !== "glossaryEntry" ||
+      activeDocument.editor.draft.entry.id !== entryId
+    ) {
+      return false;
+    }
+
+    const targetEditorId = lastActiveMarkdownEditorIdRef.current;
+    const targetOpenDocument = targetEditorId
+      ? findOpenDocument(openDocumentsState, targetEditorId)
+      : null;
+    const targetDocument =
+      targetOpenDocument && targetOpenDocument.editor.kind === "markdown"
+        ? {
+            editorId: targetOpenDocument.id,
+            content: currentDocumentContent(targetOpenDocument.editor.document)
+          }
+        : null;
+
+    const outcome = planGlossaryOccurrenceNavigation({
+      entry: activeDocument.editor.draft.entry,
+      targetDocument,
+      direction,
+      currentCursor: glossaryOccurrenceCursorRef.current
+    });
+
+    switch (outcome.kind) {
+      case "noTargetDocument":
+        setStatus({ key: "status.glossaryOccurrenceNoActiveDocument" });
+        return false;
+      case "noOccurrences":
+        setStatus({ key: "status.glossaryOccurrenceNotFound" });
+        return false;
+      case "navigated": {
+        const didOpen = await editorNavigation.openEditor(
+          outcome.cursor.documentEditorId,
+          { history: "skip" }
+        );
+
+        if (!didOpen) {
+          setStatus({ key: "status.glossaryOccurrenceNoActiveDocument" });
+          return false;
+        }
+
+        glossaryOccurrenceCursorRef.current = outcome.cursor;
+        setPendingMarkdownSelection(outcome.range);
+        return true;
+      }
+    }
+  }
+
+  navigateGlossaryOccurrenceRef.current = navigateGlossaryOccurrence;
+
   async function saveFile(): Promise<void> {
     if (activeDocument.editor.kind === "glossaryEntry") {
       await saveGlossaryEntry();
@@ -856,6 +943,9 @@ export function App(): JSX.Element {
     };
 
     editorNavigation.reset();
+    glossaryOccurrenceCursorRef.current = null;
+    lastActiveMarkdownEditorIdRef.current = null;
+    setPendingMarkdownSelection(null);
     setOpenDocumentsState((state) =>
       resetOpenDocumentsForProjectContextSwitch(state)
     );
@@ -1165,6 +1255,26 @@ export function App(): JSX.Element {
                   onDeleteGlossaryEntryForm={deleteActiveGlossaryEntryForm}
                   onDeleteGlossaryEntry={() => {
                     void deleteActiveGlossaryEntry();
+                  }}
+                  onNavigateToPreviousGlossaryOccurrence={() => {
+                    if (currentEditor.kind === "glossaryEntry") {
+                      executeUiCommand(
+                        glossaryCommandIds.previousOccurrence,
+                        currentEditor.draft.entry.id
+                      );
+                    }
+                  }}
+                  onNavigateToNextGlossaryOccurrence={() => {
+                    if (currentEditor.kind === "glossaryEntry") {
+                      executeUiCommand(
+                        glossaryCommandIds.nextOccurrence,
+                        currentEditor.draft.entry.id
+                      );
+                    }
+                  }}
+                  pendingMarkdownSelection={pendingMarkdownSelection}
+                  onPendingMarkdownSelectionApplied={() => {
+                    setPendingMarkdownSelection(null);
                   }}
                 />
               </section>
