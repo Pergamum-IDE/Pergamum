@@ -1,14 +1,32 @@
 import { describe, expect, it } from "vitest";
 import {
+  EDITOR_AREA_MIN_HEIGHT,
   MARKDOWN_EDITOR_MIN_WIDTH,
   MARKDOWN_PREVIEW_MIN_WIDTH,
   SIDEBAR_MAX_WIDTH,
   SIDEBAR_MIN_WIDTH,
+  UTILITY_WINDOW_DEFAULT_HEIGHT,
+  UTILITY_WINDOW_MIN_HEIGHT,
   clampMarkdownEditorPreviewRatio,
   clampSidebarWidth,
+  clampUtilityWindowHeight,
+  defaultUtilityWindowTab,
   resolveActiveActivityMode,
-  resolveSidebarToggle
+  resolveSidebarToggle,
+  resolveUtilityWindowOpenState,
+  type WorkbenchUtilityWindowLayoutState
 } from "../../src/renderer/workbenchLayout";
+
+function utilityWindowState(
+  overrides: Partial<WorkbenchUtilityWindowLayoutState> = {}
+): WorkbenchUtilityWindowLayoutState {
+  return {
+    open: false,
+    activeTab: defaultUtilityWindowTab,
+    height: UTILITY_WINDOW_DEFAULT_HEIGHT,
+    ...overrides
+  };
+}
 
 describe("clampSidebarWidth", () => {
   it("clamps below the minimum up to SIDEBAR_MIN_WIDTH", () => {
@@ -115,6 +133,113 @@ describe("resolveSidebarToggle", () => {
       collapsed: false,
       mode: "search"
     });
+  });
+});
+
+describe("clampUtilityWindowHeight", () => {
+  it("clamps below the minimum up to UTILITY_WINDOW_MIN_HEIGHT", () => {
+    expect(clampUtilityWindowHeight(50)).toBe(UTILITY_WINDOW_MIN_HEIGHT);
+  });
+
+  it("passes values already within range through unchanged when no available height is given", () => {
+    expect(clampUtilityWindowHeight(300)).toBe(300);
+  });
+
+  it("caps the height so the editor area keeps its minimum height", () => {
+    const availableHeight = 500;
+    const clamped = clampUtilityWindowHeight(1000, availableHeight);
+
+    expect(clamped).toBe(availableHeight - EDITOR_AREA_MIN_HEIGHT);
+  });
+
+  it("keeps the requested height when there is ample available height", () => {
+    expect(clampUtilityWindowHeight(300, 2000)).toBe(300);
+  });
+
+  it("prioritizes the editor area minimum height over the Utility Window's own minimum when the window is short", () => {
+    const availableHeight = EDITOR_AREA_MIN_HEIGHT + 60;
+    const clamped = clampUtilityWindowHeight(300, availableHeight);
+
+    expect(clamped).toBe(60);
+    expect(clamped).toBeLessThan(UTILITY_WINDOW_MIN_HEIGHT);
+  });
+
+  it("never produces a negative height even when available height cannot fit the editor area minimum", () => {
+    const availableHeight = EDITOR_AREA_MIN_HEIGHT - 50;
+    const clamped = clampUtilityWindowHeight(300, availableHeight);
+
+    expect(clamped).toBe(0);
+  });
+});
+
+describe("resolveUtilityWindowOpenState", () => {
+  it("clamps the remembered height against the current available height when opening", () => {
+    const state = utilityWindowState({ open: false, height: 1000 });
+    const availableHeight = 500;
+
+    const next = resolveUtilityWindowOpenState(state, true, availableHeight);
+
+    expect(next.open).toBe(true);
+    expect(next.height).toBe(availableHeight - EDITOR_AREA_MIN_HEIGHT);
+  });
+
+  it("clamps up to the minimum height when opening with a small remembered height", () => {
+    const state = utilityWindowState({ open: false, height: 10 });
+
+    const next = resolveUtilityWindowOpenState(state, true, 2000);
+
+    expect(next.open).toBe(true);
+    expect(next.height).toBe(UTILITY_WINDOW_MIN_HEIGHT);
+  });
+
+  it("leaves an already-clamped height unchanged when opening", () => {
+    const state = utilityWindowState({ open: false, height: 300 });
+
+    const next = resolveUtilityWindowOpenState(state, true, 2000);
+
+    expect(next.height).toBe(300);
+  });
+
+  it("re-clamps on toggle from closed to open", () => {
+    const state = utilityWindowState({ open: false, height: 1000 });
+    const availableHeight = 500;
+
+    const next = resolveUtilityWindowOpenState(
+      state,
+      !state.open,
+      availableHeight
+    );
+
+    expect(next.open).toBe(true);
+    expect(next.height).toBe(availableHeight - EDITOR_AREA_MIN_HEIGHT);
+  });
+
+  it("keeps the remembered height untouched when closing", () => {
+    const state = utilityWindowState({ open: true, height: 1000 });
+
+    const next = resolveUtilityWindowOpenState(state, false, 500);
+
+    expect(next.open).toBe(false);
+    expect(next.height).toBe(1000);
+  });
+
+  it("keeps the remembered height untouched when closing without an available height", () => {
+    const state = utilityWindowState({ open: true, height: 260 });
+
+    const next = resolveUtilityWindowOpenState(state, false);
+
+    expect(next.open).toBe(false);
+    expect(next.height).toBe(260);
+  });
+
+  it("preserves the active tab across open/close transitions", () => {
+    const state = utilityWindowState({ open: false, activeTab: "occurrences" });
+
+    const opened = resolveUtilityWindowOpenState(state, true, 2000);
+    const closed = resolveUtilityWindowOpenState(opened, false);
+
+    expect(opened.activeTab).toBe("occurrences");
+    expect(closed.activeTab).toBe("occurrences");
   });
 });
 
