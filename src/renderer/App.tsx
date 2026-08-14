@@ -53,6 +53,10 @@ import {
   type CurrentEditor
 } from "./currentEditor";
 import { DocumentTabBar } from "./DocumentTabBar";
+import {
+  logRendererDebugEvent,
+  rendererDebugErrorInfo
+} from "./debugLog";
 import { EditorSurface } from "./EditorSurface";
 import { UtilityWindow } from "./UtilityWindow";
 import { GlossaryOccurrencesPanel } from "./GlossaryOccurrencesPanel";
@@ -93,6 +97,8 @@ import {
   startGlossaryOccurrenceTracking,
   type GlossaryOccurrenceDirection,
   type GlossaryOccurrenceTrackingState,
+  type GlossaryOccurrenceTrackingOutcome,
+  type NavigateGlossaryOccurrenceTrackingOutcome,
   type ResolveGlossaryOccurrenceTrackingSessionContext,
   type ResolveGlossaryOccurrenceTrackingSessionResult
 } from "./glossaryOccurrenceTracking";
@@ -825,7 +831,26 @@ export function App(): JSX.Element {
     commandId: CommandId<TArgs, TResult>,
     ...args: CommandArgumentList<TArgs>
   ): void {
+    logRendererDebugEvent({
+      level: "debug",
+      event: "command.invoked",
+      details: {
+        commandId: String(commandId)
+      }
+    });
+
     void commandRegistry.execute(commandId, ...args).catch((error) => {
+      logRendererDebugEvent({
+        level: "error",
+        event: "command.failed",
+        details: {
+          commandId: String(commandId),
+          operation: "unknown",
+          result: "failed",
+          statusKey: "status.commandFailed",
+          error: rendererDebugErrorInfo(error)
+        }
+      });
       setStatus({
         key: "status.commandFailed",
         values: { message: errorMessage(error, translate) }
@@ -1055,13 +1080,34 @@ export function App(): JSX.Element {
           }
         : null;
 
-    const outcome = startGlossaryOccurrenceTracking({
-      currentSession: glossaryOccurrenceTrackingState,
-      entry,
-      entryLabel: canonicalGlossarySurface(entry),
-      targetDocument,
-      direction
-    });
+    let outcome: GlossaryOccurrenceTrackingOutcome;
+
+    try {
+      outcome = startGlossaryOccurrenceTracking({
+        currentSession: glossaryOccurrenceTrackingState,
+        entry,
+        entryLabel: canonicalGlossarySurface(entry),
+        targetDocument,
+        direction
+      });
+    } catch (error) {
+      logRendererDebugEvent({
+        level: "error",
+        event: "glossary.occurrences.scan.failed",
+        details: {
+          editorIdKind: "glossaryEntry",
+          operation: "scan",
+          result: "failed",
+          statusKey: "status.commandFailed",
+          error: rendererDebugErrorInfo(error)
+        }
+      });
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+      return false;
+    }
 
     switch (outcome.kind) {
       case "noTargetDocument":
@@ -1127,11 +1173,32 @@ export function App(): JSX.Element {
       return false;
     }
 
-    const outcome = navigateGlossaryOccurrenceTracking({
-      session: resolved.session,
-      content: resolved.targetContent,
-      direction
-    });
+    let outcome: NavigateGlossaryOccurrenceTrackingOutcome;
+
+    try {
+      outcome = navigateGlossaryOccurrenceTracking({
+        session: resolved.session,
+        content: resolved.targetContent,
+        direction
+      });
+    } catch (error) {
+      logRendererDebugEvent({
+        level: "error",
+        event: "glossary.occurrences.scan.failed",
+        details: {
+          editorIdKind: resolved.session.targetMarkdownEditorId.kind,
+          operation: "scan",
+          result: "failed",
+          statusKey: "status.commandFailed",
+          error: rendererDebugErrorInfo(error)
+        }
+      });
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+      return false;
+    }
 
     if (outcome.kind === "noOccurrences") {
       setGlossaryOccurrenceTrackingState(

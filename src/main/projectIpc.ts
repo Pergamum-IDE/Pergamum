@@ -18,6 +18,11 @@ import {
   type SaveProjectDocumentRequest,
   type SaveProjectDocumentResult
 } from "../shared/api";
+import { getDebugLogger, type DebugLogger } from "./debugLogger";
+import {
+  debugLogExtensionForPath,
+  debugLogPathDepth
+} from "./debugLogSanitizer";
 import { readProjectConfig } from "./projectConfigStore";
 import { isRecentProjectPath, recordRecentProject } from "./settingsStore";
 
@@ -62,6 +67,14 @@ function projectName(
 
 function errorDetail(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown error.";
+}
+
+function durationSince(startedAt: number): number {
+  return Date.now() - startedAt;
+}
+
+function projectDocumentRefKey(rootPath: string, relativePath: string): string {
+  return `${rootPath}\0${relativePath}`;
 }
 
 function isRequestObject(value: unknown): value is Record<string, unknown> {
@@ -189,47 +202,101 @@ async function recordProjectRecently(project: PergamumProject): Promise<void> {
   }
 }
 
-async function openProjectRoot(rootPath: string): Promise<PergamumProject> {
-  const config = await readProjectConfig(rootPath);
-  const documents = await discoverMarkdownFiles(rootPath);
-  const project: PergamumProject = {
-    rootPath,
-    name: projectName(rootPath, config),
-    config,
-    documents
-  };
+async function openProjectRoot(
+  rootPath: string,
+  logger: DebugLogger
+): Promise<PergamumProject> {
+  const startedAt = Date.now();
+  const projectRef = logger.projectRefForKey(rootPath);
 
-  currentProjectState = {
-    rootPath: project.rootPath,
-    documentRelativePaths: new Set(
-      project.documents.map((document) => document.relativePath)
-    )
-  };
+  try {
+    const config = await readProjectConfig(rootPath);
+    const documents = await discoverMarkdownFiles(rootPath);
+    const project: PergamumProject = {
+      rootPath,
+      name: projectName(rootPath, config),
+      config,
+      documents
+    };
 
-  await recordProjectRecently(project);
+    currentProjectState = {
+      rootPath: project.rootPath,
+      documentRelativePaths: new Set(
+        project.documents.map((document) => document.relativePath)
+      )
+    };
 
-  return project;
+    await recordProjectRecently(project);
+
+    logger.log({
+      level: "info",
+      event: "project.open.succeeded",
+      details: {
+        projectRef,
+        operation: "open",
+        result: "succeeded",
+        durationMs: durationSince(startedAt)
+      }
+    });
+
+    return project;
+  } catch (error) {
+    logger.log({
+      level: "error",
+      event: "project.open.failed",
+      details: {
+        projectRef,
+        operation: "open",
+        result: "failed",
+        durationMs: durationSince(startedAt),
+        error
+      }
+    });
+
+    throw error;
+  }
 }
 
-export function registerProjectIpc(): void {
+export function registerProjectIpc(
+  logger: DebugLogger = getDebugLogger()
+): void {
   ipcMain.handle(
     PROJECT_CHANNELS.openProject,
     async (event): Promise<PergamumProject | null> => {
-      const owner = parentWindow(event);
-      const options: OpenDialogOptions = {
-        title: "Open Pergamum Project",
-        properties: ["openDirectory"]
-      };
-      const result = owner
-        ? await dialog.showOpenDialog(owner, options)
-        : await dialog.showOpenDialog(options);
+      const startedAt = Date.now();
+      let rootPath: string | null = null;
 
-      if (result.canceled || result.filePaths.length === 0) {
-        return null;
+      try {
+        const owner = parentWindow(event);
+        const options: OpenDialogOptions = {
+          title: "Open Pergamum Project",
+          properties: ["openDirectory"]
+        };
+        const result = owner
+          ? await dialog.showOpenDialog(owner, options)
+          : await dialog.showOpenDialog(options);
+
+        if (result.canceled || result.filePaths.length === 0) {
+          return null;
+        }
+
+        rootPath = result.filePaths[0];
+      } catch (error) {
+        logger.log({
+          level: "error",
+          event: "project.open.failed",
+          details: {
+            operation: "open",
+            result: "failed",
+            durationMs: durationSince(startedAt),
+            error
+          }
+        });
+
+        throw error;
       }
 
-      const rootPath = result.filePaths[0];
-      return openProjectRoot(rootPath);
+      return openProjectRoot(rootPath, logger);
     }
   );
 
@@ -239,14 +306,36 @@ export function registerProjectIpc(): void {
       _event,
       rawRequest: unknown
     ): Promise<PergamumProject> => {
-      const request = parseOpenRecentProjectRequest(rawRequest);
-      const isRegisteredRecentProject = await isRecentProjectPath(request.path);
+      const startedAt = Date.now();
+      let request: OpenRecentProjectRequest;
 
-      if (!isRegisteredRecentProject) {
-        throw new Error("Recent project is not registered.");
+      try {
+        request = parseOpenRecentProjectRequest(rawRequest);
+        const isRegisteredRecentProject = await isRecentProjectPath(
+          request.path
+        );
+
+        if (!isRegisteredRecentProject) {
+          throw new Error("Recent project is not registered.");
+        }
+
+        return openProjectRoot(request.path, logger);
+      } catch (error) {
+        logger.log({
+          level: "error",
+          event: "project.open.failed",
+          details: {
+            operation: "open",
+            result: "failed",
+            durationMs: durationSince(startedAt),
+            error
+          }
+        });
+
+        throw error;
       }
 
-      return openProjectRoot(request.path);
+      return openProjectRoot(request.path, logger);
     }
   );
 
@@ -256,14 +345,52 @@ export function registerProjectIpc(): void {
       _event,
       rawRequest: unknown
     ): Promise<ProjectDocumentContent> => {
-      const request = parseReadProjectDocumentRequest(rawRequest);
-      const documentPath = resolveProjectDocumentPath(request.relativePath);
-      const content = await fs.readFile(documentPath, "utf8");
+      const startedAt = Date.now();
+      let request: ReadProjectDocumentRequest | null = null;
 
-      return {
-        relativePath: request.relativePath,
-        content
-      };
+      try {
+        request = parseReadProjectDocumentRequest(rawRequest);
+        const documentPath = resolveProjectDocumentPath(request.relativePath);
+        const content = await fs.readFile(documentPath, "utf8");
+
+        return {
+          relativePath: request.relativePath,
+          content
+        };
+      } catch (error) {
+        const rootPath = currentProjectState?.rootPath;
+        const documentRef =
+          rootPath && request
+            ? logger.documentRefForKey(
+                projectDocumentRefKey(rootPath, request.relativePath)
+              )
+            : undefined;
+        const projectRef = rootPath
+          ? logger.projectRefForKey(rootPath)
+          : undefined;
+
+        logger.log({
+          level: "error",
+          event: "document.open.failed",
+          details: {
+            ...(projectRef ? { projectRef } : {}),
+            ...(documentRef ? { documentRef } : {}),
+            pathKind: "projectFile",
+            extension: request
+              ? debugLogExtensionForPath(request.relativePath)
+              : "unknown",
+            pathDepth: request
+              ? debugLogPathDepth(request.relativePath)
+              : undefined,
+            operation: "open",
+            result: "failed",
+            durationMs: durationSince(startedAt),
+            error
+          }
+        });
+
+        throw error;
+      }
     }
   );
 
@@ -273,13 +400,51 @@ export function registerProjectIpc(): void {
       _event,
       rawRequest: unknown
     ): Promise<SaveProjectDocumentResult> => {
-      const request = parseSaveProjectDocumentRequest(rawRequest);
-      const documentPath = resolveProjectDocumentPath(request.relativePath);
-      await fs.writeFile(documentPath, request.content, "utf8");
+      const startedAt = Date.now();
+      let request: SaveProjectDocumentRequest | null = null;
 
-      return {
-        relativePath: request.relativePath
-      };
+      try {
+        request = parseSaveProjectDocumentRequest(rawRequest);
+        const documentPath = resolveProjectDocumentPath(request.relativePath);
+        await fs.writeFile(documentPath, request.content, "utf8");
+
+        return {
+          relativePath: request.relativePath
+        };
+      } catch (error) {
+        const rootPath = currentProjectState?.rootPath;
+        const documentRef =
+          rootPath && request
+            ? logger.documentRefForKey(
+                projectDocumentRefKey(rootPath, request.relativePath)
+              )
+            : undefined;
+        const projectRef = rootPath
+          ? logger.projectRefForKey(rootPath)
+          : undefined;
+
+        logger.log({
+          level: "error",
+          event: "document.save.failed",
+          details: {
+            ...(projectRef ? { projectRef } : {}),
+            ...(documentRef ? { documentRef } : {}),
+            pathKind: "projectFile",
+            extension: request
+              ? debugLogExtensionForPath(request.relativePath)
+              : "unknown",
+            pathDepth: request
+              ? debugLogPathDepth(request.relativePath)
+              : undefined,
+            operation: "save",
+            result: "failed",
+            durationMs: durationSince(startedAt),
+            error
+          }
+        });
+
+        throw error;
+      }
     }
   );
 }

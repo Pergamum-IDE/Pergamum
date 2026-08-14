@@ -9,6 +9,7 @@ import type {
   GlossarySurfaceLookupResult,
   UpdateGlossaryEntryInput
 } from "./glossary";
+import type { RendererDebugLogRequest } from "./debugLog";
 
 export type {
   ApplicationSettings,
@@ -61,6 +62,10 @@ export const GLOSSARY_CHANNELS = {
   lookupSurface: "glossary:lookupSurface",
   update: "glossary:update",
   delete: "glossary:delete"
+} as const;
+
+export const DEBUG_LOG_CHANNELS = {
+  logEvent: "debugLog:logEvent"
 } as const;
 
 export interface MarkdownFile {
@@ -168,5 +173,8 @@ export interface PergamumApi {
       id: string,
       confirmMessage: string
     ) => Promise<DeleteGlossaryEntryResult>;
+  };
+  debugLog: {
+    logEvent: (request: RendererDebugLogRequest) => Promise<void>;
   };
 }

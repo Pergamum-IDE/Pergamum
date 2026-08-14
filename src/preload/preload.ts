@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import {
+  DEBUG_LOG_CHANNELS,
   FILE_CHANNELS,
   GLOSSARY_CHANNELS,
   PROJECT_CHANNELS,
@@ -54,6 +55,9 @@ const pergamumApi: PergamumApi = {
         id,
         confirmMessage
       })
+  },
+  debugLog: {
+    logEvent: (request) => ipcRenderer.invoke(DEBUG_LOG_CHANNELS.logEvent, request)
   }
 };
 
