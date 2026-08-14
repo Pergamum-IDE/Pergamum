@@ -179,7 +179,9 @@ function stubGlossaryApi(
 
 const noopGlossaryCreateFormProps = {
   canCreateEntry: true,
+  searchQuery: "",
   createForm: initialGlossaryCreateFormState,
+  onChangeSearchQuery: () => undefined,
   onToggleCreateForm: () => undefined,
   onChangeCreateSurface: () => undefined,
   onChangeCreateKind: () => undefined,

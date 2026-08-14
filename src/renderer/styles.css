@@ -570,6 +570,14 @@ button:active {
   gap: 2px;
 }
 
+.glossaryNavigatorSearch {
+  padding: 0 0 6px;
+}
+
+.glossaryNavigatorSearch input {
+  width: 100%;
+}
+
 .workspaceSidebarItem {
   display: block;
   width: 100%;
