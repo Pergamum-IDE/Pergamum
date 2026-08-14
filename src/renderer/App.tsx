@@ -55,6 +55,7 @@ import {
 import { DocumentTabBar } from "./DocumentTabBar";
 import { EditorSurface } from "./EditorSurface";
 import { UtilityWindow } from "./UtilityWindow";
+import { GlossaryOccurrencesPanel } from "./GlossaryOccurrencesPanel";
 import {
   EditorNavigation,
   type EditorResolveResult,
@@ -84,12 +85,22 @@ import {
   glossaryCommandIds,
   registerGlossaryCommands
 } from "./glossaryCommands";
+import type { GlossaryOccurrenceRange } from "./glossaryOccurrenceNavigation";
 import {
-  planGlossaryOccurrenceNavigation,
-  type GlossaryOccurrenceCursor,
+  inactiveGlossaryOccurrenceTrackingState,
+  navigateGlossaryOccurrenceTracking,
+  resolveGlossaryOccurrenceTrackingSession,
+  startGlossaryOccurrenceTracking,
   type GlossaryOccurrenceDirection,
-  type GlossaryOccurrenceRange
-} from "./glossaryOccurrenceNavigation";
+  type GlossaryOccurrenceTrackingState,
+  type ResolveGlossaryOccurrenceTrackingSessionContext,
+  type ResolveGlossaryOccurrenceTrackingSessionResult
+} from "./glossaryOccurrenceTracking";
+import {
+  createGlossaryOccurrencesCommandTitles,
+  glossaryOccurrencesCommandIds,
+  registerGlossaryOccurrencesCommands
+} from "./glossaryOccurrencesCommands";
 import {
   activeCurrentEditor,
   activeOpenDocument,
@@ -190,6 +201,12 @@ export function App(): JSX.Element {
   const [glossaryRefreshToken, setGlossaryRefreshToken] = useState(0);
   const [pendingMarkdownSelection, setPendingMarkdownSelection] =
     useState<GlossaryOccurrenceRange | null>(null);
+  const [
+    glossaryOccurrenceTrackingState,
+    setGlossaryOccurrenceTrackingState
+  ] = useState<GlossaryOccurrenceTrackingState>(
+    inactiveGlossaryOccurrenceTrackingState
+  );
   const editorNavigationRef = useRef<EditorNavigation<CurrentEditor> | null>(
     null
   );
@@ -197,15 +214,21 @@ export function App(): JSX.Element {
     new ProjectActivationLifetime()
   );
   const lastActiveMarkdownEditorIdRef = useRef<EditorId | null>(null);
-  const glossaryOccurrenceCursorRef = useRef<GlossaryOccurrenceCursor | null>(
-    null
-  );
   const navigateGlossaryOccurrenceRef = useRef<
     (
       entryId: GlossaryEntryId,
       direction: GlossaryOccurrenceDirection
     ) => Promise<boolean>
   >(() => Promise.resolve(false));
+  const navigateGlossaryOccurrenceTrackingSessionRef = useRef<
+    (direction: GlossaryOccurrenceDirection) => Promise<boolean>
+  >(() => Promise.resolve(false));
+  const openTrackedGlossaryEntryRef = useRef<() => Promise<boolean>>(() =>
+    Promise.resolve(false)
+  );
+  const closeGlossaryOccurrenceTrackingRef = useRef<() => boolean>(
+    () => false
+  );
   const mainAreaRef = useRef<HTMLElement | null>(null);
   const editorAreaBodyRef = useRef<HTMLElement | null>(null);
   const sidebarWidthAtDragStartRef = useRef(layout.sidebar.width);
@@ -433,6 +456,19 @@ export function App(): JSX.Element {
           navigateGlossaryOccurrenceRef.current(entryId, "next")
       },
       createGlossaryCommandTitles(translate)
+    );
+    registerGlossaryOccurrencesCommands(
+      registry,
+      {
+        navigateToPreviousOccurrence: () =>
+          navigateGlossaryOccurrenceTrackingSessionRef.current("previous"),
+        navigateToNextOccurrence: () =>
+          navigateGlossaryOccurrenceTrackingSessionRef.current("next"),
+        openTrackedGlossaryEntry: () => openTrackedGlossaryEntryRef.current(),
+        closeGlossaryOccurrenceTracking: () =>
+          closeGlossaryOccurrenceTrackingRef.current()
+      },
+      createGlossaryOccurrencesCommandTitles(translate)
     );
 
     return registry;
@@ -960,6 +996,11 @@ export function App(): JSX.Element {
         closeOpenEditor(state, documentIdToDelete)
       );
       setGlossaryRefreshToken((token) => token + 1);
+      setGlossaryOccurrenceTrackingState((state) =>
+        state.kind === "active" && state.entryId === entryIdToDelete
+          ? inactiveGlossaryOccurrenceTrackingState
+          : state
+      );
     } catch (error) {
       if (
         !projectActivationLifetimeRef.current.isProjectActivationCurrent(
@@ -976,6 +1017,20 @@ export function App(): JSX.Element {
     }
   }
 
+  function openUtilityWindowOnOccurrencesTab(): void {
+    setLayout((current) => ({
+      ...current,
+      utilityWindow: {
+        ...resolveUtilityWindowOpenState(
+          current.utilityWindow,
+          true,
+          editorAreaBodyRef.current?.clientHeight
+        ),
+        activeTab: "occurrences"
+      }
+    }));
+  }
+
   async function navigateGlossaryOccurrence(
     entryId: GlossaryEntryId,
     direction: GlossaryOccurrenceDirection
@@ -987,6 +1042,7 @@ export function App(): JSX.Element {
       return false;
     }
 
+    const entry = activeDocument.editor.draft.entry;
     const targetEditorId = lastActiveMarkdownEditorIdRef.current;
     const targetOpenDocument = targetEditorId
       ? findOpenDocument(openDocumentsState, targetEditorId)
@@ -999,11 +1055,12 @@ export function App(): JSX.Element {
           }
         : null;
 
-    const outcome = planGlossaryOccurrenceNavigation({
-      entry: activeDocument.editor.draft.entry,
+    const outcome = startGlossaryOccurrenceTracking({
+      currentSession: glossaryOccurrenceTrackingState,
+      entry,
+      entryLabel: canonicalGlossarySurface(entry),
       targetDocument,
-      direction,
-      currentCursor: glossaryOccurrenceCursorRef.current
+      direction
     });
 
     switch (outcome.kind) {
@@ -1013,9 +1070,9 @@ export function App(): JSX.Element {
       case "noOccurrences":
         setStatus({ key: "status.glossaryOccurrenceNotFound" });
         return false;
-      case "navigated": {
+      case "tracking": {
         const didOpen = await editorNavigation.openEditor(
-          outcome.cursor.documentEditorId,
+          outcome.session.targetMarkdownEditorId,
           { history: "skip" }
         );
 
@@ -1024,14 +1081,138 @@ export function App(): JSX.Element {
           return false;
         }
 
-        glossaryOccurrenceCursorRef.current = outcome.cursor;
+        setGlossaryOccurrenceTrackingState(outcome.session);
         setPendingMarkdownSelection(outcome.range);
+        openUtilityWindowOnOccurrencesTab();
         return true;
       }
     }
   }
 
   navigateGlossaryOccurrenceRef.current = navigateGlossaryOccurrence;
+
+  function resolveGlossaryOccurrenceTrackingSessionContext(): ResolveGlossaryOccurrenceTrackingSessionContext {
+    return {
+      openDocumentsState,
+      getGlossaryEntryById: window.pergamum.glossary.getById
+    };
+  }
+
+  function applyGlossaryOccurrenceTrackingResolutionFailure(
+    kind: Exclude<ResolveGlossaryOccurrenceTrackingSessionResult["kind"], "resolved">
+  ): void {
+    if (kind === "inactive") {
+      return;
+    }
+
+    setGlossaryOccurrenceTrackingState(inactiveGlossaryOccurrenceTrackingState);
+    setStatus({
+      key:
+        kind === "entryMissing"
+          ? "status.glossaryOccurrenceEntryNotFound"
+          : "status.glossaryOccurrenceNoActiveDocument"
+    });
+  }
+
+  async function navigateGlossaryOccurrenceTrackingSession(
+    direction: GlossaryOccurrenceDirection
+  ): Promise<boolean> {
+    const resolved = await resolveGlossaryOccurrenceTrackingSession(
+      glossaryOccurrenceTrackingState,
+      resolveGlossaryOccurrenceTrackingSessionContext()
+    );
+
+    if (resolved.kind !== "resolved") {
+      applyGlossaryOccurrenceTrackingResolutionFailure(resolved.kind);
+      return false;
+    }
+
+    const outcome = navigateGlossaryOccurrenceTracking({
+      session: resolved.session,
+      content: resolved.targetContent,
+      direction
+    });
+
+    if (outcome.kind === "noOccurrences") {
+      setGlossaryOccurrenceTrackingState(
+        inactiveGlossaryOccurrenceTrackingState
+      );
+      setStatus({ key: "status.glossaryOccurrenceNotFound" });
+      return false;
+    }
+
+    const didOpen = await editorNavigation.openEditor(
+      outcome.session.targetMarkdownEditorId,
+      { history: "skip" }
+    );
+
+    if (!didOpen) {
+      setGlossaryOccurrenceTrackingState(
+        inactiveGlossaryOccurrenceTrackingState
+      );
+      setStatus({ key: "status.glossaryOccurrenceNoActiveDocument" });
+      return false;
+    }
+
+    setGlossaryOccurrenceTrackingState(outcome.session);
+    setPendingMarkdownSelection(outcome.range);
+    return true;
+  }
+
+  navigateGlossaryOccurrenceTrackingSessionRef.current =
+    navigateGlossaryOccurrenceTrackingSession;
+
+  async function openTrackedGlossaryEntry(): Promise<boolean> {
+    const resolved = await resolveGlossaryOccurrenceTrackingSession(
+      glossaryOccurrenceTrackingState,
+      resolveGlossaryOccurrenceTrackingSessionContext()
+    );
+
+    if (resolved.kind !== "resolved") {
+      applyGlossaryOccurrenceTrackingResolutionFailure(resolved.kind);
+      return false;
+    }
+
+    const entryId = resolved.session.entryId;
+
+    try {
+      const didOpen = await commandRegistry.execute(
+        glossaryCommandIds.openEntry,
+        entryId
+      );
+
+      if (!didOpen) {
+        setGlossaryOccurrenceTrackingState(
+          inactiveGlossaryOccurrenceTrackingState
+        );
+        setStatus({ key: "status.glossaryOccurrenceEntryNotFound" });
+      }
+
+      return didOpen;
+    } catch (error) {
+      setGlossaryOccurrenceTrackingState(
+        inactiveGlossaryOccurrenceTrackingState
+      );
+      setStatus({
+        key: "status.commandFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+      return false;
+    }
+  }
+
+  openTrackedGlossaryEntryRef.current = openTrackedGlossaryEntry;
+
+  function closeGlossaryOccurrenceTracking(): boolean {
+    if (glossaryOccurrenceTrackingState.kind !== "active") {
+      return false;
+    }
+
+    setGlossaryOccurrenceTrackingState(inactiveGlossaryOccurrenceTrackingState);
+    return true;
+  }
+
+  closeGlossaryOccurrenceTrackingRef.current = closeGlossaryOccurrenceTracking;
 
   async function saveFile(): Promise<void> {
     if (activeDocument.editor.kind === "glossaryEntry") {
@@ -1116,9 +1297,9 @@ export function App(): JSX.Element {
     };
 
     editorNavigation.reset();
-    glossaryOccurrenceCursorRef.current = null;
     lastActiveMarkdownEditorIdRef.current = null;
     setPendingMarkdownSelection(null);
+    setGlossaryOccurrenceTrackingState(inactiveGlossaryOccurrenceTrackingState);
     setOpenDocumentsState((state) =>
       resetOpenDocumentsForProjectContextSwitch(state)
     );
@@ -1502,7 +1683,32 @@ export function App(): JSX.Element {
                         onClose={() =>
                           executeUiCommand(utilityWindowCommandIds.close)
                         }
-                      />
+                      >
+                        <GlossaryOccurrencesPanel
+                          session={glossaryOccurrenceTrackingState}
+                          translate={translate}
+                          onNavigatePrevious={() =>
+                            executeUiCommand(
+                              glossaryOccurrencesCommandIds.previous
+                            )
+                          }
+                          onNavigateNext={() =>
+                            executeUiCommand(
+                              glossaryOccurrencesCommandIds.next
+                            )
+                          }
+                          onOpenEntry={() =>
+                            executeUiCommand(
+                              glossaryOccurrencesCommandIds.openEntry
+                            )
+                          }
+                          onCloseTracking={() =>
+                            executeUiCommand(
+                              glossaryOccurrencesCommandIds.closeTracking
+                            )
+                          }
+                        />
+                      </UtilityWindow>
                     </>
                   ) : null}
                 </section>

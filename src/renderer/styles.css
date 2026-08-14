@@ -650,6 +650,46 @@ button:active {
   font-size: 13px;
 }
 
+.glossaryOccurrencesPanel {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.glossaryOccurrencesPanelHeader {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: 12px;
+}
+
+.glossaryOccurrencesPanelTitle {
+  margin: 0;
+  min-width: 0;
+  overflow: hidden;
+  color: #17212b;
+  font-size: 14px;
+  font-weight: 700;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.glossaryOccurrencesPanelPosition {
+  flex: 0 0 auto;
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.glossaryOccurrencesPanelActions {
+  display: flex;
+  gap: 8px;
+}
+
+.glossaryOccurrencesPanelActions button {
+  flex: 0 0 auto;
+}
+
 .workbenchSidebar {
   display: flex;
   min-width: 0;
