@@ -118,14 +118,21 @@ import {
 import { RecentProjectsPanel } from "./RecentProjectsPanel";
 import { resolveCurrentEditor } from "./resolveCurrentEditor";
 import { SettingsPanel } from "./SettingsPanel";
-import { defaultSidebarMode } from "./sidebarMode";
+import { defaultSidebarMode, type SidebarMode } from "./sidebarMode";
 import { useApplicationSettings } from "./useApplicationSettings";
+import { useHorizontalDrag } from "./useHorizontalDrag";
 import { WelcomeScreen } from "./WelcomeScreen";
+import {
+  clampSidebarWidth,
+  createInitialWorkbenchLayoutState,
+  resolveActiveActivityMode,
+  resolveSidebarToggle,
+  type WorkbenchLayoutState
+} from "./workbenchLayout";
 import {
   createWorkspaceCommandTitles,
   registerWorkspaceCommands,
-  workspaceCommandIds,
-  workspaceFocusCommandIdForMode
+  workspaceCommandIds
 } from "./workspaceCommands";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 
@@ -165,6 +172,9 @@ export function App(): JSX.Element {
   const [openDocumentsState, setOpenDocumentsState] =
     useState<OpenDocumentsState>(createInitialOpenDocumentsState);
   const [sidebarMode, setSidebarMode] = useState(defaultSidebarMode);
+  const [layout, setLayout] = useState<WorkbenchLayoutState>(
+    createInitialWorkbenchLayoutState
+  );
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [status, setStatus] = useState<StatusMessage>({ key: "app.ready" });
@@ -187,6 +197,25 @@ export function App(): JSX.Element {
       direction: GlossaryOccurrenceDirection
     ) => Promise<boolean>
   >(() => Promise.resolve(false));
+  const mainAreaRef = useRef<HTMLElement | null>(null);
+  const sidebarWidthAtDragStartRef = useRef(layout.sidebar.width);
+  const sidebarResizeDrag = useHorizontalDrag({
+    onDragStart: () => {
+      sidebarWidthAtDragStartRef.current = layout.sidebar.width;
+    },
+    onDragMove: (deltaX) => {
+      const nextWidth = clampSidebarWidth(
+        sidebarWidthAtDragStartRef.current + deltaX,
+        mainAreaRef.current?.clientWidth
+      );
+
+      setLayout((current) =>
+        current.sidebar.width === nextWidth
+          ? current
+          : { ...current, sidebar: { ...current.sidebar, width: nextWidth } }
+      );
+    }
+  });
   const {
     settings,
     displayLanguage,
@@ -205,6 +234,26 @@ export function App(): JSX.Element {
       lastActiveMarkdownEditorIdRef.current = activeDocument.id;
     }
   }, [currentEditor, activeDocument.id]);
+  useEffect(() => {
+    function handleWindowResize(): void {
+      const containerWidth = mainAreaRef.current?.clientWidth;
+
+      if (containerWidth === undefined) {
+        return;
+      }
+
+      setLayout((current) => {
+        const nextWidth = clampSidebarWidth(current.sidebar.width, containerWidth);
+
+        return nextWidth === current.sidebar.width
+          ? current
+          : { ...current, sidebar: { ...current.sidebar, width: nextWidth } };
+      });
+    }
+
+    window.addEventListener("resize", handleWindowResize);
+    return () => window.removeEventListener("resize", handleWindowResize);
+  }, []);
   const activeProjectContext = useMemo(
     () => projectContextForProject(project),
     [project]
@@ -307,6 +356,11 @@ export function App(): JSX.Element {
   }, [activeProjectContext, translate]);
   const shouldShowWelcome =
     project === null && isOnlyInitialUntitledDocument(openDocumentsState);
+  const activeActivityMode = resolveActiveActivityMode(
+    sidebarMode,
+    layout.sidebar.collapsed,
+    project !== null
+  );
   const tabs = useMemo(
     () => documentTabs(openDocumentsState),
     [openDocumentsState]
@@ -544,6 +598,42 @@ export function App(): JSX.Element {
 
   function activateDocument(documentId: EditorId): void {
     openEditorFromUi(documentId);
+  }
+
+  function handleActivityBarModeClick(mode: SidebarMode): void {
+    const toggled = resolveSidebarToggle(
+      sidebarMode,
+      mode,
+      layout.sidebar.collapsed
+    );
+
+    setSidebarMode(toggled.mode);
+    setLayout((current) => {
+      if (toggled.collapsed) {
+        return current.sidebar.collapsed
+          ? current
+          : { ...current, sidebar: { ...current.sidebar, collapsed: true } };
+      }
+
+      return {
+        ...current,
+        sidebar: {
+          collapsed: false,
+          width: clampSidebarWidth(
+            current.sidebar.width,
+            mainAreaRef.current?.clientWidth
+          )
+        }
+      };
+    });
+  }
+
+  function handleChangeMarkdownEditorPreviewRatio(ratio: number): void {
+    setLayout((current) =>
+      current.markdownEditorPreview.ratio === ratio
+        ? current
+        : { ...current, markdownEditorPreview: { ratio } }
+    );
   }
 
   async function resolveEditor(
@@ -1145,12 +1235,10 @@ export function App(): JSX.Element {
 
       <section className="appBody">
         <ActivityBar
-          activeMode={sidebarMode}
+          activeMode={activeActivityMode}
           isProjectSettingsOpen={isSettingsOpen}
           translate={translate}
-          onSelectMode={(mode) =>
-            executeUiCommand(workspaceFocusCommandIdForMode(mode))
-          }
+          onSelectMode={handleActivityBarModeClick}
           onToggleProjectSettings={() =>
             executeUiCommand(workspaceCommandIds.toggleSettings)
           }
@@ -1191,26 +1279,45 @@ export function App(): JSX.Element {
               }}
             />
           ) : (
-            <section className="mainArea">
-              <WorkspaceSidebar
-                mode={sidebarMode}
-                project={project}
-                highlightedProjectDocumentRelativePath={
-                  currentEditorProjectRelativePath(currentEditor)
-                }
-                highlightedGlossaryEntryId={
-                  currentEditorGlossaryEntryId(currentEditor)
-                }
-                glossaryRefreshToken={glossaryRefreshToken}
-                translate={translate}
-                onActivateProjectDocument={(relativePath) => {
-                  void activateProjectDocument(relativePath);
-                }}
-                onActivateGlossaryEntry={(entryId) => {
-                  executeUiCommand(glossaryCommandIds.openEntry, entryId);
-                }}
-                onCreateGlossaryEntry={createGlossaryEntryFromSidebar}
-              />
+            <section className="mainArea" ref={mainAreaRef}>
+              {!layout.sidebar.collapsed ? (
+                <>
+                  <div
+                    className="workbenchSidebar"
+                    style={{ width: layout.sidebar.width }}
+                  >
+                    <WorkspaceSidebar
+                      mode={sidebarMode}
+                      project={project}
+                      highlightedProjectDocumentRelativePath={
+                        currentEditorProjectRelativePath(currentEditor)
+                      }
+                      highlightedGlossaryEntryId={
+                        currentEditorGlossaryEntryId(currentEditor)
+                      }
+                      glossaryRefreshToken={glossaryRefreshToken}
+                      translate={translate}
+                      onActivateProjectDocument={(relativePath) => {
+                        void activateProjectDocument(relativePath);
+                      }}
+                      onActivateGlossaryEntry={(entryId) => {
+                        executeUiCommand(glossaryCommandIds.openEntry, entryId);
+                      }}
+                      onCreateGlossaryEntry={createGlossaryEntryFromSidebar}
+                    />
+                  </div>
+                  <div
+                    className="workbenchSidebarResizeHandle"
+                    role="separator"
+                    aria-orientation="vertical"
+                    aria-label={translate("workbench.sidebarResizeHandle")}
+                    onPointerDown={sidebarResizeDrag.onPointerDown}
+                    onPointerMove={sidebarResizeDrag.onPointerMove}
+                    onPointerUp={sidebarResizeDrag.onPointerUp}
+                    onPointerCancel={sidebarResizeDrag.onPointerCancel}
+                  />
+                </>
+              ) : null}
 
               <section className="editorArea">
                 <DocumentTabBar
@@ -1225,6 +1332,10 @@ export function App(): JSX.Element {
                   projectRootPath={project?.rootPath ?? null}
                   glossaryRefreshToken={glossaryRefreshToken}
                   translate={translate}
+                  markdownEditorPreviewRatio={layout.markdownEditorPreview.ratio}
+                  onChangeMarkdownEditorPreviewRatio={
+                    handleChangeMarkdownEditorPreviewRatio
+                  }
                   onChangeMarkdownContent={setActiveDocumentContent}
                   onChangeGlossaryEntryKind={setActiveGlossaryEntryKind}
                   onChangeGlossaryEntryDescription={

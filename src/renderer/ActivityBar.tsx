@@ -6,7 +6,7 @@ import searchIcon from "../../assets/icons/activity-bar/search.svg?raw";
 import settingsIcon from "../../assets/icons/activity-bar/settings.svg?raw";
 
 interface ActivityBarProps {
-  activeMode: SidebarMode;
+  activeMode: SidebarMode | null;
   isProjectSettingsOpen: boolean;
   translate: Translate;
   onSelectMode: (mode: SidebarMode) => void;

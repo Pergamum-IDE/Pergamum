@@ -1,3 +1,4 @@
+import { useEffect, useRef, useState } from "react";
 import type {
   GlossaryEntryKind,
   GlossaryFormMatchBoundary,
@@ -16,12 +17,39 @@ import { GlossaryPreviewDecorator } from "./GlossaryPreviewDecorator";
 import { MarkdownEditor } from "./MarkdownEditor";
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
 import { useGlossaryEntriesForMatching } from "./useGlossaryEntriesForMatching";
+import { useHorizontalDrag } from "./useHorizontalDrag";
+import { clampMarkdownEditorPreviewRatio } from "./workbenchLayout";
+
+const NARROW_MARKDOWN_WORKSPACE_MEDIA_QUERY = "(max-width: 760px)";
+
+function useIsNarrowMarkdownWorkspace(): boolean {
+  const [isNarrow, setIsNarrow] = useState(
+    () => window.matchMedia(NARROW_MARKDOWN_WORKSPACE_MEDIA_QUERY).matches
+  );
+
+  useEffect(() => {
+    const mediaQueryList = window.matchMedia(
+      NARROW_MARKDOWN_WORKSPACE_MEDIA_QUERY
+    );
+
+    function handleChange(event: MediaQueryListEvent): void {
+      setIsNarrow(event.matches);
+    }
+
+    mediaQueryList.addEventListener("change", handleChange);
+    return () => mediaQueryList.removeEventListener("change", handleChange);
+  }, []);
+
+  return isNarrow;
+}
 
 interface EditorSurfaceProps {
   editor: CurrentEditor;
   projectRootPath: string | null;
   glossaryRefreshToken: number;
   translate: Translate;
+  markdownEditorPreviewRatio: number;
+  onChangeMarkdownEditorPreviewRatio: (ratio: number) => void;
   onChangeMarkdownContent: (content: string) => void;
   onChangeGlossaryEntryKind: (kind: GlossaryEntryKind) => void;
   onChangeGlossaryEntryDescription: (description: string) => void;
@@ -62,6 +90,8 @@ export function EditorSurface({
   projectRootPath,
   glossaryRefreshToken,
   translate,
+  markdownEditorPreviewRatio,
+  onChangeMarkdownEditorPreviewRatio,
   onChangeMarkdownContent,
   onChangeGlossaryEntryKind,
   onChangeGlossaryEntryDescription,
@@ -91,6 +121,8 @@ export function EditorSurface({
           onChangeMarkdownContent={onChangeMarkdownContent}
           pendingSelection={pendingMarkdownSelection}
           onPendingSelectionApplied={onPendingMarkdownSelectionApplied}
+          ratio={markdownEditorPreviewRatio}
+          onChangeRatio={onChangeMarkdownEditorPreviewRatio}
         />
       );
     case "glossaryEntry":
@@ -137,6 +169,8 @@ interface MarkdownEditorSurfaceProps {
   onChangeMarkdownContent: (content: string) => void;
   pendingSelection: GlossaryOccurrenceRange | null;
   onPendingSelectionApplied: () => void;
+  ratio: number;
+  onChangeRatio: (ratio: number) => void;
 }
 
 function MarkdownEditorSurface({
@@ -146,7 +180,9 @@ function MarkdownEditorSurface({
   translate,
   onChangeMarkdownContent,
   pendingSelection,
-  onPendingSelectionApplied
+  onPendingSelectionApplied,
+  ratio,
+  onChangeRatio
 }: MarkdownEditorSurfaceProps): JSX.Element {
   const content = currentDocumentContent(document);
   const previewHtml = markdownPreviewRenderer.render(content);
@@ -154,11 +190,63 @@ function MarkdownEditorSurface({
     projectRootPath,
     glossaryRefreshToken
   );
+  const isNarrow = useIsNarrowMarkdownWorkspace();
+  const workspaceRef = useRef<HTMLElement | null>(null);
+  const ratioAtDragStartRef = useRef(ratio);
+  const ratioDrag = useHorizontalDrag({
+    onDragStart: () => {
+      ratioAtDragStartRef.current = ratio;
+    },
+    onDragMove: (deltaX) => {
+      const containerWidth = workspaceRef.current?.clientWidth;
+
+      if (!containerWidth) {
+        return;
+      }
+
+      const nextRatio = clampMarkdownEditorPreviewRatio(
+        ratioAtDragStartRef.current + deltaX / containerWidth,
+        containerWidth
+      );
+
+      onChangeRatio(nextRatio);
+    }
+  });
+
+  useEffect(() => {
+    function handleWindowResize(): void {
+      const containerWidth = workspaceRef.current?.clientWidth;
+
+      if (!containerWidth) {
+        return;
+      }
+
+      const clampedRatio = clampMarkdownEditorPreviewRatio(
+        ratio,
+        containerWidth
+      );
+
+      if (clampedRatio !== ratio) {
+        onChangeRatio(clampedRatio);
+      }
+    }
+
+    window.addEventListener("resize", handleWindowResize);
+    return () => window.removeEventListener("resize", handleWindowResize);
+  }, [ratio, onChangeRatio]);
 
   return (
     <section
       className="workspace"
       aria-label={translate("workspace.markdownWorkspace")}
+      ref={workspaceRef}
+      style={
+        isNarrow
+          ? undefined
+          : {
+              gridTemplateColumns: `minmax(0, ${ratio}fr) 6px minmax(0, ${1 - ratio}fr)`
+            }
+      }
     >
       <section
         className="pane"
@@ -174,6 +262,19 @@ function MarkdownEditorSurface({
           onPendingSelectionApplied={onPendingSelectionApplied}
         />
       </section>
+
+      {!isNarrow ? (
+        <div
+          className="markdownWorkspaceResizeHandle"
+          role="separator"
+          aria-orientation="vertical"
+          aria-label={translate("workbench.markdownEditorPreviewResizeHandle")}
+          onPointerDown={ratioDrag.onPointerDown}
+          onPointerMove={ratioDrag.onPointerMove}
+          onPointerUp={ratioDrag.onPointerUp}
+          onPointerCancel={ratioDrag.onPointerCancel}
+        />
+      ) : null}
 
       <section
         className="pane"

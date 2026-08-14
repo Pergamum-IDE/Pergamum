@@ -138,6 +138,8 @@ export const jaTranslations = {
   "welcome.recentProjects": "最近のプロジェクト",
   "welcome.start": "開始",
   "welcome.title": "Pergamum",
+  "workbench.markdownEditorPreviewResizeHandle": "エディタとプレビューのサイズを変更",
+  "workbench.sidebarResizeHandle": "サイドバーのサイズを変更",
   "workspace.editor": "エディタ",
   "workspace.markdownEditor": "Markdownエディタ",
   "workspace.markdownPreview": "Markdownプレビュー",
