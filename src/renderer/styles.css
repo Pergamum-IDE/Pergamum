@@ -524,12 +524,35 @@ button:active {
   flex-direction: column;
 }
 
-.fileExplorer {
+.workbenchSidebar {
   display: flex;
-  width: 248px;
-  min-width: 200px;
+  min-width: 0;
   min-height: 0;
   flex: 0 0 auto;
+  overflow: hidden;
+}
+
+.workbenchSidebarResizeHandle {
+  width: 6px;
+  min-width: 6px;
+  flex: 0 0 auto;
+  border-left: 1px solid var(--workspace-sidebar-border);
+  background: transparent;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.workbenchSidebarResizeHandle:hover,
+.workbenchSidebarResizeHandle:active {
+  background: var(--workspace-sidebar-focus-ring);
+}
+
+.fileExplorer {
+  display: flex;
+  width: 100%;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
   flex-direction: column;
   border-right: 1px solid var(--workspace-sidebar-border);
   background: var(--workspace-sidebar-background);
@@ -537,10 +560,10 @@ button:active {
 
 .workspaceSidebarPanel {
   display: flex;
-  width: 248px;
-  min-width: 200px;
+  width: 100%;
+  min-width: 0;
   min-height: 0;
-  flex: 0 0 auto;
+  flex: 1;
   flex-direction: column;
   border-right: 1px solid var(--workspace-sidebar-border);
   background: var(--workspace-sidebar-background);
@@ -724,6 +747,19 @@ button:active {
 
 .pane + .pane {
   border-left: 1px solid #d3dae2;
+}
+
+.markdownWorkspaceResizeHandle {
+  min-width: 0;
+  min-height: 0;
+  background: #d3dae2;
+  cursor: col-resize;
+  touch-action: none;
+}
+
+.markdownWorkspaceResizeHandle:hover,
+.markdownWorkspaceResizeHandle:active {
+  background: #7aa7d9;
 }
 
 .paneHeader {
@@ -1216,10 +1252,17 @@ button:active {
     flex-direction: column;
   }
 
+  .workbenchSidebar {
+    width: auto !important;
+    max-height: 160px;
+  }
+
+  .workbenchSidebarResizeHandle {
+    display: none;
+  }
+
   .fileExplorer,
   .workspaceSidebarPanel {
-    width: auto;
-    max-height: 160px;
     border-right: 0;
     border-bottom: 1px solid var(--workspace-sidebar-border);
   }

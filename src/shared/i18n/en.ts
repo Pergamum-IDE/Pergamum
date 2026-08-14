@@ -140,6 +140,8 @@ export const enTranslations = {
   "welcome.recentProjects": "Recent Projects",
   "welcome.start": "Start",
   "welcome.title": "Pergamum",
+  "workbench.markdownEditorPreviewResizeHandle": "Resize editor and preview",
+  "workbench.sidebarResizeHandle": "Resize sidebar",
   "workspace.editor": "Editor",
   "workspace.markdownEditor": "Markdown editor",
   "workspace.markdownPreview": "Markdown preview",
