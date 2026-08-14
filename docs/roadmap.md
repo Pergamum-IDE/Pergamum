@@ -4,7 +4,7 @@
 
 この文書は、Pergamum の開発ロードマップを整理するための文書である。
 
-実装スコープの正本は GitHub Issue とする。  
+実装スコープの正本は GitHub Issue とする。
 この文書は、開発の方向性・優先順位・保留事項・今後の候補を見失わないための地図として扱う。
 
 ```text
@@ -21,7 +21,7 @@ roadmap.md:
   方向性・優先順位・保留事項の整理
 ```
 
-この文書に書かれている項目は、必ずしも実装を約束するものではない。  
+この文書に書かれている項目は、必ずしも実装を約束するものではない。
 実際に着手する前には、個別の GitHub Issue としてスコープ・非スコープ・受け入れ条件・テスト観点を定義する。
 
 ---
@@ -30,7 +30,7 @@ roadmap.md:
 
 Pergamum は、小説を書く人のための open-source IDE である。
 
-中心に置くものは、作者が書いた本文である。  
+中心に置くものは、作者が書いた本文である。
 Pergamum は本文を勝手に書き換えない。
 
 ```text
@@ -61,13 +61,34 @@ Linter / Suggestion:
 
 作者が明示的に選んだ場合だけ、補助機能として作用する。
 
+Pergamum の UI は、本文を書く場を守る。
+本文の文脈を隠しすぎない。
+本文そのものを覆いすぎない。
+
+```text
+本文を書く場:
+  Editor
+  Preview
+
+本文の周辺作業:
+  Navigator
+  Search
+  Occurrences
+  Diagnostics
+  Output
+  Debug Log
+  Utility Window / 支援ウィンドウ
+```
+
+探す・辿る・診断する・出力する・ログを確認する作業は、本文領域ではなく、周辺 UI に逃がす。
+
 ---
 
 ## 現在地
 
 現在は Phase 3 に入っている。
 
-Phase 2 では、Glossary と Markdown Preview の接続が成立した。  
+Phase 2 では、Glossary と Markdown Preview の接続が成立した。
 Preview 上の本文に Glossary match を装飾し、Hover Card で情報を表示できるようになった。
 
 Phase 3 では、その接続が「つながりすぎる」問題を制御する。
@@ -76,6 +97,32 @@ Phase 3 では、その接続が「つながりすぎる」問題を制御する
 Phase 3 の合言葉:
   つながりすぎないようにする
 ```
+
+Phase 3 前半では、Glossary surface matching の boundary resolver と、form ごとの matching boundary UI を整備した。
+
+Phase 3 後半では、本文を書く場と、周辺作業の場を分離していく。
+
+```text
+本文を書く場:
+  Editor / Preview
+
+本文の周辺作業:
+  Navigator
+  Utility Window / 支援ウィンドウ
+  Search
+  Occurrences
+  Diagnostics
+  Output
+  Debug Log
+```
+
+直近では Issue #81「Glossary occurrence navigation foundation」を完了した。
+Glossary Editor から、保存済み entry の surface が Markdown 文書内に出現する箇所へ移動できるようになった。
+
+ただし、Glossary Editor 上の `◀ / ▶` ボタンを押すと Markdown Editor tab へ移動するため、連続操作中に Glossary Editor 側のボタンが画面から消える。
+
+これは Foundation issue としては許容する。
+次の UX 改善候補として、支援ウィンドウに Occurrences tab を置く。
 
 ---
 
@@ -187,7 +234,7 @@ strict
 none
 ```
 
-開閉状態は保存しない。  
+開閉状態は保存しない。
 保存するのは Glossary form の boundary policy だけである。
 
 dogfood では以下を確認した。
@@ -207,9 +254,382 @@ canonical: メイド
   オーダーメイド の メイド も match
 ```
 
+### Glossary occurrence navigation foundation
+
+保存済み Glossary entry の surface が、直近の Markdown 文書内でどこに出現するかへ移動できるようにした。
+
+Glossary Editor header に以下のボタンを追加した。
+
+```text
+◀ 前の使用箇所
+▶ 次の使用箇所
+```
+
+追加 command ID:
+
+```text
+glossary.entry.previousOccurrence
+glossary.entry.nextOccurrence
+```
+
+Occurrence navigation は、Preview DOM や rendered HTML offset ではなく、raw Markdown text に対して行う。
+
+```text
+buildGlossarySurfaceIndex([entry])
+  ↓
+matchGlossarySurfacesInText(text, index)
+```
+
+例:
+
+```markdown
+**メイド**が控えている
+```
+
+この場合、選択されるのは `メイド` のみであり、Markdown 記法の `**` は含まれない。
+
+```markdown
+*オーダ*ーメイドの品
+```
+
+このような Markdown 記法をまたぐ表記結合はしない。
+Editor raw Markdown text を正とする。
+
+Occurrence navigation は保存済み snapshot を使う。
+未保存 draft の canonical surface / forms は使わない。
+
+Glossary Editor 表示中は対象 MarkdownEditor が unmount されているため、App 側で以下の経路を取る。
+
+```text
+Glossary Editor button
+  ↓
+Command Registry
+  ↓
+App.tsx occurrence navigation
+  ↓
+last active Markdown document を決定
+  ↓
+editorNavigation.openEditor(id, { history: "skip" })
+  ↓
+pendingMarkdownSelection を set
+  ↓
+MarkdownEditor mount/effect で selection 適用
+```
+
+Navigation History には積まない。
+
+Project switch 時には、occurrence navigation に関する一時状態を掃除する。
+
+```text
+glossaryOccurrenceCursor
+lastActiveMarkdownEditorId
+pendingMarkdownSelection
+```
+
+dogfood では以下を確認した。
+
+```text
+**メイド**:
+  メイドだけ選択される
+  ** は含まれない
+
+複数メイド:
+  ◀ / ▶ で前後移動できる
+  wrap-around する
+
+オーダーメイド:
+  default auto boundary で メイド は拾われない
+
+未保存 draft:
+  保存済み surface で移動する
+
+Navigator search:
+  0件に絞っても occurrence navigation / Preview decoration に影響しない
+```
+
+ただし、Glossary Editor 上の `◀ / ▶` を押すと Markdown Editor tab へ移動するため、連続操作中に Glossary Editor 側のボタンが画面から消える。
+
+これは Foundation issue としては許容する。
+次の UX 改善候補として、支援ウィンドウに Occurrences tab を置く。
+
 ---
 
 ## 近いうちにやること
+
+### Workbench resizable panes and sidebar collapse foundation
+
+Workbench の主要ペインを、初期段階で明示的に制御できるようにする。
+
+現状、左 Navigator / Editor / Preview の幅は固定に近い。
+dogfood を進めると、Glossary や Preview の表示幅を作業内容に応じて変えたくなる。
+
+候補 Issue:
+
+```text
+Workbench resizable panes and sidebar collapse foundation
+```
+
+目的:
+
+```text
+左 Navigator 幅を drag で変更可能にする
+Editor / Preview split を drag で変更可能にする
+左 Activity Bar の active icon 再クリックで Navigator を collapse / restore できるようにする
+Activity Bar 自体は常に表示する
+```
+
+通常:
+
+```text
+[Activity Bar] [Navigator] [Editor] [Preview]
+```
+
+Navigator collapse 時:
+
+```text
+[Activity Bar] [Editor] [Preview]
+```
+
+初期状態案:
+
+```ts
+interface WorkbenchLayoutState {
+  sidebar: {
+    collapsed: boolean;
+    width: number;
+  };
+  editorPreview: {
+    ratio: number;
+  };
+}
+```
+
+初期値候補:
+
+```text
+sidebar.width:
+  260px 前後
+
+editorPreview.ratio:
+  0.5
+
+sidebar.collapsed:
+  false
+```
+
+制約候補:
+
+```text
+sidebar min:
+  180px
+
+sidebar max:
+  420px
+
+editor min:
+  320px
+
+preview min:
+  280px
+```
+
+状態はアプリケーションインスタンス中だけ保持する。
+初期実装では settings / project config / DB / session restore には保存しない。
+
+実装時の注意:
+
+```text
+PointerEvent ベースで drag する
+pointer capture を使う
+min / max clamp する
+window resize 時に clamp する
+drag 中の text selection を抑制する
+```
+
+非スコープ候補:
+
+```text
+下ペイン
+支援ウィンドウ
+layout 永続化
+keyboard shortcut
+command palette
+terminal
+per-project layout
+split editor 増殖
+```
+
+---
+
+### Utility Window shell foundation
+
+本文領域の下に、補助作業を受け止めるアプリ内ペインを追加する。
+
+Internal name:
+
+```text
+Utility Window
+```
+
+Japanese UI:
+
+```text
+支援ウィンドウ
+```
+
+English UI:
+
+```text
+Utility Window
+```
+
+「補助ウィンドウ」ではなく「支援ウィンドウ」とする。
+本文を書くのは作者であり、Pergamum は勝手に本文を書き換えない。
+しかし、探す・辿る・診断する・出力する作業は支援する。
+
+候補 Issue:
+
+```text
+Utility Window shell foundation
+```
+
+役割:
+
+```text
+上:
+  本文を書く / 読む / Preview する
+
+左:
+  Project / Glossary / Search などの Navigator
+
+下:
+  一時的な操作・探索・結果表示
+```
+
+初期スコープ候補:
+
+```text
+Workspace 下部に支援ウィンドウ領域を追加する
+open / close できる
+active tab を持てる
+初期タブは空 shell または Occurrences のみ
+height は固定、または最小限の可変
+状態はアプリケーションインスタンス中のみ保持する
+```
+
+初期実装では以下に保存しない。
+
+```text
+settings
+project config
+DB
+session restore
+```
+
+将来タブ候補:
+
+```text
+使用箇所 / Occurrences
+コマンド / Command
+検索 / Search
+診断 / Diagnostics
+出力 / Output
+ターミナル / Terminal
+デバッグログ / Debug Log
+```
+
+推奨実装順:
+
+```text
+1. Utility Window shell foundation
+2. Occurrences tab
+3. Command tab
+4. Diagnostics / Output
+5. Debug Log tab
+6. Terminal
+```
+
+非スコープ候補:
+
+```text
+Terminal
+Git
+Command Palette 本実装
+Diagnostics 本実装
+Output 本実装
+Debug logging
+layout 永続化
+```
+
+---
+
+### Glossary occurrences Utility Window tab foundation
+
+Issue #81 で Glossary occurrence navigation の技術経路は通った。
+しかし、Glossary Editor 上の `◀ / ▶` を押すと Markdown Editor tab へ移動するため、連続操作中にボタンが画面から消える。
+
+これを改善するため、支援ウィンドウに `使用箇所 / Occurrences` tab を置く。
+
+候補 Issue:
+
+```text
+Glossary occurrences Utility Window tab foundation
+```
+
+UI 案:
+
+```text
+語彙: メイド    1 / 3    ◀  ▶    [語彙を開く] [閉じる]
+```
+
+英語:
+
+```text
+Entry: メイド    1 / 3    ◀  ▶    [Open entry] [Close]
+```
+
+目的:
+
+```text
+Markdown Editor へ移動した後も、現在の Glossary occurrence navigation を継続できる UI を提供する
+```
+
+初期スコープ候補:
+
+```text
+occurrence navigation target entry を保持する
+current index / total count を表示する
+◀ / ▶ を支援ウィンドウから呼べる
+Markdown Editor 上で連続移動できる
+[語彙を開く] で Glossary Editor へ戻れる
+[閉じる] で tracking を終了できる
+```
+
+注意:
+
+```text
+#81 の index-based cursor tracking は、文書編集後に直感とズレる可能性がある。
+初期では許容する。
+```
+
+将来検討:
+
+```text
+content hash
+range anchoring
+cursor-position-aware navigation
+```
+
+非スコープ候補:
+
+```text
+range anchoring 本実装
+文書編集に追随する occurrence 再計算
+複数 entry の同時 tracking
+Project 全体検索
+```
+
+---
 
 ### renderer `.test.tsx` を Vitest 実行対象に含める
 
@@ -234,9 +654,9 @@ Include renderer .test.tsx files in Vitest config
 非スコープ候補:
 
 ```text
-UIテスト基盤の全面刷新
+UI テスト基盤の全面刷新
 testing-library 導入
-E2Eテスト導入
+E2E テスト導入
 ```
 
 ---
@@ -245,7 +665,7 @@ E2Eテスト導入
 
 Glossary entry を UI から削除できるようにする。
 
-現在は dogfood を進めるほど試験用エントリが増える。  
+現在は dogfood を進めるほど試験用エントリが増える。
 削除できない Glossary は運用上の摩擦になる。
 
 候補 Issue:
@@ -286,7 +706,7 @@ Trash / recycle bin
 
 Glossary Sidebar 上で検索・絞り込みできるようにする。
 
-Glossary は人物・地名・組織・アイテム・概念などですぐ増える。  
+Glossary は人物・地名・組織・アイテム・概念などですぐ増える。
 数十件を超えた時点で検索が必要になる。
 
 候補 Issue:
@@ -377,7 +797,7 @@ import / export
 トータルエクリプス
 ```
 
-重要なのは、自動で match させないこと。  
+重要なのは、自動で match させないこと。
 自動で alias を追加しないこと。
 
 ```text
@@ -412,7 +832,7 @@ Linter / Suggestion として出すか
 
 日本語表記揺れを検出する Linter の基礎を作る。
 
-ただし、日本語表記揺れは危険が多い。  
+ただし、日本語表記揺れは危険が多い。
 文脈なしに「誤り」と断定できないものが多い。
 
 分類が必要。
@@ -493,6 +913,168 @@ Hover Card / Balloon 用語整理
 
 ---
 
+### Debug mode JSONL logging foundation
+
+Debug mode のログ基盤を作る。
+
+候補 Issue:
+
+```text
+Debug mode JSONL logging foundation
+```
+
+基本方針:
+
+```text
+--debug 起動オプションを追加する
+--debug が指定された場合、現在のアプリケーションインスタンスについてデバッグログをファイルに出力し続ける
+ログ形式は JSONL とする
+```
+
+Debug Log tab は、ファイルログ出力そのものではなく、直近の warning / error を表示する viewer として扱う。
+そのため、ログ基盤と Debug Log tab は別 Issue に分ける。
+
+JSONL を採用する理由:
+
+```text
+1行1イベント
+人間も読める
+grep / jq / parser にかけやすい
+AI に読ませやすい
+将来の Debug Log viewer や issue report export に流用しやすい
+```
+
+ファイル名候補:
+
+```text
+debug-{sessionUuidV7}--{yyyy-mm-dd}--{hh}-{MM}.jsonl
+```
+
+例:
+
+```text
+debug-018f4b8c-7a2b-7c3d-8e4f-100000000001--2026-08-14--15-32.jsonl
+```
+
+ローテーション方針:
+
+```text
+最大行数でローテーションする
+現在のログファイルが最大行数に達したら、その時点のローカル日付・時刻を使って新しい JSONL ファイルを開く
+同じ分に複数回ローテーションしてファイル名が衝突する場合だけ suffix を付ける
+```
+
+イベント形式候補:
+
+```ts
+interface DebugLogEvent {
+  timestamp: string;
+  level: "debug" | "info" | "warn" | "error";
+  source: string;
+  message: string;
+  sessionId: string;
+  details?: Record<string, unknown>;
+}
+```
+
+重要な制限:
+
+```text
+Debug log must not write manuscript body text by default.
+```
+
+OK:
+
+```text
+timestamp
+level
+source
+message
+sessionId
+editorId
+entryId
+relativePath
+document length
+occurrence count
+range start/end
+error name/message
+```
+
+慎重:
+
+```text
+glossary surface text
+selected text
+description text
+```
+
+NG:
+
+```text
+document.content 全文
+段落全文
+manuscript body text
+glossary description 全文
+project config 内の secret-ish 情報
+```
+
+非スコープ候補:
+
+```text
+Utility Window Debug Log tab
+ログファイル viewer
+issue report export
+remote telemetry
+本文内容の収集
+```
+
+---
+
+### Utility Window debug log tab foundation
+
+Debug mode JSONL logging foundation の後に、支援ウィンドウ上で直近の warning / error を確認できる viewer を作る。
+
+候補 Issue:
+
+```text
+Utility Window debug log tab foundation
+```
+
+位置づけ:
+
+```text
+Debug Log tab:
+  直近の warn / error を見るための viewer
+
+JSONL file sink:
+  --debug 時に全 debug / info / warn / error を保存するログ基盤
+```
+
+Debug Log tab はログ保存そのものではない。
+ログ基盤の in-memory / event-bus sink を UI に表示するものとして扱う。
+
+初期スコープ候補:
+
+```text
+支援ウィンドウに Debug Log tab を追加する
+直近の warn / error を表示する
+timestamp / level / source / message を表示する
+詳細 details を必要に応じて展開できる
+```
+
+非スコープ候補:
+
+```text
+JSONL file sink 本体
+ログファイルの全文 viewer
+ログ検索
+ログエクスポート
+remote telemetry
+本文内容の表示
+```
+
+---
+
 ## dogfood を楽にするための候補
 
 ### Session restore foundation
@@ -561,7 +1143,38 @@ drag and drop
 
 ### Outline View
 
-アクティブな編集中mdファイルの階層構造にあわせて、アウトラインビューを表示する。
+アクティブな編集中 Markdown ファイルの階層構造にあわせて、アウトラインビューを表示する。
+
+候補 Issue:
+
+```text
+Outline view foundation
+```
+
+目的:
+
+```text
+Markdown heading をもとに現在の文書構造を表示する
+長い章や設定メモを移動しやすくする
+```
+
+検討事項:
+
+```text
+heading level の扱い
+現在位置の highlight
+クリック時の editor navigation
+Navigation history に積むか
+```
+
+非スコープ候補:
+
+```text
+複数ファイル横断 outline
+章構成管理
+heading の自動修正
+本文構造の自動生成
+```
 
 ---
 
@@ -604,26 +1217,98 @@ Mac 表示ラベルと Windows/Linux 表示ラベルを分ける
 
 ---
 
-### Command palette
+### Command tab / Command Launcher
 
-マウス操作に依存せず、キーボードショートカットのみで各種操作を可能にする Command palette を実装する。
+マウス操作に依存せず、キーボードから各種操作を呼び出せる UI は必要になる。
+
+ただし、VSCode 型の上中央 overlay Command Palette は、Pergamum では慎重に扱う。
+
+理由:
+
+```text
+本文の文脈を隠す
+視線を奪う
+プログラミング IDE 感が強すぎる
+IME や Hover Card と衝突しやすい
+```
+
+将来的な方針:
+
+```text
+Command Palette / Command Launcher は、本文中央に大きく overlay しない
+支援ウィンドウ内の transient command UI として検討する
+```
+
+候補:
+
+```text
+支援ウィンドウ > コマンド tab
+Command Lane inside Utility Window
+```
+
+候補 Issue:
+
+```text
+Command tab foundation
+```
+
+非スコープ候補:
+
+```text
+VSCode 型 overlay palette
+全 command の網羅
+キーバインド全面カスタマイズ
+plugin command registration
+```
 
 ---
 
 ### UI Polish
 
-UIを細部まで調整する。
+UI を細部まで調整する。
 
-- タブを閉じるボタン
-- Aboutダイアログ
-- 他dogfoodingで判明したもの
+候補:
+
+```text
+タブを閉じるボタン
+About ダイアログ
+empty state
+loading state
+error state
+status message の整理
+他 dogfooding で判明したもの
+```
 
 ---
 
 ### settings.json
 
-現在Pergamum内部でハードコードされている初期値や、エディタフォント名、サイズ、ビューワーフォント名等の設定UIとそれを保持する settings.json を用意する。
-settings.json はプロジェクト単位でプロジェクトフォルダに保存する。
+現在 Pergamum 内部でハードコードされている初期値や、エディタフォント名、サイズ、ビューワーフォント名等の設定 UI とそれを保持する settings.json を用意する。
+
+settings.json を app 単位にするか project 単位にするかは、設定項目ごとに慎重に判断する。
+
+検討事項:
+
+```text
+app settings:
+  theme
+  editor font
+  preview font
+  UI language
+  debug related preferences
+
+project settings:
+  project-specific output settings
+  project-specific glossary policy
+  project-specific manuscript conventions
+```
+
+注意:
+
+```text
+初期実装では、layout の一時状態を settings.json に保存しない
+Workbench layout の永続化は後回しにする
+```
 
 ---
 
@@ -631,14 +1316,14 @@ settings.json はプロジェクト単位でプロジェクトフォルダに保
 
 `pergamum.db` の内容から、人間が読める JSON snapshot を生成する。
 
-目的は、DBの中身を確認しやすくすること、Git差分で構造化データの変化を追いやすくすること、将来の復元機能の足場を作ることである。
+目的は、DB の中身を確認しやすくすること、Git 差分で構造化データの変化を追いやすくすること、将来の復元機能の足場を作ることである。
 
 ```text
 pergamum.db:
   構造化データの正本
 
 snapshot JSON:
-  DBから生成される派生データ
+  DB から生成される派生データ
   正本ではない
 ```
 
@@ -647,8 +1332,8 @@ snapshot JSON:
 ```text
 Main Process が生成する
 Renderer は DB / snapshot に直接触らない
-DB保存成功後に生成する
-snapshot生成失敗時に DB保存を巻き戻すかは慎重に判断する
+DB 保存成功後に生成する
+snapshot 生成失敗時に DB 保存を巻き戻すかは慎重に判断する
 ```
 
 非スコープ候補:
@@ -666,13 +1351,13 @@ schema migration の代替
 
 JSON snapshot から `pergamum.db` を復元する。
 
-復元は既存DBを置き換える危険な操作であるため、snapshot生成より後に扱う。
+復元は既存 DB を置き換える危険な操作であるため、snapshot 生成より後に扱う。
 
 初期方針:
 
 ```text
 snapshot を validate する
-一時DBに復元する
+一時 DB に復元する
 schema validation を通す
 成功後に既存 DB をバックアップして置換する
 失敗時に既存 DB を壊さない
@@ -706,7 +1391,7 @@ built-in themes:
 common tokens:
   app background
   app foreground
-  panel backgroundgit
+  panel background
   panel foreground
   border color
   muted foreground
@@ -778,6 +1463,10 @@ v0.9 は、Git 統合や Plugin API を含めない dogfood 可能な配布版�
 ### v0.9 に欲しいもの
 
 ```text
+Workbench resizable panes
+Sidebar collapse
+Utility Window shell
+Glossary occurrences tab
 Glossary entry deletion
 Glossary navigator search
 階層 File Explorer
@@ -796,6 +1485,7 @@ README / FAQ 整理
 
 ```text
 Git 統合
+Integrated Terminal
 Plugin API
 複雑な Linter
 高度な fuzzy matching
@@ -803,11 +1493,12 @@ Plugin API
 本文エクスポート
 共同編集
 クラウド同期
+layout 永続化
 ```
 
 ### DB 方針
 
-v0.9 までは DB schema 破壊を許容する。  
+v0.9 までは DB schema 破壊を許容する。
 既存の開発 DB は捨ててよい。
 
 ただし、v1.0 以降は migration が必要になる。
@@ -844,6 +1535,61 @@ FAQ / Help
 ```
 
 v1.0 では、ユーザーのデータを壊さないことを重視する。
+
+---
+
+## v1.x 以降の候補
+
+v1.x 以降では、v1.0 までに固めた本文正本・Glossary・Workbench・支援ウィンドウの上に、より大きな補助機能を載せる。
+
+候補:
+
+```text
+Git status / diff / commit UI
+Integrated Terminal optional / experimental
+Plugin API
+Trusted UI Extension
+高度な Linter
+Export / output の拡張
+縦書き出力
+EPUB / PDF / DOCX 出力
+```
+
+Terminal は Git 統合とセットで考える。
+
+```text
+Git UI:
+  よく使う操作を安全に提供する
+
+Terminal:
+  UI で覆いきれない操作の escape hatch
+```
+
+ただし、Terminal は実装コストが高いため後回しにする。
+
+理由:
+
+```text
+OS 依存
+shell 選択が必要
+PTY 制御が必要
+node-pty など native module が絡む可能性
+packaging / CI / security が重くなる
+```
+
+ロードマップ感:
+
+```text
+v0.9:
+  Terminal なし
+  Git なしでも dogfood 可能にする
+
+v1.0 前後:
+  Git status / diff / commit UI を検討
+
+v1.x:
+  Integrated Terminal optional / experimental
+```
 
 ---
 
@@ -907,7 +1653,7 @@ Renderer をどこまで触らせるか
 
 ```text
 Git は外部ツールで扱える
-小説IDEとしてのコアではない
+小説 IDE としてのコアではない
 初期実装に含めると複雑化する
 ```
 
@@ -918,6 +1664,37 @@ Git は外部ツールで扱える
 commit helper
 history viewer
 diff viewer
+```
+
+Terminal は Git 統合とセットで考える。
+
+Git UI は、よく使う操作を安全に提供する。
+Terminal は、UI で覆いきれない操作の escape hatch として扱う。
+
+ただし、Terminal は実装コストが高いため後回しにする。
+
+理由:
+
+```text
+OS 依存
+shell 選択が必要
+PTY 制御が必要
+node-pty など native module が絡む可能性
+packaging / CI / security が重くなる
+```
+
+ロードマップ感:
+
+```text
+v0.9:
+  Terminal なし
+  Git なしでも dogfood 可能にする
+
+v1.0 前後:
+  Git status / diff / commit UI を検討
+
+v1.x:
+  Integrated Terminal optional / experimental
 ```
 
 ---
@@ -951,7 +1728,7 @@ is_builtin
 
 ```text
 kind key をどう扱うか
-表示名変更と内部IDの関係
+表示名変更と内部 ID の関係
 既存 entry との互換性
 ```
 
@@ -994,9 +1771,43 @@ PDF / DOCX / EPUB
 
 ---
 
+## 直近の推奨 Issue 順
+
+現時点では、以下の順で進める。
+
+```text
+1. Workbench resizable panes and sidebar collapse foundation
+2. Utility Window shell foundation
+3. Glossary occurrences Utility Window tab foundation
+4. Debug mode JSONL logging foundation
+5. Utility Window debug log tab foundation
+6. Command tab foundation
+```
+
+理由:
+
+```text
+Workbench layout:
+  支援ウィンドウを入れる前に、上位レイアウトの責務境界を固める
+
+Utility Window shell:
+  本文周辺作業を逃がす場所を作る
+
+Occurrences tab:
+  #81 の UX 課題を自然に改善する
+
+Debug logging:
+  将来の dogfood / issue report / AI 解析に備える
+
+Command tab:
+  本文中央 overlay を避けた command launcher の置き場所を作る
+```
+
+---
+
 ## ロードマップ運用
 
-この文書は、完璧に保つ必要はない。  
+この文書は、完璧に保つ必要はない。
 大きな方針・近い候補・保留事項を忘れないために更新する。
 
 運用案:
@@ -1015,5 +1826,5 @@ Issue が完了した後:
   古い記述を消すか、保留・却下として残す
 ```
 
-この文書は、Pergamum の「開発の地図」であり、法律ではない。  
+この文書は、Pergamum の「開発の地図」であり、法律ではない。
 実装時の正本は GitHub Issue とする。
