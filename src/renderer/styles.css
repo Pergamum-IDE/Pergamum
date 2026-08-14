@@ -344,10 +344,40 @@ button:active {
   display: flex;
   min-height: 36px;
   min-width: 0;
-  overflow-x: auto;
+  align-items: stretch;
   border-bottom: 1px solid #d3dae2;
   background: #edf2f7;
+}
+
+.documentTabBarTabs {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  overflow-x: auto;
   padding: 0 8px;
+}
+
+.documentTabBarUtilityToggle {
+  height: auto;
+  flex: 0 0 auto;
+  border: 0;
+  border-left: 1px solid #d3dae2;
+  border-radius: 0;
+  background: transparent;
+  color: #52616f;
+  font-size: 12px;
+  font-weight: 600;
+  padding: 0 14px;
+}
+
+.documentTabBarUtilityToggle:hover {
+  background: #e2eaf2;
+}
+
+.documentTabBarUtilityToggle.isActive,
+.documentTabBarUtilityToggle.isActive:hover {
+  background: #ffffff;
+  color: #17212b;
 }
 
 .documentTab {
@@ -522,6 +552,102 @@ button:active {
   min-height: 0;
   flex: 1;
   flex-direction: column;
+}
+
+.editorAreaBody {
+  display: flex;
+  min-width: 0;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+}
+
+.utilityWindowResizeHandle {
+  height: 6px;
+  min-height: 6px;
+  flex: 0 0 auto;
+  border-top: 1px solid #d3dae2;
+  background: transparent;
+  cursor: row-resize;
+  touch-action: none;
+}
+
+.utilityWindowResizeHandle:hover,
+.utilityWindowResizeHandle:active {
+  background: #7aa7d9;
+}
+
+.utilityWindow {
+  display: flex;
+  min-width: 0;
+  flex: 0 0 auto;
+  flex-direction: column;
+  overflow: hidden;
+  border-top: 1px solid #d3dae2;
+  background: #ffffff;
+}
+
+.utilityWindowHeader {
+  display: flex;
+  min-height: 34px;
+  flex: 0 0 auto;
+  align-items: stretch;
+  border-bottom: 1px solid #e3e8ee;
+  background: #fbfcfd;
+}
+
+.utilityWindowTabBar {
+  display: flex;
+  min-width: 0;
+  flex: 1;
+  align-items: center;
+  gap: 4px;
+  padding: 0 12px;
+}
+
+.utilityWindowTab {
+  display: inline-flex;
+  align-items: center;
+  color: #6b7785;
+  font-size: 12px;
+  font-weight: 700;
+  text-transform: uppercase;
+}
+
+.utilityWindowTab.isActive {
+  color: #17212b;
+}
+
+.utilityWindowCloseButton {
+  width: 34px;
+  height: auto;
+  flex: 0 0 auto;
+  border: 0;
+  border-left: 1px solid #e3e8ee;
+  border-radius: 0;
+  background: transparent;
+  color: #52616f;
+  font-size: 15px;
+  line-height: 1;
+  padding: 0;
+}
+
+.utilityWindowCloseButton:hover {
+  background: #eef3f8;
+  color: #17212b;
+}
+
+.utilityWindowContent {
+  flex: 1;
+  min-height: 0;
+  overflow: auto;
+  padding: 16px;
+}
+
+.utilityWindowEmpty {
+  margin: 0;
+  color: #6b7785;
+  font-size: 13px;
 }
 
 .workbenchSidebar {

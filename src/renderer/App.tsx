@@ -54,6 +54,7 @@ import {
 } from "./currentEditor";
 import { DocumentTabBar } from "./DocumentTabBar";
 import { EditorSurface } from "./EditorSurface";
+import { UtilityWindow } from "./UtilityWindow";
 import {
   EditorNavigation,
   type EditorResolveResult,
@@ -121,12 +122,20 @@ import { SettingsPanel } from "./SettingsPanel";
 import { defaultSidebarMode, type SidebarMode } from "./sidebarMode";
 import { useApplicationSettings } from "./useApplicationSettings";
 import { useHorizontalDrag } from "./useHorizontalDrag";
+import { useVerticalDrag } from "./useVerticalDrag";
+import {
+  createUtilityWindowCommandTitles,
+  registerUtilityWindowCommands,
+  utilityWindowCommandIds
+} from "./utilityWindowCommands";
 import { WelcomeScreen } from "./WelcomeScreen";
 import {
   clampSidebarWidth,
+  clampUtilityWindowHeight,
   createInitialWorkbenchLayoutState,
   resolveActiveActivityMode,
   resolveSidebarToggle,
+  resolveUtilityWindowOpenState,
   type WorkbenchLayoutState
 } from "./workbenchLayout";
 import {
@@ -198,6 +207,7 @@ export function App(): JSX.Element {
     ) => Promise<boolean>
   >(() => Promise.resolve(false));
   const mainAreaRef = useRef<HTMLElement | null>(null);
+  const editorAreaBodyRef = useRef<HTMLElement | null>(null);
   const sidebarWidthAtDragStartRef = useRef(layout.sidebar.width);
   const sidebarResizeDrag = useHorizontalDrag({
     onDragStart: () => {
@@ -213,6 +223,27 @@ export function App(): JSX.Element {
         current.sidebar.width === nextWidth
           ? current
           : { ...current, sidebar: { ...current.sidebar, width: nextWidth } }
+      );
+    }
+  });
+  const utilityWindowHeightAtDragStartRef = useRef(layout.utilityWindow.height);
+  const utilityWindowResizeDrag = useVerticalDrag({
+    onDragStart: () => {
+      utilityWindowHeightAtDragStartRef.current = layout.utilityWindow.height;
+    },
+    onDragMove: (deltaY) => {
+      const nextHeight = clampUtilityWindowHeight(
+        utilityWindowHeightAtDragStartRef.current - deltaY,
+        editorAreaBodyRef.current?.clientHeight
+      );
+
+      setLayout((current) =>
+        current.utilityWindow.height === nextHeight
+          ? current
+          : {
+              ...current,
+              utilityWindow: { ...current.utilityWindow, height: nextHeight }
+            }
       );
     }
   });
@@ -236,18 +267,35 @@ export function App(): JSX.Element {
   }, [currentEditor, activeDocument.id]);
   useEffect(() => {
     function handleWindowResize(): void {
-      const containerWidth = mainAreaRef.current?.clientWidth;
-
-      if (containerWidth === undefined) {
-        return;
-      }
+      const sidebarContainerWidth = mainAreaRef.current?.clientWidth;
+      const utilityWindowContainerHeight =
+        editorAreaBodyRef.current?.clientHeight;
 
       setLayout((current) => {
-        const nextWidth = clampSidebarWidth(current.sidebar.width, containerWidth);
+        const nextWidth =
+          sidebarContainerWidth === undefined
+            ? current.sidebar.width
+            : clampSidebarWidth(current.sidebar.width, sidebarContainerWidth);
+        const nextHeight =
+          utilityWindowContainerHeight === undefined
+            ? current.utilityWindow.height
+            : clampUtilityWindowHeight(
+                current.utilityWindow.height,
+                utilityWindowContainerHeight
+              );
 
-        return nextWidth === current.sidebar.width
-          ? current
-          : { ...current, sidebar: { ...current.sidebar, width: nextWidth } };
+        if (
+          nextWidth === current.sidebar.width &&
+          nextHeight === current.utilityWindow.height
+        ) {
+          return current;
+        }
+
+        return {
+          ...current,
+          sidebar: { ...current.sidebar, width: nextWidth },
+          utilityWindow: { ...current.utilityWindow, height: nextHeight }
+        };
       });
     }
 
@@ -293,6 +341,41 @@ export function App(): JSX.Element {
         }
       },
       createWorkspaceCommandTitles(translate)
+    );
+    registerUtilityWindowCommands(
+      registry,
+      {
+        openUtilityWindow: () => {
+          setLayout((current) => ({
+            ...current,
+            utilityWindow: resolveUtilityWindowOpenState(
+              current.utilityWindow,
+              true,
+              editorAreaBodyRef.current?.clientHeight
+            )
+          }));
+        },
+        closeUtilityWindow: () => {
+          setLayout((current) => ({
+            ...current,
+            utilityWindow: resolveUtilityWindowOpenState(
+              current.utilityWindow,
+              false
+            )
+          }));
+        },
+        toggleUtilityWindow: () => {
+          setLayout((current) => ({
+            ...current,
+            utilityWindow: resolveUtilityWindowOpenState(
+              current.utilityWindow,
+              !current.utilityWindow.open,
+              editorAreaBodyRef.current?.clientHeight
+            )
+          }));
+        }
+      },
+      createUtilityWindowCommandTitles(translate)
     );
     registerGlossaryCommands(
       registry,
@@ -1325,69 +1408,104 @@ export function App(): JSX.Element {
                   activeDocumentId={openDocumentsState.activeDocumentId}
                   translate={translate}
                   onSelectDocument={activateDocument}
+                  isUtilityWindowOpen={layout.utilityWindow.open}
+                  onToggleUtilityWindow={() =>
+                    executeUiCommand(utilityWindowCommandIds.toggle)
+                  }
                 />
 
-                <EditorSurface
-                  editor={currentEditor}
-                  projectRootPath={project?.rootPath ?? null}
-                  glossaryRefreshToken={glossaryRefreshToken}
-                  translate={translate}
-                  markdownEditorPreviewRatio={layout.markdownEditorPreview.ratio}
-                  onChangeMarkdownEditorPreviewRatio={
-                    handleChangeMarkdownEditorPreviewRatio
-                  }
-                  onChangeMarkdownContent={setActiveDocumentContent}
-                  onChangeGlossaryEntryKind={setActiveGlossaryEntryKind}
-                  onChangeGlossaryEntryDescription={
-                    setActiveGlossaryEntryDescription
-                  }
-                  onChangeGlossaryEntryCanonicalSurface={
-                    setActiveGlossaryEntryCanonicalSurface
-                  }
-                  onChangeGlossaryEntryCanonicalMatchBoundaryStart={
-                    setActiveGlossaryEntryCanonicalMatchBoundaryStart
-                  }
-                  onChangeGlossaryEntryCanonicalMatchBoundaryEnd={
-                    setActiveGlossaryEntryCanonicalMatchBoundaryEnd
-                  }
-                  onAddGlossaryEntryForm={addActiveGlossaryEntryForm}
-                  onChangeGlossaryEntryFormSurface={
-                    setActiveGlossaryEntryFormSurface
-                  }
-                  onChangeGlossaryEntryFormWarningPolicy={
-                    setActiveGlossaryEntryFormWarningPolicy
-                  }
-                  onChangeGlossaryEntryFormMatchBoundaryStart={
-                    setActiveGlossaryEntryFormMatchBoundaryStart
-                  }
-                  onChangeGlossaryEntryFormMatchBoundaryEnd={
-                    setActiveGlossaryEntryFormMatchBoundaryEnd
-                  }
-                  onDeleteGlossaryEntryForm={deleteActiveGlossaryEntryForm}
-                  onDeleteGlossaryEntry={() => {
-                    void deleteActiveGlossaryEntry();
-                  }}
-                  onNavigateToPreviousGlossaryOccurrence={() => {
-                    if (currentEditor.kind === "glossaryEntry") {
-                      executeUiCommand(
-                        glossaryCommandIds.previousOccurrence,
-                        currentEditor.draft.entry.id
-                      );
+                <section className="editorAreaBody" ref={editorAreaBodyRef}>
+                  <EditorSurface
+                    editor={currentEditor}
+                    projectRootPath={project?.rootPath ?? null}
+                    glossaryRefreshToken={glossaryRefreshToken}
+                    translate={translate}
+                    markdownEditorPreviewRatio={
+                      layout.markdownEditorPreview.ratio
                     }
-                  }}
-                  onNavigateToNextGlossaryOccurrence={() => {
-                    if (currentEditor.kind === "glossaryEntry") {
-                      executeUiCommand(
-                        glossaryCommandIds.nextOccurrence,
-                        currentEditor.draft.entry.id
-                      );
+                    onChangeMarkdownEditorPreviewRatio={
+                      handleChangeMarkdownEditorPreviewRatio
                     }
-                  }}
-                  pendingMarkdownSelection={pendingMarkdownSelection}
-                  onPendingMarkdownSelectionApplied={() => {
-                    setPendingMarkdownSelection(null);
-                  }}
-                />
+                    onChangeMarkdownContent={setActiveDocumentContent}
+                    onChangeGlossaryEntryKind={setActiveGlossaryEntryKind}
+                    onChangeGlossaryEntryDescription={
+                      setActiveGlossaryEntryDescription
+                    }
+                    onChangeGlossaryEntryCanonicalSurface={
+                      setActiveGlossaryEntryCanonicalSurface
+                    }
+                    onChangeGlossaryEntryCanonicalMatchBoundaryStart={
+                      setActiveGlossaryEntryCanonicalMatchBoundaryStart
+                    }
+                    onChangeGlossaryEntryCanonicalMatchBoundaryEnd={
+                      setActiveGlossaryEntryCanonicalMatchBoundaryEnd
+                    }
+                    onAddGlossaryEntryForm={addActiveGlossaryEntryForm}
+                    onChangeGlossaryEntryFormSurface={
+                      setActiveGlossaryEntryFormSurface
+                    }
+                    onChangeGlossaryEntryFormWarningPolicy={
+                      setActiveGlossaryEntryFormWarningPolicy
+                    }
+                    onChangeGlossaryEntryFormMatchBoundaryStart={
+                      setActiveGlossaryEntryFormMatchBoundaryStart
+                    }
+                    onChangeGlossaryEntryFormMatchBoundaryEnd={
+                      setActiveGlossaryEntryFormMatchBoundaryEnd
+                    }
+                    onDeleteGlossaryEntryForm={deleteActiveGlossaryEntryForm}
+                    onDeleteGlossaryEntry={() => {
+                      void deleteActiveGlossaryEntry();
+                    }}
+                    onNavigateToPreviousGlossaryOccurrence={() => {
+                      if (currentEditor.kind === "glossaryEntry") {
+                        executeUiCommand(
+                          glossaryCommandIds.previousOccurrence,
+                          currentEditor.draft.entry.id
+                        );
+                      }
+                    }}
+                    onNavigateToNextGlossaryOccurrence={() => {
+                      if (currentEditor.kind === "glossaryEntry") {
+                        executeUiCommand(
+                          glossaryCommandIds.nextOccurrence,
+                          currentEditor.draft.entry.id
+                        );
+                      }
+                    }}
+                    pendingMarkdownSelection={pendingMarkdownSelection}
+                    onPendingMarkdownSelectionApplied={() => {
+                      setPendingMarkdownSelection(null);
+                    }}
+                  />
+
+                  {layout.utilityWindow.open ? (
+                    <>
+                      <div
+                        className="utilityWindowResizeHandle"
+                        role="separator"
+                        aria-orientation="horizontal"
+                        aria-label={translate(
+                          "workbench.utilityWindowResizeHandle"
+                        )}
+                        onPointerDown={utilityWindowResizeDrag.onPointerDown}
+                        onPointerMove={utilityWindowResizeDrag.onPointerMove}
+                        onPointerUp={utilityWindowResizeDrag.onPointerUp}
+                        onPointerCancel={
+                          utilityWindowResizeDrag.onPointerCancel
+                        }
+                      />
+                      <UtilityWindow
+                        activeTab={layout.utilityWindow.activeTab}
+                        height={layout.utilityWindow.height}
+                        translate={translate}
+                        onClose={() =>
+                          executeUiCommand(utilityWindowCommandIds.close)
+                        }
+                      />
+                    </>
+                  ) : null}
+                </section>
               </section>
             </section>
           )}
