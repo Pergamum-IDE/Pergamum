@@ -16,6 +16,7 @@ import {
   shouldApplyGlossaryLoadResult,
   type GlossarySidebarState
 } from "./glossarySidebarState";
+import { filterGlossaryEntriesForNavigator } from "./glossaryNavigatorSearch";
 
 interface GlossarySidebarProps {
   projectRootPath: string | null;
@@ -49,7 +50,9 @@ interface GlossarySidebarViewProps {
   onSelectEntry: (entryId: GlossaryEntryId) => void;
   onActivateEntry: (entryId: GlossaryEntryId) => void;
   canCreateEntry: boolean;
+  searchQuery: string;
   createForm: GlossaryCreateFormState;
+  onChangeSearchQuery: (query: string) => void;
   onToggleCreateForm: () => void;
   onChangeCreateSurface: (surface: string) => void;
   onChangeCreateKind: (kind: GlossaryEntryKind) => void;
@@ -71,13 +74,20 @@ export function GlossarySidebarView({
   onSelectEntry,
   onActivateEntry,
   canCreateEntry,
+  searchQuery,
   createForm,
+  onChangeSearchQuery,
   onToggleCreateForm,
   onChangeCreateSurface,
   onChangeCreateKind,
   onSubmitCreateForm
 }: GlossarySidebarViewProps): JSX.Element {
   let content: JSX.Element;
+  const filteredEntries =
+    state.status === "loaded"
+      ? filterGlossaryEntriesForNavigator(state.entries, searchQuery)
+      : [];
+  const hasSearchQuery = searchQuery.trim().length > 0;
 
   switch (state.status) {
     case "noProject":
@@ -107,12 +117,16 @@ export function GlossarySidebarView({
           <div className="workspacePlaceholder">
             {translate("glossary.empty")}
           </div>
+        ) : filteredEntries.length === 0 && hasSearchQuery ? (
+          <div className="workspacePlaceholder">
+            {translate("glossaryNavigator.emptySearchResult")}
+          </div>
         ) : (
           <div
             className="workspaceSidebarList"
             aria-label={translate("glossary.entries")}
           >
-            {state.entries.map((entry) => {
+            {filteredEntries.map((entry) => {
               const label = canonicalGlossarySurface(entry);
               const isHighlighted = highlightedEntryId === entry.id;
               const isSelected = state.selectedEntryId === entry.id;
@@ -156,6 +170,17 @@ export function GlossarySidebarView({
         {translate("glossary.sidebarTitle")}
       </div>
       <div className="workspacePlaceholderList">
+        {state.status === "loaded" ? (
+          <div className="glossaryNavigatorSearch">
+            <input
+              type="search"
+              value={searchQuery}
+              aria-label={translate("glossaryNavigator.search")}
+              placeholder={translate("glossaryNavigator.searchPlaceholder")}
+              onChange={(event) => onChangeSearchQuery(event.target.value)}
+            />
+          </div>
+        ) : null}
         {content}
       </div>
       {createForm.isOpen ? (
@@ -245,6 +270,7 @@ export function GlossarySidebar({
   const [createForm, setCreateForm] = useState<GlossaryCreateFormState>(
     initialGlossaryCreateFormState
   );
+  const [searchQuery, setSearchQuery] = useState("");
   const projectRootPathRef = useRef<string | null>(projectRootPath);
   const loadRequestIdRef = useRef(0);
 
@@ -367,7 +393,9 @@ export function GlossarySidebar({
       }
       onActivateEntry={onActivateEntry}
       canCreateEntry={projectRootPath !== null}
+      searchQuery={searchQuery}
       createForm={createForm}
+      onChangeSearchQuery={setSearchQuery}
       onToggleCreateForm={() =>
         setCreateForm((currentForm) =>
           currentForm.isOpen

@@ -13,6 +13,12 @@ const matchBoundaryKeys = [
   "glossaryEditor.matchBoundary.none.description"
 ] as const;
 
+const glossaryNavigatorSearchKeys = [
+  "glossaryNavigator.search",
+  "glossaryNavigator.searchPlaceholder",
+  "glossaryNavigator.emptySearchResult"
+] as const;
+
 const disallowedBoundaryWords = [
   "左端",
   "右端",
@@ -99,5 +105,29 @@ describe("glossary form match boundary translations", () => {
         }
       }
     }
+  });
+});
+
+describe("glossary navigator search translations", () => {
+  it("defines search input and empty search result keys for ja and en", () => {
+    for (const key of glossaryNavigatorSearchKeys) {
+      expect(t("ja", key).length).toBeGreaterThan(0);
+      expect(t("en", key).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("uses the Issue 79 search labels and empty result text", () => {
+    expect(t("ja", "glossaryNavigator.search")).toBe("語彙を検索");
+    expect(t("ja", "glossaryNavigator.searchPlaceholder")).toBe("語彙を検索");
+    expect(t("ja", "glossaryNavigator.emptySearchResult")).toBe(
+      "一致する語彙がありません"
+    );
+    expect(t("en", "glossaryNavigator.search")).toBe("Search glossary");
+    expect(t("en", "glossaryNavigator.searchPlaceholder")).toBe(
+      "Search glossary"
+    );
+    expect(t("en", "glossaryNavigator.emptySearchResult")).toBe(
+      "No glossary entries match your search."
+    );
   });
 });
