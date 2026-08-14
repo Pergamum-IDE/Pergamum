@@ -100,6 +100,8 @@ function glossaryEditorProps(
     onChangeFormMatchBoundaryEnd: () => undefined,
     onDeleteForm: () => undefined,
     onDeleteEntry: () => undefined,
+    onNavigateToPreviousOccurrence: () => undefined,
+    onNavigateToNextOccurrence: () => undefined,
     ...overrides
   };
 }
@@ -311,6 +313,62 @@ describe("GlossaryEditor", () => {
     );
     expect(onAddForm).toHaveBeenCalledWith("alias");
     expect(onAddForm).toHaveBeenCalledWith("variant");
+  });
+
+  it("renders previous/next occurrence buttons with i18n-backed display labels and aria-label/title", () => {
+    const element = GlossaryEditor(glossaryEditorProps());
+    const buttons = collectElements(
+      element,
+      (child) =>
+        child.type === "button" &&
+        child.props.className === "glossaryEditorOccurrenceButton"
+    );
+
+    expect(buttons).toHaveLength(2);
+
+    const [previousButton, nextButton] = buttons;
+
+    expect(previousButton.props["aria-label"]).toBe(
+      "glossaryEditor.previousOccurrence"
+    );
+    expect(previousButton.props.title).toBe(
+      "glossaryEditor.previousOccurrence"
+    );
+    expect(previousButton.props.children).toBe(
+      "glossaryEditor.previousOccurrenceLabel"
+    );
+
+    expect(nextButton.props["aria-label"]).toBe(
+      "glossaryEditor.nextOccurrence"
+    );
+    expect(nextButton.props.title).toBe("glossaryEditor.nextOccurrence");
+    expect(nextButton.props.children).toBe(
+      "glossaryEditor.nextOccurrenceLabel"
+    );
+  });
+
+  it("reports occurrence navigation clicks through the onNavigateToPrevious/NextOccurrence props, not inline logic", () => {
+    const onNavigateToPreviousOccurrence = vi.fn();
+    const onNavigateToNextOccurrence = vi.fn();
+    const element = GlossaryEditor(
+      glossaryEditorProps({
+        onNavigateToPreviousOccurrence,
+        onNavigateToNextOccurrence
+      })
+    );
+    const buttons = collectElements(
+      element,
+      (child) =>
+        child.type === "button" &&
+        child.props.className === "glossaryEditorOccurrenceButton"
+    );
+    const [previousButton, nextButton] = buttons;
+
+    (previousButton.props.onClick as () => void)();
+    (nextButton.props.onClick as () => void)();
+
+    expect(onNavigateToPreviousOccurrence).toHaveBeenCalledTimes(1);
+    expect(onNavigateToNextOccurrence).toHaveBeenCalledTimes(1);
   });
 
   it("renders a danger-styled delete-entry icon button with an i18n aria-label and title", () => {

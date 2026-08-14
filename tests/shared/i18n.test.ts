@@ -131,3 +131,49 @@ describe("glossary navigator search translations", () => {
     );
   });
 });
+
+const glossaryOccurrenceNavigationKeys = [
+  "glossaryEditor.previousOccurrenceLabel",
+  "glossaryEditor.nextOccurrenceLabel",
+  "glossaryEditor.previousOccurrence",
+  "glossaryEditor.nextOccurrence",
+  "status.glossaryOccurrenceNoActiveDocument",
+  "status.glossaryOccurrenceNotFound"
+] as const;
+
+describe("glossary occurrence navigation translations", () => {
+  it("defines the occurrence navigation keys for ja and en", () => {
+    for (const key of glossaryOccurrenceNavigationKeys) {
+      expect(t("ja", key).length).toBeGreaterThan(0);
+      expect(t("en", key).length).toBeGreaterThan(0);
+    }
+  });
+
+  it("uses the Issue 81 display labels, aria text, and status messages", () => {
+    expect(t("ja", "glossaryEditor.previousOccurrenceLabel")).toBe("◀");
+    expect(t("ja", "glossaryEditor.nextOccurrenceLabel")).toBe("▶");
+    expect(t("ja", "glossaryEditor.previousOccurrence")).toBe(
+      "前の使用箇所"
+    );
+    expect(t("ja", "glossaryEditor.nextOccurrence")).toBe("次の使用箇所");
+    expect(t("ja", "status.glossaryOccurrenceNoActiveDocument")).toBe(
+      "移動先の文書がありません"
+    );
+    expect(t("ja", "status.glossaryOccurrenceNotFound")).toBe(
+      "この文書内に使用箇所がありません"
+    );
+
+    expect(t("en", "glossaryEditor.previousOccurrenceLabel")).toBe("◀");
+    expect(t("en", "glossaryEditor.nextOccurrenceLabel")).toBe("▶");
+    expect(t("en", "glossaryEditor.previousOccurrence")).toBe(
+      "Previous occurrence"
+    );
+    expect(t("en", "glossaryEditor.nextOccurrence")).toBe("Next occurrence");
+    expect(t("en", "status.glossaryOccurrenceNoActiveDocument")).toBe(
+      "No document to search."
+    );
+    expect(t("en", "status.glossaryOccurrenceNotFound")).toBe(
+      "No occurrences in this document."
+    );
+  });
+});

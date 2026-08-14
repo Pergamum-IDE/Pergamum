@@ -10,6 +10,7 @@ import {
   type CurrentDocument
 } from "./currentDocument";
 import type { CurrentEditor } from "./currentEditor";
+import type { GlossaryOccurrenceRange } from "./glossaryOccurrenceNavigation";
 import { GlossaryEditor } from "./GlossaryEditor";
 import { GlossaryPreviewDecorator } from "./GlossaryPreviewDecorator";
 import { MarkdownEditor } from "./MarkdownEditor";
@@ -50,6 +51,10 @@ interface EditorSurfaceProps {
   ) => void;
   onDeleteGlossaryEntryForm: (formId: string) => void;
   onDeleteGlossaryEntry: () => void;
+  onNavigateToPreviousGlossaryOccurrence: () => void;
+  onNavigateToNextGlossaryOccurrence: () => void;
+  pendingMarkdownSelection: GlossaryOccurrenceRange | null;
+  onPendingMarkdownSelectionApplied: () => void;
 }
 
 export function EditorSurface({
@@ -69,7 +74,11 @@ export function EditorSurface({
   onChangeGlossaryEntryFormMatchBoundaryStart,
   onChangeGlossaryEntryFormMatchBoundaryEnd,
   onDeleteGlossaryEntryForm,
-  onDeleteGlossaryEntry
+  onDeleteGlossaryEntry,
+  onNavigateToPreviousGlossaryOccurrence,
+  onNavigateToNextGlossaryOccurrence,
+  pendingMarkdownSelection,
+  onPendingMarkdownSelectionApplied
 }: EditorSurfaceProps): JSX.Element {
   switch (editor.kind) {
     case "markdown":
@@ -80,6 +89,8 @@ export function EditorSurface({
           glossaryRefreshToken={glossaryRefreshToken}
           translate={translate}
           onChangeMarkdownContent={onChangeMarkdownContent}
+          pendingSelection={pendingMarkdownSelection}
+          onPendingSelectionApplied={onPendingMarkdownSelectionApplied}
         />
       );
     case "glossaryEntry":
@@ -109,6 +120,10 @@ export function EditorSurface({
           }
           onDeleteForm={onDeleteGlossaryEntryForm}
           onDeleteEntry={onDeleteGlossaryEntry}
+          onNavigateToPreviousOccurrence={
+            onNavigateToPreviousGlossaryOccurrence
+          }
+          onNavigateToNextOccurrence={onNavigateToNextGlossaryOccurrence}
         />
       );
   }
@@ -120,6 +135,8 @@ interface MarkdownEditorSurfaceProps {
   glossaryRefreshToken: number;
   translate: Translate;
   onChangeMarkdownContent: (content: string) => void;
+  pendingSelection: GlossaryOccurrenceRange | null;
+  onPendingSelectionApplied: () => void;
 }
 
 function MarkdownEditorSurface({
@@ -127,7 +144,9 @@ function MarkdownEditorSurface({
   projectRootPath,
   glossaryRefreshToken,
   translate,
-  onChangeMarkdownContent
+  onChangeMarkdownContent,
+  pendingSelection,
+  onPendingSelectionApplied
 }: MarkdownEditorSurfaceProps): JSX.Element {
   const content = currentDocumentContent(document);
   const previewHtml = markdownPreviewRenderer.render(content);
@@ -151,6 +170,8 @@ function MarkdownEditorSurface({
         <MarkdownEditor
           value={content}
           onChange={onChangeMarkdownContent}
+          pendingSelection={pendingSelection}
+          onPendingSelectionApplied={onPendingSelectionApplied}
         />
       </section>
 
