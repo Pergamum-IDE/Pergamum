@@ -49,6 +49,7 @@ interface EditorSurfaceProps {
     matchBoundaryEnd: GlossaryFormMatchBoundary
   ) => void;
   onDeleteGlossaryEntryForm: (formId: string) => void;
+  onDeleteGlossaryEntry: () => void;
 }
 
 export function EditorSurface({
@@ -67,7 +68,8 @@ export function EditorSurface({
   onChangeGlossaryEntryFormWarningPolicy,
   onChangeGlossaryEntryFormMatchBoundaryStart,
   onChangeGlossaryEntryFormMatchBoundaryEnd,
-  onDeleteGlossaryEntryForm
+  onDeleteGlossaryEntryForm,
+  onDeleteGlossaryEntry
 }: EditorSurfaceProps): JSX.Element {
   switch (editor.kind) {
     case "markdown":
@@ -106,6 +108,7 @@ export function EditorSurface({
             onChangeGlossaryEntryFormMatchBoundaryEnd
           }
           onDeleteForm={onDeleteGlossaryEntryForm}
+          onDeleteEntry={onDeleteGlossaryEntry}
         />
       );
   }

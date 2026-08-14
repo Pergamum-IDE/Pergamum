@@ -42,6 +42,8 @@ export const enTranslations = {
   "glossaryEditor.aliases": "Aliases",
   "glossaryEditor.canonicalForm": "Canonical",
   "glossaryEditor.canonicalSurface": "Canonical surface",
+  "glossaryEditor.deleteEntry": "Delete",
+  "glossaryEditor.deleteEntryConfirmMessage": "Delete this glossary entry?",
   "glossaryEditor.description": "Description",
   "glossaryEditor.emptyDescription": "No description.",
   "glossaryEditor.forms": "Forms",

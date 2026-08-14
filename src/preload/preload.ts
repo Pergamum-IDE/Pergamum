@@ -49,9 +49,10 @@ const pergamumApi: PergamumApi = {
         surface
       }),
     update: (input) => ipcRenderer.invoke(GLOSSARY_CHANNELS.update, input),
-    delete: (id) =>
+    delete: (id, confirmMessage) =>
       ipcRenderer.invoke(GLOSSARY_CHANNELS.delete, {
-        id
+        id,
+        confirmMessage
       })
   }
 };

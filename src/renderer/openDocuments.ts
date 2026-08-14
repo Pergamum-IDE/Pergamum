@@ -273,6 +273,42 @@ export function openOrActivateEditor(
   };
 }
 
+export function closeOpenEditor(
+  state: OpenDocumentsState,
+  editorId: EditorId
+): OpenDocumentsState {
+  const index = state.documents.findIndex((document) =>
+    editorIdEquals(document.id, editorId)
+  );
+
+  if (index === -1) {
+    return state;
+  }
+
+  const remainingDocuments = state.documents.filter(
+    (_document, documentIndex) => documentIndex !== index
+  );
+
+  if (remainingDocuments.length === 0) {
+    return createInitialOpenDocumentsState(state.nextUntitledId);
+  }
+
+  if (!editorIdEquals(state.activeDocumentId, editorId)) {
+    return {
+      ...state,
+      documents: remainingDocuments
+    };
+  }
+
+  const fallbackIndex = Math.min(index, remainingDocuments.length - 1);
+
+  return {
+    ...state,
+    documents: remainingDocuments,
+    activeDocumentId: remainingDocuments[fallbackIndex].id
+  };
+}
+
 export function updateOpenDocument(
   state: OpenDocumentsState,
   editorId: EditorId,

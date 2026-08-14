@@ -1,3 +1,4 @@
+import deleteIcon from "../../assets/icons/glossary/delete.svg?raw";
 import {
   glossaryEntryKinds,
   glossaryWarningPolicies,
@@ -52,6 +53,7 @@ interface GlossaryEditorProps {
     matchBoundaryEnd: GlossaryFormMatchBoundary
   ) => void;
   onDeleteForm: (formId: string) => void;
+  onDeleteEntry: () => void;
 }
 
 export function GlossaryEditor({
@@ -67,7 +69,8 @@ export function GlossaryEditor({
   onChangeFormWarningPolicy,
   onChangeFormMatchBoundaryStart,
   onChangeFormMatchBoundaryEnd,
-  onDeleteForm
+  onDeleteForm,
+  onDeleteEntry
 }: GlossaryEditorProps): JSX.Element {
   const entry = draft.entry;
   const title = draft.canonicalSurface.trim() || canonicalGlossarySurface(entry);
@@ -102,8 +105,14 @@ export function GlossaryEditor({
               </option>
             ))}
           </select>
-          <button type="button" onClick={() => onDeleteForm(form.id)}>
-            {translate("glossaryEditor.removeForm")}
+          <button
+            type="button"
+            className="glossaryEditorRemoveFormButton"
+            aria-label={translate("glossaryEditor.removeForm")}
+            title={translate("glossaryEditor.removeForm")}
+            onClick={() => onDeleteForm(form.id)}
+          >
+            <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: deleteIcon }} />
           </button>
         </div>
         <GlossaryFormAdvancedMatchingSettings
@@ -143,6 +152,15 @@ export function GlossaryEditor({
             ))}
           </select>
         </label>
+        <button
+          type="button"
+          className="glossaryEditorDeleteButton"
+          aria-label={translate("glossaryEditor.deleteEntry")}
+          title={translate("glossaryEditor.deleteEntry")}
+          onClick={onDeleteEntry}
+        >
+          <span aria-hidden="true" dangerouslySetInnerHTML={{ __html: deleteIcon }} />
+        </button>
       </header>
 
       <section className="glossaryEditorSection">

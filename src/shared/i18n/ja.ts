@@ -40,6 +40,8 @@ export const jaTranslations = {
   "glossaryEditor.aliases": "別名",
   "glossaryEditor.canonicalForm": "代表表記",
   "glossaryEditor.canonicalSurface": "代表表記",
+  "glossaryEditor.deleteEntry": "削除",
+  "glossaryEditor.deleteEntryConfirmMessage": "この語彙を削除します。よろしいですか？",
   "glossaryEditor.description": "説明",
   "glossaryEditor.emptyDescription": "説明はありません。",
   "glossaryEditor.forms": "表記",
