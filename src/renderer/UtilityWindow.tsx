@@ -1,3 +1,4 @@
+import type { ReactNode } from "react";
 import type { Translate } from "../shared/i18n";
 import type { UtilityWindowTabId } from "./workbenchLayout";
 
@@ -6,6 +7,7 @@ interface UtilityWindowProps {
   height: number;
   translate: Translate;
   onClose: () => void;
+  children?: ReactNode;
 }
 
 function utilityWindowTabLabel(
@@ -22,7 +24,8 @@ export function UtilityWindow({
   activeTab,
   height,
   translate,
-  onClose
+  onClose,
+  children
 }: UtilityWindowProps): JSX.Element {
   const label = translate("utilityWindow.label");
 
@@ -57,13 +60,7 @@ export function UtilityWindow({
         </button>
       </div>
 
-      <div className="utilityWindowContent">
-        {activeTab === "occurrences" ? (
-          <p className="utilityWindowEmpty">
-            {translate("utilityWindow.occurrences.empty")}
-          </p>
-        ) : null}
-      </div>
+      <div className="utilityWindowContent">{children}</div>
     </section>
   );
 }
