@@ -688,6 +688,89 @@ schema validation を通す
 
 ---
 
+### Color theme foundation
+
+長時間執筆・編集するために、カラーテーマを切り替えられるようにする。
+
+初期段階では、ビルトインテーマとしてライトテーマとダークテーマを用意する。
+
+```text
+built-in themes:
+  light
+  dark
+```
+
+ユーザー定義テーマは、任意 CSS を直接読み込むのではなく、まずは許可されたテーマトークンを設定として受け取る方式を検討する。
+
+```text
+common tokens:
+  app background
+  app foreground
+  panel backgroundgit
+  panel foreground
+  border color
+  muted foreground
+  accent color
+  accent foreground
+  selection background
+  selection foreground
+  warning color
+  error color
+  success color
+
+editor tokens:
+  editor background
+  editor foreground
+  editor selection background
+  editor selection foreground
+
+preview / viewer tokens:
+  preview background
+  preview foreground
+  preview muted foreground
+  preview heading foreground
+  preview link foreground
+
+glossary match tokens:
+  glossary match foreground
+  glossary match background
+  glossary match underline
+
+glossary hover card tokens:
+  glossary card background
+  glossary card foreground
+  glossary card border
+
+typography tokens:
+  font family
+  font size
+  line height
+```
+
+これらは、アプリ全体、エディタ、プレビュー、Glossary の一致箇所、Hover Card 本体を別々に調整できるようにするためのものである。
+
+検討事項:
+
+```text
+テーマ設定を app 単位にするか project 単位にするか
+settings.json とどう関係させるか
+CSS variables をテーマ境界にするか
+ユーザー定義テーマをどこまで許可するか
+破綻したテーマ設定から復旧する手段を用意するか
+```
+
+非スコープ候補:
+
+```text
+任意 CSS の直接読み込み
+テーママーケットプレイス
+テーマ同期
+プラグインによるテーマ配布
+高度なテーマエディタ
+```
+
+---
+
 ## v0.9 に向けた候補
 
 v0.9 は、Git 統合や Plugin API を含めない dogfood 可能な配布版を目指す。
