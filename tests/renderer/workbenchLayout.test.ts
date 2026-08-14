@@ -241,6 +241,16 @@ describe("resolveUtilityWindowOpenState", () => {
     expect(opened.activeTab).toBe("occurrences");
     expect(closed.activeTab).toBe("occurrences");
   });
+
+  it("allows the Debug Log tab to be the active Utility Window tab", () => {
+    const state = utilityWindowState({ open: false, activeTab: "debugLog" });
+
+    const opened = resolveUtilityWindowOpenState(state, true, 2000);
+    const closed = resolveUtilityWindowOpenState(opened, false);
+
+    expect(opened.activeTab).toBe("debugLog");
+    expect(closed.activeTab).toBe("debugLog");
+  });
 });
 
 describe("resolveActiveActivityMode", () => {

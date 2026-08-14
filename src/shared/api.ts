@@ -9,7 +9,11 @@ import type {
   GlossarySurfaceLookupResult,
   UpdateGlossaryEntryInput
 } from "./glossary";
-import type { RendererDebugLogRequest } from "./debugLog";
+import type {
+  DebugLogSnapshot,
+  RendererDebugLogRequest,
+  SanitizedDebugLogEvent
+} from "./debugLog";
 
 export type {
   ApplicationSettings,
@@ -65,7 +69,11 @@ export const GLOSSARY_CHANNELS = {
 } as const;
 
 export const DEBUG_LOG_CHANNELS = {
-  logEvent: "debugLog:logEvent"
+  logEvent: "debugLog:logEvent",
+  getSnapshot: "debugLog:getSnapshot",
+  subscribe: "debugLog:subscribe",
+  unsubscribe: "debugLog:unsubscribe",
+  event: "debugLog:event"
 } as const;
 
 export interface MarkdownFile {
@@ -176,5 +184,7 @@ export interface PergamumApi {
   };
   debugLog: {
     logEvent: (request: RendererDebugLogRequest) => Promise<void>;
+    getSnapshot: () => Promise<DebugLogSnapshot>;
+    onEvent: (callback: (event: SanitizedDebugLogEvent) => void) => () => void;
   };
 }

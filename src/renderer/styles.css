@@ -607,14 +607,25 @@ button:active {
 
 .utilityWindowTab {
   display: inline-flex;
+  height: 26px;
   align-items: center;
+  border: 0;
+  border-bottom: 2px solid transparent;
+  background: transparent;
   color: #6b7785;
+  cursor: pointer;
   font-size: 12px;
   font-weight: 700;
+  padding: 0 8px;
   text-transform: uppercase;
 }
 
+.utilityWindowTab:hover {
+  color: #17212b;
+}
+
 .utilityWindowTab.isActive {
+  border-bottom-color: #2f6f9f;
   color: #17212b;
 }
 
@@ -648,6 +659,118 @@ button:active {
   margin: 0;
   color: #6b7785;
   font-size: 13px;
+}
+
+.debugLogPanel {
+  display: flex;
+  min-height: 0;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.debugLogPanelDisabled {
+  gap: 8px;
+}
+
+.debugLogPanelHeader {
+  display: flex;
+  flex: 0 0 auto;
+  flex-direction: column;
+  gap: 4px;
+}
+
+.debugLogPanelDescription,
+.debugLogPanelMeta,
+.debugLogPanelEmptyTitle {
+  margin: 0;
+  font-size: 13px;
+}
+
+.debugLogPanelDescription,
+.debugLogPanelEmptyTitle {
+  color: #17212b;
+  font-weight: 700;
+}
+
+.debugLogPanelMeta {
+  color: #52616f;
+}
+
+.debugLogPanelGap {
+  color: #8a4c0f;
+  font-weight: 700;
+}
+
+.debugLogTable {
+  width: 100%;
+  min-width: 640px;
+  border-collapse: collapse;
+  color: #17212b;
+  font-family: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", monospace;
+  font-size: 12px;
+}
+
+.debugLogTable th,
+.debugLogTable td {
+  border-bottom: 1px solid #e3e8ee;
+  padding: 5px 8px;
+  text-align: left;
+  vertical-align: top;
+}
+
+.debugLogTable th {
+  background: #f4f7fa;
+  color: #52616f;
+  font-weight: 700;
+}
+
+.debugLogSeq {
+  width: 72px;
+  color: #52616f;
+  text-align: right;
+}
+
+.debugLogTime {
+  width: 180px;
+  white-space: nowrap;
+}
+
+.debugLogLevel {
+  width: 72px;
+  font-weight: 700;
+}
+
+.debugLogLevel-debug {
+  color: #52616f;
+}
+
+.debugLogLevel-info {
+  color: #1f6f4a;
+}
+
+.debugLogLevel-warn {
+  color: #8a4c0f;
+}
+
+.debugLogLevel-error {
+  color: #a32929;
+}
+
+.debugLogEventName {
+  min-width: 220px;
+}
+
+.debugLogDetailsRow td {
+  padding: 0 8px 8px 88px;
+  background: #fbfcfd;
+}
+
+.debugLogDetailsRow pre {
+  margin: 0;
+  overflow: auto;
+  color: #52616f;
+  white-space: pre-wrap;
+  word-break: break-word;
 }
 
 .glossaryOccurrencesPanel {

@@ -57,6 +57,7 @@ import {
   logRendererDebugEvent,
   rendererDebugErrorInfo
 } from "./debugLog";
+import { DebugLogPanel } from "./DebugLogPanel";
 import { EditorSurface } from "./EditorSurface";
 import { UtilityWindow } from "./UtilityWindow";
 import { GlossaryOccurrencesPanel } from "./GlossaryOccurrencesPanel";
@@ -153,6 +154,7 @@ import {
   resolveActiveActivityMode,
   resolveSidebarToggle,
   resolveUtilityWindowOpenState,
+  type UtilityWindowTabId,
   type WorkbenchLayoutState
 } from "./workbenchLayout";
 import {
@@ -1056,6 +1058,16 @@ export function App(): JSX.Element {
     }));
   }
 
+  function selectUtilityWindowTab(tab: UtilityWindowTabId): void {
+    setLayout((current) => ({
+      ...current,
+      utilityWindow: {
+        ...current.utilityWindow,
+        activeTab: tab
+      }
+    }));
+  }
+
   async function navigateGlossaryOccurrence(
     entryId: GlossaryEntryId,
     direction: GlossaryOccurrenceDirection
@@ -1747,34 +1759,39 @@ export function App(): JSX.Element {
                         activeTab={layout.utilityWindow.activeTab}
                         height={layout.utilityWindow.height}
                         translate={translate}
+                        onSelectTab={selectUtilityWindowTab}
                         onClose={() =>
                           executeUiCommand(utilityWindowCommandIds.close)
                         }
                       >
-                        <GlossaryOccurrencesPanel
-                          session={glossaryOccurrenceTrackingState}
-                          translate={translate}
-                          onNavigatePrevious={() =>
-                            executeUiCommand(
-                              glossaryOccurrencesCommandIds.previous
-                            )
-                          }
-                          onNavigateNext={() =>
-                            executeUiCommand(
-                              glossaryOccurrencesCommandIds.next
-                            )
-                          }
-                          onOpenEntry={() =>
-                            executeUiCommand(
-                              glossaryOccurrencesCommandIds.openEntry
-                            )
-                          }
-                          onCloseTracking={() =>
-                            executeUiCommand(
-                              glossaryOccurrencesCommandIds.closeTracking
-                            )
-                          }
-                        />
+                        {layout.utilityWindow.activeTab === "debugLog" ? (
+                          <DebugLogPanel translate={translate} />
+                        ) : (
+                          <GlossaryOccurrencesPanel
+                            session={glossaryOccurrenceTrackingState}
+                            translate={translate}
+                            onNavigatePrevious={() =>
+                              executeUiCommand(
+                                glossaryOccurrencesCommandIds.previous
+                              )
+                            }
+                            onNavigateNext={() =>
+                              executeUiCommand(
+                                glossaryOccurrencesCommandIds.next
+                              )
+                            }
+                            onOpenEntry={() =>
+                              executeUiCommand(
+                                glossaryOccurrencesCommandIds.openEntry
+                              )
+                            }
+                            onCloseTracking={() =>
+                              executeUiCommand(
+                                glossaryOccurrencesCommandIds.closeTracking
+                              )
+                            }
+                          />
+                        )}
                       </UtilityWindow>
                     </>
                   ) : null}

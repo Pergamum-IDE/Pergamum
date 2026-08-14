@@ -1,13 +1,16 @@
 import crypto from "node:crypto";
 import path from "node:path";
 import {
+  DEFAULT_DEBUG_LOG_UI_BUFFER_LIMIT,
   isDebugLogEventName,
   isDebugLogLevel,
+  type DebugLogSnapshot,
   type DebugLogDetails,
   type DebugLogEvent,
   type DebugLogEventName,
   type DebugLogLevel,
-  type RendererDebugLogRequest
+  type RendererDebugLogRequest,
+  type SanitizedDebugLogEvent
 } from "../shared/debugLog";
 import { DebugLogOpaqueRefRegistry } from "./debugLogOpaqueRefs";
 import { formatLocalDebugLogTimestamp } from "./debugLogPath";
@@ -33,6 +36,8 @@ export interface DebugLogger {
   readonly enabled: boolean;
   readonly sessionId: string | null;
   readonly currentFilePath: string | null;
+  getSnapshot(): DebugLogSnapshot;
+  subscribe(callback: DebugLogEventSubscriber): () => void;
   log(input: {
     level: DebugLogLevel | string;
     event: DebugLogEventName | string;
@@ -47,12 +52,15 @@ export interface DebugLogger {
   isKnownDocumentRef(documentRef: string): boolean;
 }
 
+export type DebugLogEventSubscriber = (event: SanitizedDebugLogEvent) => void;
+
 export interface CreateDebugLoggerOptions {
   enabled: boolean;
   runtime: DebugLogRuntimeDetails;
   sessionId?: string;
   maxLines?: number;
   preSinkQueueLimit?: number;
+  uiBufferLimit?: number;
   fileSystem?: DebugLogFileSystem;
   now?: () => Date;
   isDevelopmentBuild?: boolean;
@@ -134,6 +142,20 @@ class DisabledDebugLogger implements DebugLogger {
   readonly sessionId = null;
   readonly currentFilePath = null;
 
+  getSnapshot(): DebugLogSnapshot {
+    return {
+      enabled: false,
+      sessionId: null,
+      events: [],
+      uiDroppedEventCount: 0,
+      uiBufferLimit: DEFAULT_DEBUG_LOG_UI_BUFFER_LIMIT
+    };
+  }
+
+  subscribe(): () => void {
+    return () => undefined;
+  }
+
   log(): void {
     return;
   }
@@ -172,6 +194,7 @@ class FileDebugLogger implements DebugLogger {
   readonly sessionId: string;
   private readonly opaqueRefs = new DebugLogOpaqueRefRegistry();
   private readonly preSinkQueueLimit: number;
+  private readonly uiBufferLimit: number;
   private readonly now: () => Date;
   private readonly maxLines: number;
   private readonly fileSystem: DebugLogFileSystem | undefined;
@@ -182,12 +205,20 @@ class FileDebugLogger implements DebugLogger {
   private seq = 0;
   private preSinkQueue: DebugLogEvent[] = [];
   private preSinkDroppedEventCount = 0;
+  private uiBuffer: SanitizedDebugLogEvent[] = [];
+  private uiDroppedEventCount = 0;
+  private subscribers = new Set<DebugLogEventSubscriber>();
+  private writeFailureEventAccepted = false;
 
   constructor(private readonly options: CreateDebugLoggerOptions) {
     this.sessionId = options.sessionId ?? crypto.randomUUID();
     this.preSinkQueueLimit = Math.max(
       1,
       options.preSinkQueueLimit ?? DEFAULT_DEBUG_LOG_PRE_SINK_QUEUE_LIMIT
+    );
+    this.uiBufferLimit = Math.max(
+      1,
+      options.uiBufferLimit ?? DEFAULT_DEBUG_LOG_UI_BUFFER_LIMIT
     );
     this.now = options.now ?? (() => new Date());
     this.maxLines = Math.max(
@@ -203,6 +234,24 @@ class FileDebugLogger implements DebugLogger {
     return this.sink?.currentFilePath ?? null;
   }
 
+  getSnapshot(): DebugLogSnapshot {
+    return {
+      enabled: true,
+      sessionId: this.sessionId,
+      events: [...this.uiBuffer],
+      uiDroppedEventCount: this.uiDroppedEventCount,
+      uiBufferLimit: this.uiBufferLimit
+    };
+  }
+
+  subscribe(callback: DebugLogEventSubscriber): () => void {
+    this.subscribers.add(callback);
+
+    return () => {
+      this.subscribers.delete(callback);
+    };
+  }
+
   log(input: {
     level: DebugLogLevel | string;
     event: DebugLogEventName | string;
@@ -216,7 +265,7 @@ class FileDebugLogger implements DebugLogger {
 
     const event = this.createEvent(input.event, input.details);
 
-    this.writeEvent(event);
+    this.acceptEvent(event);
   }
 
   logRendererRequest(request: unknown): void {
@@ -275,7 +324,7 @@ class FileDebugLogger implements DebugLogger {
       rotated: false
     });
 
-    this.writeEventToOpenSink(openedEvent);
+    this.acceptEvent(openedEvent);
   }
 
   flushAndClose(): void {
@@ -323,6 +372,47 @@ class FileDebugLogger implements DebugLogger {
     return this.seq;
   }
 
+  private acceptEvent(event: DebugLogEvent): void {
+    this.addEventToUiBuffer(event);
+    this.notifySubscribers(event);
+    this.writeEvent(event);
+  }
+
+  private sanitizedEventForRenderer(
+    event: DebugLogEvent
+  ): SanitizedDebugLogEvent {
+    return {
+      seq: event.seq,
+      timestamp: event.timestamp,
+      level: event.level,
+      event: event.event,
+      ...(event.details ? { details: event.details } : {})
+    };
+  }
+
+  private addEventToUiBuffer(event: DebugLogEvent): void {
+    const sanitizedEvent = this.sanitizedEventForRenderer(event);
+
+    if (this.uiBuffer.length >= this.uiBufferLimit) {
+      this.uiBuffer.shift();
+      this.uiDroppedEventCount += 1;
+    }
+
+    this.uiBuffer.push(sanitizedEvent);
+  }
+
+  private notifySubscribers(event: DebugLogEvent): void {
+    const sanitizedEvent = this.sanitizedEventForRenderer(event);
+
+    for (const subscriber of this.subscribers) {
+      try {
+        subscriber(sanitizedEvent);
+      } catch {
+        // Debug UI subscribers must not affect logging or app behavior.
+      }
+    }
+  }
+
   private writeEvent(event: DebugLogEvent): void {
     // Seq is assigned when an event is accepted, before sink state checks.
     // A degraded sink can therefore leave gaps in the JSONL file by design.
@@ -362,7 +452,11 @@ class FileDebugLogger implements DebugLogger {
       return;
     }
 
-    this.sink.writeLine(JSON.stringify(event));
+    const didWrite = this.sink.writeLine(JSON.stringify(event));
+
+    if (!didWrite) {
+      this.recordFileWriteFailedForUi();
+    }
   }
 
   private rotateOpenSinkIfNeeded(): void {
@@ -386,7 +480,21 @@ class FileDebugLogger implements DebugLogger {
       rotated: true
     });
 
-    this.writeEventToOpenSink(openedEvent);
+    this.acceptEvent(openedEvent);
+  }
+
+  private recordFileWriteFailedForUi(): void {
+    if (this.writeFailureEventAccepted) {
+      return;
+    }
+
+    this.writeFailureEventAccepted = true;
+    const event = this.createEvent("log.file.write.failed", {
+      error: { category: "io" }
+    });
+
+    this.addEventToUiBuffer(event);
+    this.notifySubscribers(event);
   }
 }
 
