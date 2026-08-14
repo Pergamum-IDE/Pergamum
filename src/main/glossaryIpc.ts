@@ -36,6 +36,7 @@ import {
   type ProjectDatabase
 } from "./projectDatabase";
 import { requireCurrentProjectRootPath } from "./projectIpc";
+import { getDebugLogger, type DebugLogger } from "./debugLogger";
 
 export type CurrentProjectRootPathProvider = () => string;
 
@@ -66,6 +67,10 @@ export interface GlossaryIpcHandlers {
 
 function isRequestObject(value: unknown): value is Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function durationSince(startedAt: number): number {
+  return Date.now() - startedAt;
 }
 
 function parseGlossaryEntryIdRequest(
@@ -153,7 +158,8 @@ export function createGlossaryIpcHandlers(
   getCurrentProjectRootPath: CurrentProjectRootPathProvider =
     requireCurrentProjectRootPath,
   confirmDeletion: ConfirmGlossaryEntryDeletion =
-    confirmGlossaryEntryDeletionWithDialog
+    confirmGlossaryEntryDeletionWithDialog,
+  logger: DebugLogger = getDebugLogger()
 ): GlossaryIpcHandlers {
   return {
     async create(rawRequest) {
@@ -188,13 +194,37 @@ export function createGlossaryIpcHandlers(
       );
     },
     async update(rawRequest) {
-      const input: UpdateGlossaryEntryInput =
-        validateUpdateGlossaryEntryInput(rawRequest);
+      const startedAt = Date.now();
+      let input: UpdateGlossaryEntryInput | null = null;
 
-      return withCurrentProjectDatabase(
-        getCurrentProjectRootPath,
-        (database) => updateGlossaryEntry(database, input)
-      );
+      try {
+        const validatedInput = validateUpdateGlossaryEntryInput(rawRequest);
+        input = validatedInput;
+
+        return await withCurrentProjectDatabase(
+          getCurrentProjectRootPath,
+          (database) => updateGlossaryEntry(database, validatedInput)
+        );
+      } catch (error) {
+        const documentRef = input
+          ? logger.documentRefForKey(`glossary:${input.id}`)
+          : undefined;
+
+        logger.log({
+          level: "error",
+          event: "document.save.failed",
+          details: {
+            ...(documentRef ? { documentRef } : {}),
+            editorIdKind: "glossaryEntry",
+            operation: "save",
+            result: "failed",
+            durationMs: durationSince(startedAt),
+            error
+          }
+        });
+
+        throw error;
+      }
     },
     async delete(rawRequest, event) {
       const request = parseDeleteGlossaryEntryRequest(rawRequest);
@@ -222,8 +252,14 @@ export function createGlossaryIpcHandlers(
   };
 }
 
-export function registerGlossaryIpc(): void {
-  const handlers = createGlossaryIpcHandlers();
+export function registerGlossaryIpc(
+  logger: DebugLogger = getDebugLogger()
+): void {
+  const handlers = createGlossaryIpcHandlers(
+    requireCurrentProjectRootPath,
+    confirmGlossaryEntryDeletionWithDialog,
+    logger
+  );
 
   ipcMain.handle(GLOSSARY_CHANNELS.create, (_event, rawRequest: unknown) =>
     handlers.create(rawRequest)

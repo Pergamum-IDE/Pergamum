@@ -1,6 +1,15 @@
 import { app, BrowserWindow } from "electron";
 import started from "electron-squirrel-startup";
 import path from "node:path";
+import { parseDebugModeFromArgv } from "./debugMode";
+import {
+  createDebugLogger,
+  createDebugLogRuntimeDetails,
+  resolveDebugLogsDirectory,
+  setDebugLogger,
+  type DebugLogger
+} from "./debugLogger";
+import { registerDebugLogIpc } from "./debugLogIpc";
 import { registerFileIpc } from "./fileIpc";
 import { registerGlossaryIpc } from "./glossaryIpc";
 import { installApplicationMenu } from "./menu";
@@ -8,6 +17,7 @@ import { registerProjectIpc } from "./projectIpc";
 import { registerSettingsIpc } from "./settingsIpc";
 
 let mainWindow: BrowserWindow | null = null;
+const pergamumDebugMode = parseDebugModeFromArgv(process.argv);
 
 if (started) {
   app.quit();
@@ -42,11 +52,71 @@ async function createMainWindow(): Promise<void> {
   );
 }
 
+function installDebugLogLifecycleHandlers(logger: DebugLogger): void {
+  app.on("before-quit", () => {
+    logger.flushAndClose();
+  });
+  app.on("will-quit", () => {
+    logger.flushAndClose();
+  });
+
+  process.on("uncaughtException", (error) => {
+    logger.log({
+      level: "error",
+      event: "app.uncaughtException",
+      details: {
+        operation: "unknown",
+        result: "failed",
+        error
+      }
+    });
+    logger.flushAndClose();
+    process.exit(1);
+  });
+
+  process.on("unhandledRejection", (reason) => {
+    logger.log({
+      level: "error",
+      event: "app.unhandledRejection",
+      details: {
+        operation: "unknown",
+        result: "failed",
+        error: reason
+      }
+    });
+    logger.flushAndClose();
+    process.exit(1);
+  });
+}
+
 app.whenReady().then(async () => {
+  const debugLogger = createDebugLogger({
+    enabled: pergamumDebugMode,
+    runtime: createDebugLogRuntimeDetails(app, pergamumDebugMode),
+    isDevelopmentBuild: !app.isPackaged
+  });
+  setDebugLogger(debugLogger);
+  installDebugLogLifecycleHandlers(debugLogger);
+  debugLogger.log({
+    level: "info",
+    event: "app.start",
+    details: {
+      appVersion: true,
+      platform: true,
+      arch: true,
+      locale: true,
+      electronVersion: true,
+      nodeVersion: true,
+      debugMode: true
+    }
+  });
+  debugLogger.openFileSink(resolveDebugLogsDirectory(app));
+
   await installApplicationMenu();
-  registerFileIpc();
-  registerGlossaryIpc();
-  registerProjectIpc();
+  registerDebugLogIpc(debugLogger);
+  registerFileIpc(debugLogger);
+  registerGlossaryIpc(debugLogger);
+  registerProjectIpc(debugLogger);
   registerSettingsIpc();
   void createMainWindow();
 
