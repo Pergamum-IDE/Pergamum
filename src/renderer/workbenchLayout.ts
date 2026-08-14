@@ -14,7 +14,7 @@ export const UTILITY_WINDOW_MIN_HEIGHT = 140;
 export const UTILITY_WINDOW_DEFAULT_HEIGHT = 220;
 export const EDITOR_AREA_MIN_HEIGHT = 240;
 
-export type UtilityWindowTabId = "occurrences";
+export type UtilityWindowTabId = "occurrences" | "debugLog";
 
 export const defaultUtilityWindowTab: UtilityWindowTabId = "occurrences";
 

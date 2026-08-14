@@ -1,6 +1,6 @@
 export function parseDebugModeFromArgv(argv: readonly string[]): boolean {
   return argv.some((argument, index) => {
-    if (argument !== "--pergamum-debug") {
+    if (argument.toLowerCase() !== "--pergamum-debug") {
       return false;
     }
 

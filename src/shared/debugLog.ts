@@ -2,6 +2,9 @@ export const debugLogLevels = ["debug", "info", "warn", "error"] as const;
 
 export type DebugLogLevel = (typeof debugLogLevels)[number];
 
+export const DEFAULT_DEBUG_LOG_UI_BUFFER_LIMIT = 1_000;
+export const DEBUG_LOG_GAP_RECOVERY_LIMIT = 3;
+
 export const debugLogEventNames = [
   "app.start",
   "log.file.opened",
@@ -176,6 +179,22 @@ export interface DebugLogEvent {
   details?: DebugLogDetails;
 }
 
+export interface SanitizedDebugLogEvent {
+  seq: number;
+  timestamp: string;
+  level: DebugLogLevel;
+  event: DebugLogEventName;
+  details?: DebugLogDetails;
+}
+
+export interface DebugLogSnapshot {
+  enabled: boolean;
+  sessionId: string | null;
+  events: SanitizedDebugLogEvent[];
+  uiDroppedEventCount: number;
+  uiBufferLimit: number;
+}
+
 export interface RendererDebugLogRequest {
   level: DebugLogLevel | string;
   event: DebugLogEventName | string;
@@ -241,4 +260,3 @@ export function isDebugLogLevel(value: unknown): value is DebugLogLevel {
 export function isDebugLogEventName(value: unknown): value is DebugLogEventName {
   return includesValue(debugLogEventNames, value);
 }
-

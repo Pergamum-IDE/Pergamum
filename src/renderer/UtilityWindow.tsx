@@ -6,9 +6,15 @@ interface UtilityWindowProps {
   activeTab: UtilityWindowTabId;
   height: number;
   translate: Translate;
+  onSelectTab: (tab: UtilityWindowTabId) => void;
   onClose: () => void;
   children?: ReactNode;
 }
+
+const utilityWindowTabs: readonly UtilityWindowTabId[] = [
+  "occurrences",
+  "debugLog"
+];
 
 function utilityWindowTabLabel(
   tab: UtilityWindowTabId,
@@ -17,6 +23,8 @@ function utilityWindowTabLabel(
   switch (tab) {
     case "occurrences":
       return translate("utilityWindow.tabs.occurrences");
+    case "debugLog":
+      return translate("utilityWindow.tabs.debugLog");
   }
 }
 
@@ -24,6 +32,7 @@ export function UtilityWindow({
   activeTab,
   height,
   translate,
+  onSelectTab,
   onClose,
   children
 }: UtilityWindowProps): JSX.Element {
@@ -41,13 +50,20 @@ export function UtilityWindow({
           role="tablist"
           aria-label={label}
         >
-          <span
-            className="utilityWindowTab isActive"
-            role="tab"
-            aria-selected="true"
-          >
-            {utilityWindowTabLabel(activeTab, translate)}
-          </span>
+          {utilityWindowTabs.map((tab) => (
+            <button
+              key={tab}
+              type="button"
+              className={`utilityWindowTab${
+                tab === activeTab ? " isActive" : ""
+              }`}
+              role="tab"
+              aria-selected={tab === activeTab}
+              onClick={() => onSelectTab(tab)}
+            >
+              {utilityWindowTabLabel(tab, translate)}
+            </button>
+          ))}
         </div>
         <button
           type="button"

@@ -1,5 +1,6 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  DEBUG_LOG_CHANNELS,
   FILE_CHANNELS,
   GLOSSARY_CHANNELS,
   type PergamumApi
@@ -10,7 +11,10 @@ const electronMock = vi.hoisted(() => ({
   exposeInMainWorld: vi.fn((key: string, api: PergamumApi) => {
     electronMock.exposedApi = api;
   }),
-  invoke: vi.fn()
+  invoke: vi.fn(),
+  on: vi.fn(),
+  off: vi.fn(),
+  send: vi.fn()
 }));
 
 vi.mock("electron", () => ({
@@ -18,7 +22,10 @@ vi.mock("electron", () => ({
     exposeInMainWorld: electronMock.exposeInMainWorld
   },
   ipcRenderer: {
-    invoke: electronMock.invoke
+    invoke: electronMock.invoke,
+    on: electronMock.on,
+    off: electronMock.off,
+    send: electronMock.send
   }
 }));
 
@@ -141,6 +148,58 @@ describe("glossary preload API", () => {
         path: null,
         content: "content"
       }
+    );
+  });
+
+  it("exposes debug log snapshot and subscription APIs", async () => {
+    electronMock.invoke.mockClear();
+    electronMock.on.mockClear();
+    electronMock.off.mockClear();
+    electronMock.send.mockClear();
+    const api = electronMock.exposedApi;
+
+    if (!api) {
+      throw new Error("Pergamum API was not exposed.");
+    }
+
+    const receivedEvents: unknown[] = [];
+    const unsubscribe = api.debugLog.onEvent((event) => {
+      receivedEvents.push(event);
+    });
+    const listener = electronMock.on.mock.calls[0][1] as (
+      event: unknown,
+      debugLogEvent: unknown
+    ) => void;
+    const sanitizedEvent = {
+      seq: 1,
+      timestamp: "2026-08-14T22:00:21.959+09:00",
+      level: "info",
+      event: "app.start"
+    };
+
+    await api.debugLog.getSnapshot();
+    listener({}, sanitizedEvent);
+    unsubscribe();
+
+    expect(electronMock.invoke).toHaveBeenCalledWith(
+      DEBUG_LOG_CHANNELS.getSnapshot
+    );
+    expect(electronMock.on).toHaveBeenCalledWith(
+      DEBUG_LOG_CHANNELS.event,
+      expect.any(Function)
+    );
+    expect(electronMock.send).toHaveBeenNthCalledWith(
+      1,
+      DEBUG_LOG_CHANNELS.subscribe
+    );
+    expect(receivedEvents).toEqual([sanitizedEvent]);
+    expect(electronMock.off).toHaveBeenCalledWith(
+      DEBUG_LOG_CHANNELS.event,
+      listener
+    );
+    expect(electronMock.send).toHaveBeenNthCalledWith(
+      2,
+      DEBUG_LOG_CHANNELS.unsubscribe
     );
   });
 });

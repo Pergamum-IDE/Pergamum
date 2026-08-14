@@ -7,7 +7,10 @@ import {
   type CreateDebugLoggerOptions
 } from "../../src/main/debugLogger";
 import { resolveDebugLogFilePath } from "../../src/main/debugLogPath";
-import type { DebugLogEvent } from "../../src/shared/debugLog";
+import {
+  DEFAULT_DEBUG_LOG_UI_BUFFER_LIMIT,
+  type DebugLogEvent
+} from "../../src/shared/debugLog";
 
 const sessionId = "018f4b8c-7a2b-4c3d-9e4f-100000000001";
 const runtime: CreateDebugLoggerOptions["runtime"] = {
@@ -57,6 +60,135 @@ describe("debug logger", () => {
     logger.openFileSink(logsDir);
 
     await expect(jsonlFiles(logsDir)).resolves.toEqual([]);
+  });
+
+  it("returns a disabled snapshot without allocating or sanitizing a UI buffer", () => {
+    const logger = createTestLogger({
+      enabled: false,
+      runtime
+    });
+    const details = {};
+
+    Object.defineProperty(details, "appVersion", {
+      get() {
+        throw new Error("sanitizer should not read disabled details");
+      }
+    });
+
+    expect(() => {
+      logger.log({
+        level: "info",
+        event: "app.start",
+        details
+      });
+    }).not.toThrow();
+
+    expect(logger.getSnapshot()).toEqual({
+      enabled: false,
+      sessionId: null,
+      events: [],
+      uiDroppedEventCount: 0,
+      uiBufferLimit: DEFAULT_DEBUG_LOG_UI_BUFFER_LIMIT
+    });
+  });
+
+  it("returns sanitized current-session events without file paths or per-event session IDs", async () => {
+    const logger = createTestLogger(
+      enabledOptions([new Date(2026, 7, 14, 15, 29, 0, 1)])
+    );
+    const rawError = new Error("C:\\Users\\name\\secret.md failed");
+    rawError.stack = "stack with C:\\Users\\name\\secret.md";
+
+    logger.logRendererRequest({
+      level: "warn",
+      event: "command.invoked",
+      sessionId: "renderer-session",
+      seq: 99,
+      timestamp: "1999-01-01T00:00:00.000+00:00",
+      details: {
+        commandId: "workspace.files.focus",
+        source: "renderer",
+        message: "free form",
+        fileName: "secret.md",
+        absolutePath: "C:\\Users\\name\\secret.md",
+        error: rawError
+      }
+    });
+    logger.openFileSink(logsDir);
+
+    const snapshot = logger.getSnapshot();
+    const serializedSnapshot = JSON.stringify(snapshot);
+
+    expect(snapshot.enabled).toBe(true);
+    expect(snapshot.sessionId).toBe(sessionId);
+    expect(snapshot.events).toHaveLength(2);
+    expect(snapshot.events[0]).toMatchObject({
+      seq: 1,
+      level: "debug",
+      event: "command.invoked",
+      details: {
+        commandId: "workspace.files.focus",
+        droppedKeyCount: 4,
+        error: {
+          name: "Error",
+          category: "unknown"
+        }
+      }
+    });
+    expect(snapshot.events[0].timestamp).toMatch(
+      /^2026-08-14T15:29:00\.001[+-]\d{2}:\d{2}$/
+    );
+    expect(snapshot.events[0]).not.toHaveProperty("sessionId");
+    expect(snapshot).not.toHaveProperty("currentFilePath");
+    expect(serializedSnapshot).not.toContain(logsDir);
+    expect(serializedSnapshot).not.toContain(".jsonl");
+    expect(serializedSnapshot).not.toContain("renderer-session");
+    expect(serializedSnapshot).not.toContain("1999-01-01");
+    expect(serializedSnapshot).not.toContain("source");
+    expect(serializedSnapshot).not.toContain("free form");
+    expect(serializedSnapshot).not.toContain("secret.md");
+    expect(serializedSnapshot).not.toContain("stack");
+  });
+
+  it("drops the oldest UI buffer events past the UI buffer limit", () => {
+    const logger = createTestLogger(
+      enabledOptions(
+        [
+          new Date(2026, 7, 14, 15, 29, 0, 1),
+          new Date(2026, 7, 14, 15, 29, 0, 2),
+          new Date(2026, 7, 14, 15, 29, 0, 3)
+        ],
+        {
+          uiBufferLimit: 2
+        }
+      )
+    );
+
+    logger.log({
+      level: "debug",
+      event: "command.invoked",
+      details: { commandId: "workspace.files.focus" }
+    });
+    logger.log({
+      level: "debug",
+      event: "command.invoked",
+      details: { commandId: "workspace.search.focus" }
+    });
+    logger.log({
+      level: "debug",
+      event: "command.invoked",
+      details: { commandId: "workspace.glossary.focus" }
+    });
+
+    const snapshot = logger.getSnapshot();
+
+    expect(snapshot.uiBufferLimit).toBe(2);
+    expect(snapshot.uiDroppedEventCount).toBe(1);
+    expect(snapshot.events.map((event) => event.seq)).toEqual([2, 3]);
+    expect(snapshot.events.map((event) => event.details?.commandId)).toEqual([
+      "workspace.search.focus",
+      "workspace.glossary.focus"
+    ]);
   });
 
   it("flushes pre-sink events and writes log.file.opened metadata", async () => {
@@ -346,7 +478,60 @@ describe("debug logger", () => {
     expect(writtenLines).toHaveLength(1);
     expect(writtenLines[0]).toContain("log.file.opened");
     expect(writtenLines.join("")).not.toContain("log.file.write.failed");
+    expect(logger.getSnapshot().events.map((event) => event.event)).toEqual([
+      "log.file.opened",
+      "command.invoked",
+      "log.file.write.failed",
+      "command.invoked"
+    ]);
     expect(warnings).toContain("Pergamum debug log write failed.");
+  });
+
+  it("notifies subscribers in order independently from UI buffer drops", () => {
+    const logger = createTestLogger(
+      enabledOptions(
+        [
+          new Date(2026, 7, 14, 15, 29, 0, 1),
+          new Date(2026, 7, 14, 15, 29, 0, 2),
+          new Date(2026, 7, 14, 15, 29, 0, 3)
+        ],
+        {
+          uiBufferLimit: 1
+        }
+      )
+    );
+    const receivedSeq: number[] = [];
+    const unsubscribe = logger.subscribe((event) => {
+      receivedSeq.push(event.seq);
+    });
+
+    logger.log({
+      level: "debug",
+      event: "command.invoked",
+      details: { commandId: "workspace.files.focus" }
+    });
+    logger.log({
+      level: "debug",
+      event: "command.invoked",
+      details: { commandId: "workspace.search.focus" }
+    });
+    logger.log({
+      level: "debug",
+      event: "command.invoked",
+      details: { commandId: "workspace.glossary.focus" }
+    });
+    unsubscribe();
+    logger.log({
+      level: "debug",
+      event: "command.invoked",
+      details: { commandId: "workspace.settings.toggle" }
+    });
+
+    const snapshot = logger.getSnapshot();
+
+    expect(receivedSeq).toEqual([1, 2, 3]);
+    expect(snapshot.events.map((event) => event.seq)).toEqual([4]);
+    expect(snapshot.uiDroppedEventCount).toBe(3);
   });
 });
 

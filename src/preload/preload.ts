@@ -57,7 +57,25 @@ const pergamumApi: PergamumApi = {
       })
   },
   debugLog: {
-    logEvent: (request) => ipcRenderer.invoke(DEBUG_LOG_CHANNELS.logEvent, request)
+    logEvent: (request) =>
+      ipcRenderer.invoke(DEBUG_LOG_CHANNELS.logEvent, request),
+    getSnapshot: () => ipcRenderer.invoke(DEBUG_LOG_CHANNELS.getSnapshot),
+    onEvent: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        debugLogEvent: unknown
+      ) => {
+        callback(debugLogEvent as Parameters<typeof callback>[0]);
+      };
+
+      ipcRenderer.on(DEBUG_LOG_CHANNELS.event, listener);
+      ipcRenderer.send(DEBUG_LOG_CHANNELS.subscribe);
+
+      return () => {
+        ipcRenderer.off(DEBUG_LOG_CHANNELS.event, listener);
+        ipcRenderer.send(DEBUG_LOG_CHANNELS.unsubscribe);
+      };
+    }
   }
 };
 
