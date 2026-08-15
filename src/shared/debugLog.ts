@@ -202,6 +202,10 @@ export interface RendererDebugLogRequest {
 }
 
 export const knownDebugLogCommandIds = [
+  "app.project.open",
+  "editor.document.markdown.open",
+  "editor.document.save",
+  "app.recentProjects.toggle",
   "workspace.files.focus",
   "workspace.search.focus",
   "workspace.glossary.focus",
