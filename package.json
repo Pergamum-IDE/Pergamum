@@ -1,7 +1,7 @@
 {
   "name": "pergamum",
   "productName": "Pergamum",
-  "version": "0.40.0",
+  "version": "0.41.0",
   "private": true,
   "engines": {
     "node": ">=24 <25"
@@ -19,7 +19,7 @@
     "make": "electron-forge make"
   },
   "dependencies": {
-    "@codemirror/lang-markdown": "^6.3.4",
+    "@codemirror/lang-markdown": "^6.5.2",
     "better-sqlite3": "^13.0.3",
     "codemirror": "^6.0.2",
     "electron-squirrel-startup": "^1.0.1",
