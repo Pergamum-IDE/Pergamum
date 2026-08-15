@@ -33,6 +33,11 @@ import {
 import { resolveEffectiveSettings } from "../shared/settings";
 import { ActivityBar } from "./ActivityBar";
 import {
+  applicationCommandIds,
+  createApplicationCommandTitles,
+  registerApplicationCommands
+} from "./applicationCommands";
+import {
   applyStandaloneSaveResult,
   createProjectDocument,
   currentDocumentContent,
@@ -59,6 +64,11 @@ import {
 } from "./debugLog";
 import { DebugLogPanel } from "./DebugLogPanel";
 import { EditorSurface } from "./EditorSurface";
+import {
+  createEditorCommandTitles,
+  editorCommandIds,
+  registerEditorCommands
+} from "./editorCommands";
 import { UtilityWindow } from "./UtilityWindow";
 import { GlossaryOccurrencesPanel } from "./GlossaryOccurrencesPanel";
 import {
@@ -238,6 +248,17 @@ export function App(): JSX.Element {
   const closeGlossaryOccurrenceTrackingRef = useRef<() => boolean>(
     () => false
   );
+  const openProjectCommandRef = useRef<() => Promise<void>>(() =>
+    Promise.resolve()
+  );
+  const openMarkdownDocumentCommandRef = useRef<() => Promise<void>>(() =>
+    Promise.resolve()
+  );
+  const saveCurrentDocumentCommandRef = useRef<() => Promise<void>>(() =>
+    Promise.resolve()
+  );
+  const toggleRecentProjectsCommandRef = useRef<() => void>(() => undefined);
+  const canSaveCurrentDocumentCommandRef = useRef<() => boolean>(() => false);
   const mainAreaRef = useRef<HTMLElement | null>(null);
   const editorAreaBodyRef = useRef<HTMLElement | null>(null);
   const sidebarWidthAtDragStartRef = useRef(layout.sidebar.width);
@@ -362,6 +383,23 @@ export function App(): JSX.Element {
   const commandRegistry = useMemo(() => {
     const registry = new CommandRegistry();
 
+    registerApplicationCommands(
+      registry,
+      {
+        openProject: () => openProjectCommandRef.current(),
+        toggleRecentProjects: () => toggleRecentProjectsCommandRef.current()
+      },
+      createApplicationCommandTitles(translate)
+    );
+    registerEditorCommands(
+      registry,
+      {
+        openMarkdownDocument: () => openMarkdownDocumentCommandRef.current(),
+        saveCurrentDocument: () => saveCurrentDocumentCommandRef.current(),
+        canSaveCurrentDocument: () => canSaveCurrentDocumentCommandRef.current()
+      },
+      createEditorCommandTitles(translate)
+    );
     registerWorkspaceCommands(
       registry,
       {
@@ -844,6 +882,10 @@ export function App(): JSX.Element {
         commandId: String(commandId)
       }
     });
+
+    if (!commandRegistry.isEnabled(commandId, ...args)) {
+      return;
+    }
 
     void commandRegistry.execute(commandId, ...args).catch((error) => {
       logRendererDebugEvent({
@@ -1495,6 +1537,14 @@ export function App(): JSX.Element {
     }
   }
 
+  openProjectCommandRef.current = openProject;
+  openMarkdownDocumentCommandRef.current = openFile;
+  saveCurrentDocumentCommandRef.current = saveFile;
+  toggleRecentProjectsCommandRef.current = () => {
+    setIsRecentProjectsOpen((isOpen) => !isOpen);
+  };
+  canSaveCurrentDocumentCommandRef.current = () => canSave;
+
   async function activateProjectDocument(relativePath: string): Promise<void> {
     const document = project?.documents.find(
       (projectDocument) => projectDocument.relativePath === relativePath
@@ -1559,22 +1609,32 @@ export function App(): JSX.Element {
             </span>
           ) : null}
         </div>
-        <button type="button" onClick={openProject}>
+        <button
+          type="button"
+          onClick={() => executeUiCommand(applicationCommandIds.openProject)}
+        >
           {translate("toolbar.openProject")}
         </button>
-        <button type="button" onClick={openFile}>
+        <button
+          type="button"
+          onClick={() =>
+            executeUiCommand(editorCommandIds.openMarkdownDocument)
+          }
+        >
           {translate("common.open")}
         </button>
         <button
           type="button"
-          onClick={saveFile}
-          disabled={!canSave}
+          onClick={() => executeUiCommand(editorCommandIds.saveDocument)}
+          disabled={!commandRegistry.isEnabled(editorCommandIds.saveDocument)}
         >
           {translate("common.save")}
         </button>
         <button
           type="button"
-          onClick={() => setIsRecentProjectsOpen((isOpen) => !isOpen)}
+          onClick={() =>
+            executeUiCommand(applicationCommandIds.toggleRecentProjects)
+          }
         >
           {translate("toolbar.recentProjects")}
         </button>

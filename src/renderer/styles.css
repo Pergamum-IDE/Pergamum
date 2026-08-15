@@ -78,6 +78,20 @@ button:active {
   background: #f2f5f8;
 }
 
+.toolbar button:disabled {
+  border-color: var(--workspace-sidebar-divider);
+  background: var(--workspace-sidebar-background);
+  color: var(--workspace-sidebar-muted-foreground);
+  cursor: not-allowed;
+  opacity: 0.62;
+}
+
+.toolbar button:disabled:hover,
+.toolbar button:disabled:active {
+  background: var(--workspace-sidebar-background);
+  color: var(--workspace-sidebar-muted-foreground);
+}
+
 .documentTitle {
   display: flex;
   align-items: center;
