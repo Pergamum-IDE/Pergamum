@@ -31,6 +31,14 @@ type RegisteredCommand = Command<readonly unknown[], unknown>;
 
 const commandIdSegmentPattern = /^[a-z][A-Za-z0-9]*$/;
 
+/**
+ * Command IDs name the user-visible operation, not the UI entry point.
+ * Prefer {domain}.{target}.{verb}; keep the verb last; put objects on the
+ * target side instead of folding them into the verb. Use a fourth segment only
+ * when a compound target needs it. A Command ID may be used as the stem of an
+ * i18n key, but it is not the displayed label itself.
+ */
+
 export class InvalidCommandIdError extends Error {
   constructor(commandId: string) {
     super(`Invalid command ID: ${commandId}`);

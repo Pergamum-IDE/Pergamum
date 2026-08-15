@@ -32,10 +32,10 @@ describe("glossary occurrences commands", () => {
     );
 
     expect(registry.list().map((command) => command.id)).toEqual([
-      glossaryOccurrencesCommandIds.previous,
-      glossaryOccurrencesCommandIds.next,
-      glossaryOccurrencesCommandIds.openEntry,
-      glossaryOccurrencesCommandIds.closeTracking
+      "glossary.occurrences.previous",
+      "glossary.occurrences.next",
+      "glossary.occurrences.entry.open",
+      "glossary.occurrences.tracking.close"
     ]);
   });
 
@@ -106,8 +106,8 @@ describe("glossary occurrences commands", () => {
     expect(createGlossaryOccurrencesCommandTitles(translate)).toEqual({
       previous: "command.glossary.occurrences.previous",
       next: "command.glossary.occurrences.next",
-      openEntry: "command.glossary.occurrences.openEntry",
-      closeTracking: "command.glossary.occurrences.closeTracking"
+      openEntry: "command.glossary.occurrences.entry.open",
+      closeTracking: "command.glossary.occurrences.tracking.close"
     });
   });
 });

@@ -11,10 +11,10 @@ export const glossaryOccurrencesCommandIds = {
   ),
   next: defineCommandId<readonly [], boolean>("glossary.occurrences.next"),
   openEntry: defineCommandId<readonly [], boolean>(
-    "glossary.occurrences.openEntry"
+    "glossary.occurrences.entry.open"
   ),
   closeTracking: defineCommandId<readonly [], boolean>(
-    "glossary.occurrences.closeTracking"
+    "glossary.occurrences.tracking.close"
   )
 } as const;
 
@@ -40,8 +40,8 @@ export function createGlossaryOccurrencesCommandTitles(
   return {
     previous: translate("command.glossary.occurrences.previous"),
     next: translate("command.glossary.occurrences.next"),
-    openEntry: translate("command.glossary.occurrences.openEntry"),
-    closeTracking: translate("command.glossary.occurrences.closeTracking")
+    openEntry: translate("command.glossary.occurrences.entry.open"),
+    closeTracking: translate("command.glossary.occurrences.tracking.close")
   };
 }
 

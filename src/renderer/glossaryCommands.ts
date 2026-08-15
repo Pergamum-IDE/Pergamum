@@ -20,11 +20,11 @@ export const glossaryCommandIds = {
   previousOccurrence: defineCommandId<
     readonly [entryId: GlossaryEntryId],
     boolean
-  >("glossary.entry.previousOccurrence"),
+  >("glossary.entry.occurrences.previous"),
   nextOccurrence: defineCommandId<
     readonly [entryId: GlossaryEntryId],
     boolean
-  >("glossary.entry.nextOccurrence")
+  >("glossary.entry.occurrences.next")
 } as const;
 
 export interface GlossaryCommandController {
@@ -73,8 +73,8 @@ export function createGlossaryCommandTitles(
   return {
     openEntry: translate("command.glossary.entry.open"),
     createEntry: translate("command.glossary.entry.create"),
-    previousOccurrence: translate("glossaryEditor.previousOccurrence"),
-    nextOccurrence: translate("glossaryEditor.nextOccurrence")
+    previousOccurrence: translate("command.glossary.entry.occurrences.previous"),
+    nextOccurrence: translate("command.glossary.entry.occurrences.next")
   };
 }
 
