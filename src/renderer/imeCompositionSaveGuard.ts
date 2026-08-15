@@ -1,0 +1,214 @@
+import {
+  editorCommandIds,
+  isFileMenuCommandId,
+  type FileMenuCommandId
+} from "../shared/commandIds";
+import type { DebugLogEventName } from "../shared/debugLog";
+
+export type FileMenuCommandExecutor = (commandId: FileMenuCommandId) => void;
+export type CancelScheduledTask = () => void;
+export type ScheduleTask = (callback: () => void) => CancelScheduledTask;
+export type ImePendingSaveClearReason =
+  | "focus_left_app_shell"
+  | "active_editor_changed"
+  | "project_context_changed"
+  | "unmount"
+  | "composition_restarted"
+  | "manual_clear";
+export type ImeCompositionSaveGuardLogger = (input: {
+  event: DebugLogEventName;
+  details?: Record<string, unknown>;
+}) => void;
+
+export interface ImeCompositionSaveGuardOptions {
+  schedule?: ScheduleTask;
+  log?: ImeCompositionSaveGuardLogger;
+}
+
+export interface ImeCompositionSaveGuard {
+  handleCompositionStart(): void;
+  handleCompositionEnd(execute: FileMenuCommandExecutor): void;
+  handleCommand(commandId: string, execute: FileMenuCommandExecutor): boolean;
+  clearPendingSave(reason?: ImePendingSaveClearReason): void;
+  hasPendingSave(): boolean;
+  hasScheduledSave(): boolean;
+  isComposing(): boolean;
+}
+
+export function scheduleNextTask(callback: () => void): CancelScheduledTask {
+  const timeoutId = setTimeout(callback, 0);
+
+  return () => clearTimeout(timeoutId);
+}
+
+/**
+ * Defers only Save commands that actually reach Pergamum during IME composition.
+ *
+ * #118 dogfood did not observe CommandOrControl+S reaching Pergamum during
+ * composition in the tested Japanese IMEs; those IMEs consumed or handled the
+ * shortcut before Electron's menu command path. The guard remains as a safety
+ * net for IME versions, settings, platforms, and non-Japanese IMEs where Save
+ * may reach Pergamum before committed text reaches the editor model.
+ *
+ * 日本語メモ:
+ * 確認した日本語IMEでは変換中Ctrl+SはPergamumまで届かなかったが、
+ * 未検証IMEや将来の挙動変更に備え、Save command が composition 中に
+ * 届いた場合だけ compositionend 後へ遅延する。IMEが消費したショートカットを
+ * Pergamumが後からSaveとして捏造してはいけない。
+ */
+
+export function createImeCompositionSaveGuard({
+  schedule = scheduleNextTask,
+  log = () => undefined
+}: ImeCompositionSaveGuardOptions = {}): ImeCompositionSaveGuard {
+  let composing = false;
+  let pendingSave = false;
+  let cancelScheduledSave: CancelScheduledTask | null = null;
+
+  function hasScheduledSave(): boolean {
+    return cancelScheduledSave !== null;
+  }
+
+  function pendingStateDetails(): Record<string, unknown> {
+    return {
+      isComposing: composing,
+      hasPendingSave: pendingSave,
+      hasScheduledSave: hasScheduledSave()
+    };
+  }
+
+  function clearScheduledSave(): void {
+    if (!cancelScheduledSave) {
+      return;
+    }
+
+    cancelScheduledSave();
+    cancelScheduledSave = null;
+  }
+
+  function clearScheduledSaveForReason(
+    reason: ImePendingSaveClearReason
+  ): void {
+    if (!hasScheduledSave()) {
+      return;
+    }
+
+    log({
+      event: "ime.save.pending.cleared",
+      details: {
+        reason,
+        ...pendingStateDetails()
+      }
+    });
+    clearScheduledSave();
+  }
+
+  function clearPendingSave(
+    reason: ImePendingSaveClearReason = "manual_clear"
+  ): void {
+    const hadPendingSave = pendingSave;
+    const hadScheduledSave = hasScheduledSave();
+
+    if (hadPendingSave || hadScheduledSave) {
+      log({
+        event: "ime.save.pending.cleared",
+        details: {
+          reason,
+          ...pendingStateDetails()
+        }
+      });
+    }
+
+    pendingSave = false;
+    clearScheduledSave();
+  }
+
+  return {
+    handleCompositionStart: () => {
+      composing = true;
+      clearScheduledSaveForReason("composition_restarted");
+    },
+    handleCompositionEnd: (execute) => {
+      composing = false;
+
+      if (!pendingSave) {
+        return;
+      }
+
+      pendingSave = false;
+      clearScheduledSave();
+      cancelScheduledSave = schedule(() => {
+        cancelScheduledSave = null;
+        log({
+          event: "ime.save.pending.executed",
+          details: {
+            commandId: editorCommandIds.saveDocument,
+            operation: "command",
+            result: "succeeded",
+            ...pendingStateDetails()
+          }
+        });
+        execute(editorCommandIds.saveDocument);
+      });
+      log({
+        event: "ime.save.pending.scheduled",
+        details: {
+          commandId: editorCommandIds.saveDocument,
+          operation: "command",
+          result: "succeeded",
+          ...pendingStateDetails()
+        }
+      });
+    },
+    handleCommand: (commandId, execute) => {
+      if (!isFileMenuCommandId(commandId)) {
+        log({
+          event: "ime.command.ignored",
+          details: {
+            commandId,
+            operation: "command",
+            result: "ignored",
+            reason: "invalid_command",
+            ...pendingStateDetails()
+          }
+        });
+        return false;
+      }
+
+      if (commandId === editorCommandIds.saveDocument && composing) {
+        if (!pendingSave) {
+          pendingSave = true;
+          log({
+            event: "ime.save.pending.created",
+            details: {
+              commandId,
+              operation: "command",
+              result: "succeeded",
+              ...pendingStateDetails()
+            }
+          });
+          return true;
+        }
+
+        pendingSave = true;
+        return true;
+      }
+
+      log({
+        event: "ime.command.passed_through",
+        details: {
+          commandId,
+          operation: "command",
+          result: "succeeded",
+          ...pendingStateDetails()
+        }
+      });
+      execute(commandId);
+      return true;
+    },
+    clearPendingSave,
+    hasPendingSave: () => pendingSave,
+    hasScheduledSave,
+    isComposing: () => composing
+  };
+}

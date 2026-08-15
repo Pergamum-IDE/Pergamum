@@ -8,6 +8,7 @@ export type ApplicationMenuCommandSubscription = (
 ) => () => void;
 
 export type FileMenuCommandExecutor = (commandId: FileMenuCommandId) => void;
+export type ApplicationMenuCommandExecutor = (commandId: string) => void;
 
 export function invokeFileMenuCommand(
   commandId: string,
@@ -23,9 +24,9 @@ export function invokeFileMenuCommand(
 
 export function subscribeApplicationMenuCommands(
   onCommand: ApplicationMenuCommandSubscription,
-  getExecutor: () => FileMenuCommandExecutor
+  getExecutor: () => ApplicationMenuCommandExecutor
 ): () => void {
   return onCommand((commandId) => {
-    invokeFileMenuCommand(commandId, getExecutor());
+    getExecutor()(commandId);
   });
 }

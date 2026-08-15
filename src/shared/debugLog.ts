@@ -13,10 +13,27 @@ export const debugLogEventNames = [
   "log.file.write.failed",
   "project.open.succeeded",
   "project.open.failed",
+  "application_menu.command.sent",
+  "application_menu.command.received",
   "command.invoked",
   "command.failed",
   "document.open.failed",
   "document.save.failed",
+  "ime.composition.started",
+  "ime.composition.ended",
+  "ime.command.passed_through",
+  "ime.command.ignored",
+  "ime.save.pending.created",
+  "ime.save.pending.scheduled",
+  "ime.save.pending.executed",
+  "ime.save.pending.cleared",
+  "ime.focus.checked",
+  "save.requested",
+  "save.in_flight.ignored",
+  "save.started",
+  "save.skipped",
+  "save.succeeded",
+  "save.failed",
   "glossary.occurrences.scan.failed",
   "app.uncaughtException",
   "app.unhandledRejection"
@@ -52,6 +69,7 @@ export const debugLogOperations = [
   "delete",
   "navigate",
   "initialize",
+  "command",
   "unknown"
 ] as const;
 
@@ -76,6 +94,46 @@ export const debugLogEditorIdKinds = [
 ] as const;
 
 export type DebugLogEditorIdKind = (typeof debugLogEditorIdKinds)[number];
+
+export const debugLogReasons = [
+  "invalid_command",
+  "window_unavailable",
+  "web_contents_destroyed",
+  "focus_left_app_shell",
+  "active_editor_changed",
+  "project_context_changed",
+  "unmount",
+  "composition_restarted",
+  "manual_clear",
+  "unsupported_editor",
+  "glossary_not_dirty",
+  "glossary_already_saving",
+  "standalone_save_canceled",
+  "no_save_target",
+  "unknown"
+] as const;
+
+export type DebugLogReason = (typeof debugLogReasons)[number];
+
+export const debugLogApplicationMenuTriggers = [
+  "menu",
+  "accelerator",
+  "unknown"
+] as const;
+
+export type DebugLogApplicationMenuTrigger =
+  (typeof debugLogApplicationMenuTriggers)[number];
+
+export const debugLogSaveTargetKinds = [
+  "projectDocument",
+  "standaloneMarkdown",
+  "glossaryEntry",
+  "unsupported",
+  "unknown"
+] as const;
+
+export type DebugLogSaveTargetKind =
+  (typeof debugLogSaveTargetKinds)[number];
 
 export const debugLogPathKinds = [
   "projectFile",
@@ -149,7 +207,21 @@ export interface DebugLogDetails {
   editorIdKind?: DebugLogEditorIdKind;
   operation?: DebugLogOperation;
   result?: DebugLogResult;
+  reason?: DebugLogReason;
+  trigger?: DebugLogApplicationMenuTrigger;
   statusKey?: string;
+
+  hasPendingSave?: boolean;
+  hasScheduledSave?: boolean;
+  isComposing?: boolean;
+  isDirty?: boolean;
+  canSave?: boolean;
+  hasRelatedTarget?: boolean;
+  nextTargetInsideAppShell?: boolean;
+  documentHasFocus?: boolean;
+  willClearPendingSave?: boolean;
+
+  saveTargetKind?: DebugLogSaveTargetKind;
 
   projectRef?: string;
   documentRef?: string;

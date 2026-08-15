@@ -132,11 +132,129 @@ describe("application menu", () => {
       editorCommandIds.saveDocument
     );
   });
+
+  it("logs successful menu command routing before sending IPC", () => {
+    const { window, send } = menuWindowMock();
+    const debugLogger = debugLoggerMock();
+
+    expect(
+      sendApplicationMenuCommand(
+        () => window,
+        editorCommandIds.saveDocument,
+        debugLogger
+      )
+    ).toBe(true);
+
+    expect(debugLogger.log).toHaveBeenCalledWith({
+      level: "debug",
+      event: "application_menu.command.sent",
+      details: {
+        commandId: editorCommandIds.saveDocument,
+        operation: "command",
+        result: "succeeded",
+        trigger: "unknown"
+      }
+    });
+    expect(debugLogger.log.mock.invocationCallOrder[0]).toBeLessThan(
+      send.mock.invocationCallOrder[0]
+    );
+  });
+
+  it("logs ignored menu command routing reasons", () => {
+    const debugLogger = debugLoggerMock();
+    const { window: destroyedWebContentsWindow } = menuWindowMock({
+      webContentsDestroyed: true
+    });
+
+    sendApplicationMenuCommand(
+      () => null,
+      editorCommandIds.saveDocument,
+      debugLogger
+    );
+    sendApplicationMenuCommand(
+      () => destroyedWebContentsWindow,
+      editorCommandIds.saveDocument,
+      debugLogger
+    );
+    sendApplicationMenuCommand(
+      () => destroyedWebContentsWindow,
+      "workspace.files.focus",
+      debugLogger
+    );
+
+    expect(debugLogger.log.mock.calls.map((call) => call[0].details)).toEqual([
+      {
+        commandId: editorCommandIds.saveDocument,
+        operation: "command",
+        result: "ignored",
+        trigger: "unknown",
+        reason: "window_unavailable"
+      },
+      {
+        commandId: editorCommandIds.saveDocument,
+        operation: "command",
+        result: "ignored",
+        trigger: "unknown",
+        reason: "web_contents_destroyed"
+      },
+      {
+        commandId: "workspace.files.focus",
+        operation: "command",
+        result: "ignored",
+        trigger: "unknown",
+        reason: "invalid_command"
+      }
+    ]);
+  });
+
+  it("sets accelerators on the existing File command items", () => {
+    const fileItems = fileMenuItems("win32");
+
+    expect(fileItemByLabel(fileItems, "Open Project").accelerator).toBe(
+      "CommandOrControl+Shift+O"
+    );
+    expect(fileItemByLabel(fileItems, "Open Markdown File").accelerator).toBe(
+      "CommandOrControl+O"
+    );
+    expect(fileItemByLabel(fileItems, "Save").accelerator).toBe(
+      "CommandOrControl+S"
+    );
+  });
+
+  it("does not add an accelerator to Recent Projects", () => {
+    const fileItems = fileMenuItems("win32");
+
+    expect(fileItemByLabel(fileItems, "Recent Projects").accelerator).toBe(
+      undefined
+    );
+  });
+
+  it("keeps File command accelerators in macOS and Windows/Linux templates", () => {
+    for (const platform of ["darwin", "win32", "linux"] as const) {
+      const fileItems = fileMenuItems(platform);
+
+      expect(fileItemByLabel(fileItems, "Open Project").accelerator).toBe(
+        "CommandOrControl+Shift+O"
+      );
+      expect(fileItemByLabel(fileItems, "Open Markdown File").accelerator).toBe(
+        "CommandOrControl+O"
+      );
+      expect(fileItemByLabel(fileItems, "Save").accelerator).toBe(
+        "CommandOrControl+S"
+      );
+    }
+  });
 });
 
 function emptyMenuOptions(): ApplicationMenuOptions {
   return {
     getMainWindow: () => null
+  };
+}
+
+function debugLoggerMock(): { log: ReturnType<typeof vi.fn> } {
+  return {
+    log: vi.fn()
   };
 }
 
@@ -170,6 +288,19 @@ function fileMenuItems(
   return submenuItems(
     findTopLevelMenu(buildApplicationMenu("en", options, platform), "File")
   );
+}
+
+function fileItemByLabel(
+  items: readonly MenuItemConstructorOptions[],
+  label: string
+): MenuItemConstructorOptions {
+  const item = items.find((candidate) => candidate.label === label);
+
+  if (!item) {
+    throw new Error(`File menu item was not found: ${label}`);
+  }
+
+  return item;
 }
 
 function clickCommandItems(items: readonly MenuItemConstructorOptions[]): void {
