@@ -1,10 +1,20 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type FocusEvent as ReactFocusEvent
+} from "react";
 import type {
   PergamumProject,
   ProjectDocument,
   SaveApplicationSettingsRequest
 } from "../shared/api";
 import type { FileMenuCommandId } from "../shared/commandIds";
+import type {
+  DebugLogEditorIdKind,
+  DebugLogSaveTargetKind
+} from "../shared/debugLog";
 import {
   CommandRegistry,
   type CommandArgumentList,
@@ -120,6 +130,7 @@ import {
   glossaryOccurrencesCommandIds,
   registerGlossaryOccurrencesCommands
 } from "./glossaryOccurrencesCommands";
+import { createImeCompositionSaveGuard } from "./imeCompositionSaveGuard";
 import {
   activeCurrentEditor,
   activeOpenDocument,
@@ -149,6 +160,7 @@ import {
 import { RecentProjectsPanel } from "./RecentProjectsPanel";
 import { resolveCurrentEditor } from "./resolveCurrentEditor";
 import { SettingsPanel } from "./SettingsPanel";
+import { createSaveInFlightGuard } from "./saveInFlightGuard";
 import { defaultSidebarMode, type SidebarMode } from "./sidebarMode";
 import { useApplicationSettings } from "./useApplicationSettings";
 import { useHorizontalDrag } from "./useHorizontalDrag";
@@ -206,6 +218,21 @@ function projectContextForProject(
   project: PergamumProject | null
 ): ActiveProjectContext | null {
   return project ? { rootPath: project.rootPath } : null;
+}
+
+function debugEditorIdKind(editorId: EditorId): DebugLogEditorIdKind {
+  return editorId.kind;
+}
+
+function debugSaveTargetKind(editor: CurrentEditor): DebugLogSaveTargetKind {
+  switch (editor.kind) {
+    case "glossaryEntry":
+      return "glossaryEntry";
+    case "markdown":
+      return isProjectCurrentDocument(editor.document)
+        ? "projectDocument"
+        : "standaloneMarkdown";
+  }
 }
 
 export function App(): JSX.Element {
@@ -313,6 +340,19 @@ export function App(): JSX.Element {
     reloadSettings,
     saveSettings
   } = useApplicationSettings();
+  const imeCompositionSaveGuard = useMemo(
+    () =>
+      createImeCompositionSaveGuard({
+        log: (input) => {
+          logRendererDebugEvent({
+            level: "debug",
+            ...input
+          });
+        }
+      }),
+    []
+  );
+  const saveInFlightGuard = useMemo(() => createSaveInFlightGuard(), []);
 
   const activeDocument = activeOpenDocument(openDocumentsState);
   const currentEditor = activeCurrentEditor(openDocumentsState);
@@ -364,13 +404,39 @@ export function App(): JSX.Element {
     () =>
       subscribeApplicationMenuCommands(
         window.pergamum.applicationMenu.onCommand,
-        () => executeUiCommandRef.current
+        () => (commandId) => {
+          logRendererDebugEvent({
+            level: "debug",
+            event: "application_menu.command.received",
+            details: {
+              commandId,
+              operation: "command",
+              result: "succeeded"
+            }
+          });
+          imeCompositionSaveGuard.handleCommand(
+            commandId,
+            executeUiCommandRef.current
+          );
+        }
       ),
-    []
+    [imeCompositionSaveGuard]
   );
   const activeProjectContext = useMemo(
     () => projectContextForProject(project),
     [project]
+  );
+  useEffect(() => {
+    imeCompositionSaveGuard.clearPendingSave("active_editor_changed");
+  }, [activeDocument.id, imeCompositionSaveGuard]);
+  useEffect(() => {
+    imeCompositionSaveGuard.clearPendingSave("project_context_changed");
+  }, [activeProjectContext?.rootPath, imeCompositionSaveGuard]);
+  useEffect(
+    () => () => {
+      imeCompositionSaveGuard.clearPendingSave("unmount");
+    },
+    [imeCompositionSaveGuard]
   );
   const effectiveSettings = useMemo(
     () => resolveEffectiveSettings(settings, project?.config?.settings),
@@ -923,6 +989,65 @@ export function App(): JSX.Element {
     executeUiCommand(commandId);
   };
 
+  function handleCompositionStartCapture(): void {
+    imeCompositionSaveGuard.handleCompositionStart();
+    logRendererDebugEvent({
+      level: "debug",
+      event: "ime.composition.started",
+      details: {
+        editorIdKind: debugEditorIdKind(activeDocument.id),
+        hasPendingSave: imeCompositionSaveGuard.hasPendingSave(),
+        hasScheduledSave: imeCompositionSaveGuard.hasScheduledSave()
+      }
+    });
+  }
+
+  function handleCompositionEndCapture(): void {
+    imeCompositionSaveGuard.handleCompositionEnd((commandId) => {
+      executeUiCommandRef.current(commandId);
+    });
+    logRendererDebugEvent({
+      level: "debug",
+      event: "ime.composition.ended",
+      details: {
+        editorIdKind: debugEditorIdKind(activeDocument.id),
+        hasPendingSave: imeCompositionSaveGuard.hasPendingSave(),
+        hasScheduledSave: imeCompositionSaveGuard.hasScheduledSave()
+      }
+    });
+  }
+
+  function handleAppBlurCapture(
+    event: ReactFocusEvent<HTMLElement>
+  ): void {
+    const nextTarget = event.relatedTarget;
+    const hasRelatedTarget = nextTarget instanceof Node;
+    const nextTargetInsideAppShell =
+      hasRelatedTarget && event.currentTarget.contains(nextTarget);
+    const willClearPendingSave = !hasRelatedTarget || !nextTargetInsideAppShell;
+
+    if (
+      imeCompositionSaveGuard.isComposing() ||
+      imeCompositionSaveGuard.hasPendingSave() ||
+      imeCompositionSaveGuard.hasScheduledSave()
+    ) {
+      logRendererDebugEvent({
+        level: "debug",
+        event: "ime.focus.checked",
+        details: {
+          hasRelatedTarget,
+          nextTargetInsideAppShell,
+          documentHasFocus: document.hasFocus(),
+          willClearPendingSave
+        }
+      });
+    }
+
+    if (willClearPendingSave) {
+      imeCompositionSaveGuard.clearPendingSave("focus_left_app_shell");
+    }
+  }
+
   async function openFile(): Promise<void> {
     try {
       const file = await window.pergamum.files.openMarkdown();
@@ -968,17 +1093,50 @@ export function App(): JSX.Element {
   }
 
   async function saveGlossaryEntry(): Promise<void> {
+    const editorIdKind = debugEditorIdKind(activeDocument.id);
+
     if (activeDocument.editor.kind !== "glossaryEntry") {
+      logRendererDebugEvent({
+        level: "debug",
+        event: "save.skipped",
+        details: {
+          editorIdKind,
+          operation: "save",
+          result: "ignored",
+          reason: "unsupported_editor"
+        }
+      });
       return;
     }
 
     const documentIdToSave = activeDocument.id;
     const draftToSave = activeDocument.editor.draft;
 
-    if (
-      !isGlossaryEntryDraftDirty(draftToSave) ||
-      draftToSave.saveState === "saving"
-    ) {
+    if (!isGlossaryEntryDraftDirty(draftToSave)) {
+      logRendererDebugEvent({
+        level: "debug",
+        event: "save.skipped",
+        details: {
+          editorIdKind,
+          operation: "save",
+          result: "ignored",
+          reason: "glossary_not_dirty"
+        }
+      });
+      return;
+    }
+
+    if (draftToSave.saveState === "saving") {
+      logRendererDebugEvent({
+        level: "debug",
+        event: "save.skipped",
+        details: {
+          editorIdKind,
+          operation: "save",
+          result: "ignored",
+          reason: "glossary_already_saving"
+        }
+      });
       return;
     }
 
@@ -1003,6 +1161,16 @@ export function App(): JSX.Element {
           projectGeneration
         )
       ) {
+        logRendererDebugEvent({
+          level: "debug",
+          event: "save.skipped",
+          details: {
+            editorIdKind,
+            operation: "save",
+            result: "ignored",
+            reason: "project_context_changed"
+          }
+        });
         return;
       }
 
@@ -1024,12 +1192,42 @@ export function App(): JSX.Element {
         key: "status.savedPath",
         values: { path: canonicalGlossarySurface(savedEntry) }
       });
+      logRendererDebugEvent({
+        level: "debug",
+        event: "save.succeeded",
+        details: {
+          editorIdKind,
+          operation: "save",
+          result: "succeeded",
+          saveTargetKind: "glossaryEntry"
+        }
+      });
     } catch (error) {
+      logRendererDebugEvent({
+        level: "error",
+        event: "save.failed",
+        details: {
+          editorIdKind,
+          operation: "save",
+          result: "failed",
+          error: rendererDebugErrorInfo(error)
+        }
+      });
       if (
         !projectActivationLifetimeRef.current.isProjectActivationCurrent(
           projectGeneration
         )
       ) {
+        logRendererDebugEvent({
+          level: "debug",
+          event: "save.skipped",
+          details: {
+            editorIdKind,
+            operation: "save",
+            result: "ignored",
+            reason: "project_context_changed"
+          }
+        });
         return;
       }
 
@@ -1357,66 +1555,162 @@ export function App(): JSX.Element {
   closeGlossaryOccurrenceTrackingRef.current = closeGlossaryOccurrenceTracking;
 
   async function saveFile(): Promise<void> {
-    if (activeDocument.editor.kind === "glossaryEntry") {
-      await saveGlossaryEntry();
-      return;
-    }
+    const editorIdKind = debugEditorIdKind(activeDocument.id);
 
-    try {
-      if (activeDocument.editor.kind !== "markdown") {
-        return;
+    logRendererDebugEvent({
+      level: "debug",
+      event: "save.requested",
+      details: {
+        editorIdKind,
+        operation: "save",
+        isDirty,
+        canSave
       }
+    });
 
-      const documentToSave = activeDocument.editor.document;
-      const documentIdToSave = activeDocument.id;
+    await saveInFlightGuard.run(
+      async () => {
+        const saveTargetKind = debugSaveTargetKind(activeDocument.editor);
 
-      if (isProjectCurrentDocument(documentToSave)) {
-        const result = await window.pergamum.projects.saveProjectDocument(
-          documentToSave.relativePath,
-          documentToSave.content
-        );
-
-        replaceSavedDocument(
-          documentIdToSave,
-          markCurrentDocumentSaved(documentToSave)
-        );
-        setStatus({
-          key: "status.savedPath",
-          values: { path: result.relativePath }
+        logRendererDebugEvent({
+          level: "debug",
+          event: "save.started",
+          details: {
+            editorIdKind,
+            operation: "save",
+            saveTargetKind
+          }
         });
-        return;
-      }
 
-      const result = await window.pergamum.files.saveMarkdown(
-        standaloneSavePath(documentToSave),
-        documentToSave.content
-      );
+        if (activeDocument.editor.kind === "glossaryEntry") {
+          await saveGlossaryEntry();
+          return;
+        }
 
-      if (!result) {
-        setStatus({ key: "status.saveCanceled" });
-        return;
-      }
+        try {
+          if (activeDocument.editor.kind !== "markdown") {
+            logRendererDebugEvent({
+              level: "debug",
+              event: "save.skipped",
+              details: {
+                editorIdKind,
+                operation: "save",
+                result: "ignored",
+                reason: "unsupported_editor"
+              }
+            });
+            return;
+          }
 
-      const savedDocument = applyStandaloneSaveResult(documentToSave, result);
-      const didCollide = replaceSavedDocument(documentIdToSave, savedDocument);
+          const documentToSave = activeDocument.editor.document;
+          const documentIdToSave = activeDocument.id;
 
-      setStatus(
-        didCollide
-          ? {
-              key: "status.saveAsTargetAlreadyOpen",
-              values: { path: result.path }
-            }
-          : {
+          if (isProjectCurrentDocument(documentToSave)) {
+            const result = await window.pergamum.projects.saveProjectDocument(
+              documentToSave.relativePath,
+              documentToSave.content
+            );
+
+            replaceSavedDocument(
+              documentIdToSave,
+              markCurrentDocumentSaved(documentToSave)
+            );
+            setStatus({
               key: "status.savedPath",
-              values: { path: savedDocument.name }
+              values: { path: result.relativePath }
+            });
+            logRendererDebugEvent({
+              level: "debug",
+              event: "save.succeeded",
+              details: {
+                editorIdKind,
+                operation: "save",
+                result: "succeeded",
+                saveTargetKind: "projectDocument"
+              }
+            });
+            return;
+          }
+
+          const result = await window.pergamum.files.saveMarkdown(
+            standaloneSavePath(documentToSave),
+            documentToSave.content
+          );
+
+          if (!result) {
+            setStatus({ key: "status.saveCanceled" });
+            logRendererDebugEvent({
+              level: "debug",
+              event: "save.skipped",
+              details: {
+                editorIdKind,
+                operation: "save",
+                result: "cancelled",
+                reason: "standalone_save_canceled"
+              }
+            });
+            return;
+          }
+
+          const savedDocument = applyStandaloneSaveResult(
+            documentToSave,
+            result
+          );
+          const didCollide = replaceSavedDocument(
+            documentIdToSave,
+            savedDocument
+          );
+
+          setStatus(
+            didCollide
+              ? {
+                  key: "status.saveAsTargetAlreadyOpen",
+                  values: { path: result.path }
+                }
+              : {
+                  key: "status.savedPath",
+                values: { path: savedDocument.name }
+              }
+          );
+          logRendererDebugEvent({
+            level: "debug",
+            event: "save.succeeded",
+            details: {
+              editorIdKind,
+              operation: "save",
+              result: "succeeded",
+              saveTargetKind: "standaloneMarkdown"
             }
-      );
-    } catch (error) {
-      setStatus({
-        key: "status.saveFailed",
-        values: { message: errorMessage(error, translate) }
-      });
-    }
+          });
+        } catch (error) {
+          logRendererDebugEvent({
+            level: "error",
+            event: "save.failed",
+            details: {
+              editorIdKind,
+              operation: "save",
+              result: "failed",
+              error: rendererDebugErrorInfo(error)
+            }
+          });
+          setStatus({
+            key: "status.saveFailed",
+            values: { message: errorMessage(error, translate) }
+          });
+        }
+      },
+      () => {
+        logRendererDebugEvent({
+          level: "debug",
+          event: "save.in_flight.ignored",
+          details: {
+            editorIdKind: debugEditorIdKind(activeDocument.id),
+            operation: "save",
+            result: "ignored"
+          }
+        });
+      }
+    );
   }
 
   async function readProjectDocument(
@@ -1611,7 +1905,12 @@ export function App(): JSX.Element {
   }
 
   return (
-    <main className="appShell">
+    <main
+      className="appShell"
+      onCompositionStartCapture={handleCompositionStartCapture}
+      onCompositionEndCapture={handleCompositionEndCapture}
+      onBlurCapture={handleAppBlurCapture}
+    >
       <header className="toolbar">
         <div className="documentTitle">
           <span>{currentEditorTitle(currentEditor)}</span>

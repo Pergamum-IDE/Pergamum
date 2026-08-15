@@ -4,12 +4,16 @@ import {
   debugLogEditorIdKinds,
   debugLogEncodingAssumptions,
   debugLogExtensions,
+  debugLogApplicationMenuTriggers,
   debugLogLineEndingKinds,
   debugLogOperations,
   debugLogPathKinds,
   debugLogPlatforms,
+  debugLogReasons,
   debugLogResults,
+  debugLogSaveTargetKinds,
   debugLogSizeBuckets,
+  type DebugLogApplicationMenuTrigger,
   knownDebugLogCommandIds,
   knownDebugLogStatusKeys,
   type DebugLogArch,
@@ -22,7 +26,9 @@ import {
   type DebugLogOperation,
   type DebugLogPathKind,
   type DebugLogPlatform,
+  type DebugLogReason,
   type DebugLogResult,
+  type DebugLogSaveTargetKind,
   type DebugLogSizeBucket,
   type SanitizedErrorInfo
 } from "../shared/debugLog";
@@ -94,6 +100,10 @@ function sanitizeNonNegativeNumber(value: unknown): number | undefined {
   return typeof value === "number" && Number.isFinite(value) && value >= 0
     ? value
     : undefined;
+}
+
+function sanitizeBoolean(value: unknown): boolean | undefined {
+  return typeof value === "boolean" ? value : undefined;
 }
 
 function enumOrUnknown<TValue extends string>(
@@ -275,8 +285,98 @@ export function sanitizeDebugLogDetails(
           value
         );
         break;
+      case "reason":
+        sanitized.reason = enumOrUnknown<DebugLogReason>(
+          debugLogReasons,
+          value
+        );
+        break;
+      case "trigger":
+        sanitized.trigger = enumOrUnknown<DebugLogApplicationMenuTrigger>(
+          debugLogApplicationMenuTriggers,
+          value
+        );
+        break;
       case "statusKey":
         sanitized.statusKey = sanitizeStatusKey(value);
+        break;
+      case "hasPendingSave": {
+        const hasPendingSave = sanitizeBoolean(value);
+
+        if (hasPendingSave !== undefined) {
+          sanitized.hasPendingSave = hasPendingSave;
+        }
+        break;
+      }
+      case "hasScheduledSave": {
+        const hasScheduledSave = sanitizeBoolean(value);
+
+        if (hasScheduledSave !== undefined) {
+          sanitized.hasScheduledSave = hasScheduledSave;
+        }
+        break;
+      }
+      case "isComposing": {
+        const isComposing = sanitizeBoolean(value);
+
+        if (isComposing !== undefined) {
+          sanitized.isComposing = isComposing;
+        }
+        break;
+      }
+      case "isDirty": {
+        const isDirty = sanitizeBoolean(value);
+
+        if (isDirty !== undefined) {
+          sanitized.isDirty = isDirty;
+        }
+        break;
+      }
+      case "canSave": {
+        const canSave = sanitizeBoolean(value);
+
+        if (canSave !== undefined) {
+          sanitized.canSave = canSave;
+        }
+        break;
+      }
+      case "hasRelatedTarget": {
+        const hasRelatedTarget = sanitizeBoolean(value);
+
+        if (hasRelatedTarget !== undefined) {
+          sanitized.hasRelatedTarget = hasRelatedTarget;
+        }
+        break;
+      }
+      case "nextTargetInsideAppShell": {
+        const nextTargetInsideAppShell = sanitizeBoolean(value);
+
+        if (nextTargetInsideAppShell !== undefined) {
+          sanitized.nextTargetInsideAppShell = nextTargetInsideAppShell;
+        }
+        break;
+      }
+      case "documentHasFocus": {
+        const documentHasFocus = sanitizeBoolean(value);
+
+        if (documentHasFocus !== undefined) {
+          sanitized.documentHasFocus = documentHasFocus;
+        }
+        break;
+      }
+      case "willClearPendingSave": {
+        const willClearPendingSave = sanitizeBoolean(value);
+
+        if (willClearPendingSave !== undefined) {
+          sanitized.willClearPendingSave = willClearPendingSave;
+        }
+        break;
+      }
+      case "saveTargetKind":
+        sanitized.saveTargetKind = enumOrUnknown<DebugLogSaveTargetKind>(
+          debugLogSaveTargetKinds,
+          value
+        );
         break;
       case "projectRef":
         if (typeof value === "string" && context.isKnownProjectRef(value)) {
@@ -457,4 +557,3 @@ export function debugLogSizeBucket(byteLength: number): DebugLogSizeBucket {
 
   return "huge";
 }
-

@@ -11,6 +11,7 @@ import {
   type FileMenuCommandId
 } from "../shared/commandIds";
 import { t, type Language, type TranslationKey } from "../shared/i18n";
+import type { DebugLogger } from "./debugLogger";
 import { loadSettings } from "./settingsStore";
 
 type MenuRole = NonNullable<MenuItemConstructorOptions["role"]>;
@@ -26,6 +27,7 @@ export interface ApplicationMenuTargetWindow {
 
 export interface ApplicationMenuOptions {
   getMainWindow(): ApplicationMenuTargetWindow | null;
+  debugLogger?: Pick<DebugLogger, "log">;
 }
 
 const applicationName = "Pergamum";
@@ -54,12 +56,18 @@ function commandMenuItem(
   commandId: FileMenuCommandId,
   language: Language,
   key: TranslationKey,
-  options: ApplicationMenuOptions
+  options: ApplicationMenuOptions,
+  accelerator?: string
 ): MenuItemConstructorOptions {
   return {
     label: label(language, key),
+    accelerator,
     click: () => {
-      sendApplicationMenuCommand(options.getMainWindow, commandId);
+      sendApplicationMenuCommand(
+        options.getMainWindow,
+        commandId,
+        options.debugLogger
+      );
     }
   };
 }
@@ -94,19 +102,22 @@ function fileMenu(
       applicationCommandIds.openProject,
       language,
       "menu.openProject",
-      options
+      options,
+      "CommandOrControl+Shift+O"
     ),
     commandMenuItem(
       editorCommandIds.openMarkdownDocument,
       language,
       "menu.openMarkdownFile",
-      options
+      options,
+      "CommandOrControl+O"
     ),
     commandMenuItem(
       editorCommandIds.saveDocument,
       language,
       "menu.save",
-      options
+      options,
+      "CommandOrControl+S"
     ),
     commandMenuItem(
       applicationCommandIds.toggleRecentProjects,
@@ -188,20 +199,60 @@ function helpMenu(language: Language): MenuItemConstructorOptions {
 
 export function sendApplicationMenuCommand(
   getMainWindow: () => ApplicationMenuTargetWindow | null,
-  commandId: string
+  commandId: string,
+  debugLogger?: Pick<DebugLogger, "log">
 ): boolean {
   if (!isFileMenuCommandId(commandId)) {
+    logApplicationMenuCommandSent(debugLogger, commandId, "ignored", {
+      reason: "invalid_command"
+    });
     return false;
   }
 
   const window = getMainWindow();
 
-  if (!window || window.isDestroyed() || window.webContents.isDestroyed()) {
+  if (!window || window.isDestroyed()) {
+    logApplicationMenuCommandSent(debugLogger, commandId, "ignored", {
+      reason: "window_unavailable"
+    });
     return false;
   }
 
+  if (window.webContents.isDestroyed()) {
+    logApplicationMenuCommandSent(debugLogger, commandId, "ignored", {
+      reason: "web_contents_destroyed"
+    });
+    return false;
+  }
+
+  logApplicationMenuCommandSent(debugLogger, commandId, "succeeded");
   window.webContents.send(APPLICATION_MENU_CHANNELS.command, commandId);
   return true;
+}
+
+function logApplicationMenuCommandSent(
+  debugLogger: Pick<DebugLogger, "log"> | undefined,
+  commandId: string,
+  result: "succeeded" | "ignored",
+  details: {
+    reason?:
+      | "invalid_command"
+      | "window_unavailable"
+      | "web_contents_destroyed";
+    trigger?: "menu" | "accelerator" | "unknown";
+  } = {}
+): void {
+  debugLogger?.log({
+    level: "debug",
+    event: "application_menu.command.sent",
+    details: {
+      commandId,
+      operation: "command",
+      result,
+      trigger: details.trigger ?? "unknown",
+      ...(details.reason ? { reason: details.reason } : {})
+    }
+  });
 }
 
 export function buildApplicationMenu(

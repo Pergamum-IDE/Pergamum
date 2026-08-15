@@ -6,6 +6,7 @@ import {
 import {
   invokeFileMenuCommand,
   subscribeApplicationMenuCommands,
+  type ApplicationMenuCommandExecutor,
   type FileMenuCommandExecutor
 } from "../../src/renderer/applicationMenuBridge";
 
@@ -39,8 +40,8 @@ describe("application menu renderer bridge", () => {
 
   it("uses the latest executor and avoids stale closures", () => {
     let listener: ((commandId: string) => void) | null = null;
-    const firstExecute = vi.fn<FileMenuCommandExecutor>();
-    const secondExecute = vi.fn<FileMenuCommandExecutor>();
+    const firstExecute = vi.fn<ApplicationMenuCommandExecutor>();
+    const secondExecute = vi.fn<ApplicationMenuCommandExecutor>();
     let currentExecute = firstExecute;
 
     subscribeApplicationMenuCommands(
@@ -57,5 +58,22 @@ describe("application menu renderer bridge", () => {
 
     expect(firstExecute).toHaveBeenCalledWith(editorCommandIds.saveDocument);
     expect(secondExecute).toHaveBeenCalledWith(applicationCommandIds.openProject);
+  });
+
+  it("passes raw command IDs through to the app-level guard", () => {
+    let listener: ((commandId: string) => void) | null = null;
+    const execute = vi.fn<ApplicationMenuCommandExecutor>();
+
+    subscribeApplicationMenuCommands(
+      (callback) => {
+        listener = callback;
+        return () => undefined;
+      },
+      () => execute
+    );
+
+    listener?.("workspace.files.focus");
+
+    expect(execute).toHaveBeenCalledWith("workspace.files.focus");
   });
 });

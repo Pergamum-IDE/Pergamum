@@ -60,7 +60,10 @@ describe("debug log details sanitizer", () => {
         statusKey: "status.notInCatalog",
         operation: "publish",
         result: "partial",
-        editorIdKind: "custom"
+        editorIdKind: "custom",
+        reason: "custom_reason",
+        trigger: "shortcut",
+        saveTargetKind: "custom_target"
       },
       context()
     );
@@ -70,7 +73,38 @@ describe("debug log details sanitizer", () => {
       statusKey: "unknown",
       operation: "unknown",
       result: "unknown",
-      editorIdKind: "unknown"
+      editorIdKind: "unknown",
+      reason: "unknown",
+      trigger: "unknown",
+      saveTargetKind: "unknown"
+    });
+  });
+
+  it("accepts only safe IME diagnostic booleans", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        hasPendingSave: true,
+        hasScheduledSave: false,
+        isComposing: true,
+        isDirty: true,
+        canSave: false,
+        hasRelatedTarget: false,
+        nextTargetInsideAppShell: true,
+        documentHasFocus: "yes",
+        willClearPendingSave: true
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      hasPendingSave: true,
+      hasScheduledSave: false,
+      isComposing: true,
+      isDirty: true,
+      canSave: false,
+      hasRelatedTarget: false,
+      nextTargetInsideAppShell: true,
+      willClearPendingSave: true
     });
   });
 
@@ -132,4 +166,3 @@ describe("debug log details sanitizer", () => {
     expect(JSON.stringify(sanitized)).not.toContain("secret.md");
   });
 });
-
