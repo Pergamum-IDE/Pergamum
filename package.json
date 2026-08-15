@@ -1,7 +1,7 @@
 {
   "name": "pergamum",
   "productName": "Pergamum",
-  "version": "0.39.0",
+  "version": "0.40.0",
   "private": true,
   "engines": {
     "node": ">=24 <25"
