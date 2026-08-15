@@ -1317,15 +1317,6 @@ UI の置き場所を command ID に含めない
 shortcut / menu / context menu / command tab は同じ command を呼ぶ
 ```
 
-既存の揺れ:
-
-```text
-glossary.entry.previousOccurrence
-glossary.occurrences.previous
-```
-
-この2つは意味が近いが、命名規則が異なる。
-
 Phase 4 では、既存 command ID を即座に破壊的変更するかどうかは個別 Issue で判断する。
 ただし、新規 command ID は原則として `{domain}.{target}.{verb}` に寄せる。
 

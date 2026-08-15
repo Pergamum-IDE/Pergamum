@@ -49,10 +49,10 @@ describe("glossary commands", () => {
     registerAllGlossaryCommands(registry);
 
     expect(registry.list().map((command) => command.id)).toEqual([
-      glossaryCommandIds.openEntry,
-      glossaryCommandIds.createEntry,
-      glossaryCommandIds.previousOccurrence,
-      glossaryCommandIds.nextOccurrence
+      "glossary.entry.open",
+      "glossary.entry.create",
+      "glossary.entry.occurrences.previous",
+      "glossary.entry.occurrences.next"
     ]);
     expect(registry.get(glossaryCommandIds.openEntry)?.title).toBe(
       "Open glossary entry"
@@ -133,8 +133,9 @@ describe("glossary commands", () => {
     expect(createGlossaryCommandTitles(translate)).toEqual({
       openEntry: "translated:command.glossary.entry.open",
       createEntry: "translated:command.glossary.entry.create",
-      previousOccurrence: "translated:glossaryEditor.previousOccurrence",
-      nextOccurrence: "translated:glossaryEditor.nextOccurrence"
+      previousOccurrence:
+        "translated:command.glossary.entry.occurrences.previous",
+      nextOccurrence: "translated:command.glossary.entry.occurrences.next"
     });
   });
 

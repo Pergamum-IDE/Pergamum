@@ -211,12 +211,12 @@ export const knownDebugLogCommandIds = [
   "workbench.utilityWindow.toggle",
   "glossary.entry.open",
   "glossary.entry.create",
-  "glossary.entry.previousOccurrence",
-  "glossary.entry.nextOccurrence",
+  "glossary.entry.occurrences.previous",
+  "glossary.entry.occurrences.next",
   "glossary.occurrences.previous",
   "glossary.occurrences.next",
-  "glossary.occurrences.openEntry",
-  "glossary.occurrences.closeTracking"
+  "glossary.occurrences.entry.open",
+  "glossary.occurrences.tracking.close"
 ] as const;
 
 export const knownDebugLogStatusKeys = [
