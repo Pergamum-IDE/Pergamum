@@ -1,3 +1,5 @@
+import { applicationCommandIds, editorCommandIds } from "./commandIds";
+
 export const debugLogLevels = ["debug", "info", "warn", "error"] as const;
 
 export type DebugLogLevel = (typeof debugLogLevels)[number];
@@ -202,10 +204,10 @@ export interface RendererDebugLogRequest {
 }
 
 export const knownDebugLogCommandIds = [
-  "app.project.open",
-  "editor.document.markdown.open",
-  "editor.document.save",
-  "app.recentProjects.toggle",
+  applicationCommandIds.openProject,
+  editorCommandIds.openMarkdownDocument,
+  editorCommandIds.saveDocument,
+  applicationCommandIds.toggleRecentProjects,
   "workspace.files.focus",
   "workspace.search.focus",
   "workspace.glossary.focus",

@@ -71,6 +71,8 @@ describe("application commands", () => {
   it("keeps application command definitions independent from React and DOM APIs", () => {
     const source = readFileSync("src/renderer/applicationCommands.ts", "utf8");
 
+    expect(source).toContain("../shared/commandIds");
+    expect(source).not.toContain("defineCommandId(");
     expect(source).not.toContain("from \"react\"");
     expect(source).not.toContain("from 'react'");
     expect(source).not.toContain("window.");
