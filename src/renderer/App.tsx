@@ -4,6 +4,7 @@ import type {
   ProjectDocument,
   SaveApplicationSettingsRequest
 } from "../shared/api";
+import type { FileMenuCommandId } from "../shared/commandIds";
 import {
   CommandRegistry,
   type CommandArgumentList,
@@ -37,6 +38,7 @@ import {
   createApplicationCommandTitles,
   registerApplicationCommands
 } from "./applicationCommands";
+import { subscribeApplicationMenuCommands } from "./applicationMenuBridge";
 import {
   applyStandaloneSaveResult,
   createProjectDocument,
@@ -259,6 +261,9 @@ export function App(): JSX.Element {
   );
   const toggleRecentProjectsCommandRef = useRef<() => void>(() => undefined);
   const canSaveCurrentDocumentCommandRef = useRef<() => boolean>(() => false);
+  const executeUiCommandRef = useRef<(commandId: FileMenuCommandId) => void>(
+    () => undefined
+  );
   const mainAreaRef = useRef<HTMLElement | null>(null);
   const editorAreaBodyRef = useRef<HTMLElement | null>(null);
   const sidebarWidthAtDragStartRef = useRef(layout.sidebar.width);
@@ -355,6 +360,14 @@ export function App(): JSX.Element {
     window.addEventListener("resize", handleWindowResize);
     return () => window.removeEventListener("resize", handleWindowResize);
   }, []);
+  useEffect(
+    () =>
+      subscribeApplicationMenuCommands(
+        window.pergamum.applicationMenu.onCommand,
+        () => executeUiCommandRef.current
+      ),
+    []
+  );
   const activeProjectContext = useMemo(
     () => projectContextForProject(project),
     [project]
@@ -905,6 +918,10 @@ export function App(): JSX.Element {
       });
     });
   }
+
+  executeUiCommandRef.current = (commandId) => {
+    executeUiCommand(commandId);
+  };
 
   async function openFile(): Promise<void> {
     try {

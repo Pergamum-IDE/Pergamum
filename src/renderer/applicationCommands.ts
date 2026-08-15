@@ -1,14 +1,8 @@
-import {
-  defineCommandId,
-  type Command,
-  type CommandRegistry
-} from "../shared/commandRegistry";
+import type { Command, CommandRegistry } from "../shared/commandRegistry";
+import { applicationCommandIds } from "../shared/commandIds";
 import type { Translate } from "../shared/i18n";
 
-export const applicationCommandIds = {
-  openProject: defineCommandId("app.project.open"),
-  toggleRecentProjects: defineCommandId("app.recentProjects.toggle")
-} as const;
+export { applicationCommandIds };
 
 export interface ApplicationCommandController {
   openProject(): void | Promise<void>;

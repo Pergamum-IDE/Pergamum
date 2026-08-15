@@ -112,7 +112,7 @@ app.whenReady().then(async () => {
   });
   debugLogger.openFileSink(resolveDebugLogsDirectory(app));
 
-  await installApplicationMenu();
+  await installApplicationMenu({ getMainWindow: () => mainWindow });
   registerDebugLogIpc(debugLogger);
   registerFileIpc(debugLogger);
   registerGlossaryIpc(debugLogger);

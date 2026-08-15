@@ -1,10 +1,12 @@
 import { describe, expect, it, vi } from "vitest";
 import {
+  APPLICATION_MENU_CHANNELS,
   DEBUG_LOG_CHANNELS,
   FILE_CHANNELS,
   GLOSSARY_CHANNELS,
   type PergamumApi
 } from "../../src/shared/api";
+import { editorCommandIds } from "../../src/shared/commandIds";
 
 const electronMock = vi.hoisted(() => ({
   exposedApi: undefined as PergamumApi | undefined,
@@ -200,6 +202,39 @@ describe("glossary preload API", () => {
     expect(electronMock.send).toHaveBeenNthCalledWith(
       2,
       DEBUG_LOG_CHANNELS.unsubscribe
+    );
+  });
+
+  it("exposes application menu command subscription with unsubscribe", () => {
+    electronMock.on.mockClear();
+    electronMock.off.mockClear();
+    const api = electronMock.exposedApi;
+
+    if (!api) {
+      throw new Error("Pergamum API was not exposed.");
+    }
+
+    const receivedCommandIds: string[] = [];
+    const unsubscribe = api.applicationMenu.onCommand((commandId) => {
+      receivedCommandIds.push(commandId);
+    });
+    const listener = electronMock.on.mock.calls[0][1] as (
+      event: unknown,
+      commandId: unknown
+    ) => void;
+
+    listener({}, editorCommandIds.saveDocument);
+    listener({}, { invalid: true });
+    unsubscribe();
+
+    expect(electronMock.on).toHaveBeenCalledWith(
+      APPLICATION_MENU_CHANNELS.command,
+      expect.any(Function)
+    );
+    expect(receivedCommandIds).toEqual([editorCommandIds.saveDocument]);
+    expect(electronMock.off).toHaveBeenCalledWith(
+      APPLICATION_MENU_CHANNELS.command,
+      listener
     );
   });
 });

@@ -1,14 +1,8 @@
-import {
-  defineCommandId,
-  type Command,
-  type CommandRegistry
-} from "../shared/commandRegistry";
+import type { Command, CommandRegistry } from "../shared/commandRegistry";
+import { editorCommandIds } from "../shared/commandIds";
 import type { Translate } from "../shared/i18n";
 
-export const editorCommandIds = {
-  openMarkdownDocument: defineCommandId("editor.document.markdown.open"),
-  saveDocument: defineCommandId("editor.document.save")
-} as const;
+export { editorCommandIds };
 
 export interface EditorCommandController {
   openMarkdownDocument(): void | Promise<void>;

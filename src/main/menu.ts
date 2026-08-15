@@ -1,8 +1,33 @@
-import { Menu, type MenuItemConstructorOptions } from "electron";
+import {
+  Menu,
+  type BrowserWindow,
+  type MenuItemConstructorOptions
+} from "electron";
+import { APPLICATION_MENU_CHANNELS } from "../shared/api";
+import {
+  applicationCommandIds,
+  editorCommandIds,
+  isFileMenuCommandId,
+  type FileMenuCommandId
+} from "../shared/commandIds";
 import { t, type Language, type TranslationKey } from "../shared/i18n";
 import { loadSettings } from "./settingsStore";
 
 type MenuRole = NonNullable<MenuItemConstructorOptions["role"]>;
+type ApplicationMenuWebContents = Pick<
+  BrowserWindow["webContents"],
+  "isDestroyed" | "send"
+>;
+
+export interface ApplicationMenuTargetWindow {
+  isDestroyed(): boolean;
+  readonly webContents: ApplicationMenuWebContents;
+}
+
+export interface ApplicationMenuOptions {
+  getMainWindow(): ApplicationMenuTargetWindow | null;
+}
+
 const applicationName = "Pergamum";
 
 function label(
@@ -25,6 +50,20 @@ function roleItem(
   };
 }
 
+function commandMenuItem(
+  commandId: FileMenuCommandId,
+  language: Language,
+  key: TranslationKey,
+  options: ApplicationMenuOptions
+): MenuItemConstructorOptions {
+  return {
+    label: label(language, key),
+    click: () => {
+      sendApplicationMenuCommand(options.getMainWindow, commandId);
+    }
+  };
+}
+
 function macApplicationMenu(language: Language): MenuItemConstructorOptions {
   const appName = applicationName;
 
@@ -44,15 +83,53 @@ function macApplicationMenu(language: Language): MenuItemConstructorOptions {
   };
 }
 
-function fileMenu(language: Language): MenuItemConstructorOptions {
+function fileMenu(
+  language: Language,
+  platform: NodeJS.Platform,
+  options: ApplicationMenuOptions
+): MenuItemConstructorOptions {
   const appName = applicationName;
+  const commandItems: MenuItemConstructorOptions[] = [
+    commandMenuItem(
+      applicationCommandIds.openProject,
+      language,
+      "menu.openProject",
+      options
+    ),
+    commandMenuItem(
+      editorCommandIds.openMarkdownDocument,
+      language,
+      "menu.openMarkdownFile",
+      options
+    ),
+    commandMenuItem(
+      editorCommandIds.saveDocument,
+      language,
+      "menu.save",
+      options
+    ),
+    commandMenuItem(
+      applicationCommandIds.toggleRecentProjects,
+      language,
+      "menu.recentProjects",
+      options
+    )
+  ];
 
   return {
     label: label(language, "menu.file"),
     submenu:
-      process.platform === "darwin"
-        ? [roleItem("close", language, "menu.close")]
-        : [roleItem("quit", language, "menu.quit", { appName })]
+      platform === "darwin"
+        ? [
+            ...commandItems,
+            { type: "separator" },
+            roleItem("close", language, "menu.close")
+          ]
+        : [
+            ...commandItems,
+            { type: "separator" },
+            roleItem("quit", language, "menu.quit", { appName })
+          ]
   };
 }
 
@@ -109,21 +186,55 @@ function helpMenu(language: Language): MenuItemConstructorOptions {
   };
 }
 
-export function buildApplicationMenu(language: Language): Menu {
+export function sendApplicationMenuCommand(
+  getMainWindow: () => ApplicationMenuTargetWindow | null,
+  commandId: string
+): boolean {
+  if (!isFileMenuCommandId(commandId)) {
+    return false;
+  }
+
+  const window = getMainWindow();
+
+  if (!window || window.isDestroyed() || window.webContents.isDestroyed()) {
+    return false;
+  }
+
+  window.webContents.send(APPLICATION_MENU_CHANNELS.command, commandId);
+  return true;
+}
+
+export function buildApplicationMenu(
+  language: Language,
+  options: ApplicationMenuOptions,
+  platform: NodeJS.Platform = process.platform
+): MenuItemConstructorOptions[] {
   const template: MenuItemConstructorOptions[] = [
-    ...(process.platform === "darwin" ? [macApplicationMenu(language)] : []),
-    fileMenu(language),
+    ...(platform === "darwin" ? [macApplicationMenu(language)] : []),
+    fileMenu(language, platform, options),
     editMenu(language),
     viewMenu(language),
-    ...(process.platform === "darwin" ? [macWindowMenu(language)] : []),
+    ...(platform === "darwin" ? [macWindowMenu(language)] : []),
     helpMenu(language)
   ];
 
-  return Menu.buildFromTemplate(template);
+  return template;
 }
 
-export async function installApplicationMenu(): Promise<void> {
+export function createApplicationMenu(
+  language: Language,
+  options: ApplicationMenuOptions,
+  platform: NodeJS.Platform = process.platform
+): Menu {
+  return Menu.buildFromTemplate(
+    buildApplicationMenu(language, options, platform)
+  );
+}
+
+export async function installApplicationMenu(
+  options: ApplicationMenuOptions
+): Promise<void> {
   const settings = await loadSettings();
 
-  Menu.setApplicationMenu(buildApplicationMenu(settings.language));
+  Menu.setApplicationMenu(createApplicationMenu(settings.language, options));
 }

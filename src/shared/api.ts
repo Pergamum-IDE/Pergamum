@@ -76,6 +76,10 @@ export const DEBUG_LOG_CHANNELS = {
   event: "debugLog:event"
 } as const;
 
+export const APPLICATION_MENU_CHANNELS = {
+  command: "applicationMenu:command"
+} as const;
+
 export interface MarkdownFile {
   path: string;
   content: string;
@@ -186,5 +190,8 @@ export interface PergamumApi {
     logEvent: (request: RendererDebugLogRequest) => Promise<void>;
     getSnapshot: () => Promise<DebugLogSnapshot>;
     onEvent: (callback: (event: SanitizedDebugLogEvent) => void) => () => void;
+  };
+  applicationMenu: {
+    onCommand: (callback: (commandId: string) => void) => () => void;
   };
 }

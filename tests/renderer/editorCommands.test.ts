@@ -102,6 +102,8 @@ describe("editor commands", () => {
   it("keeps editor command definitions independent from React and DOM APIs", () => {
     const source = readFileSync("src/renderer/editorCommands.ts", "utf8");
 
+    expect(source).toContain("../shared/commandIds");
+    expect(source).not.toContain("defineCommandId(");
     expect(source).not.toContain("from \"react\"");
     expect(source).not.toContain("from 'react'");
     expect(source).not.toContain("window.");

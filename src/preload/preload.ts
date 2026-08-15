@@ -1,5 +1,6 @@
 import { contextBridge, ipcRenderer } from "electron";
 import {
+  APPLICATION_MENU_CHANNELS,
   DEBUG_LOG_CHANNELS,
   FILE_CHANNELS,
   GLOSSARY_CHANNELS,
@@ -74,6 +75,24 @@ const pergamumApi: PergamumApi = {
       return () => {
         ipcRenderer.off(DEBUG_LOG_CHANNELS.event, listener);
         ipcRenderer.send(DEBUG_LOG_CHANNELS.unsubscribe);
+      };
+    }
+  },
+  applicationMenu: {
+    onCommand: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        commandId: unknown
+      ) => {
+        if (typeof commandId === "string") {
+          callback(commandId);
+        }
+      };
+
+      ipcRenderer.on(APPLICATION_MENU_CHANNELS.command, listener);
+
+      return () => {
+        ipcRenderer.off(APPLICATION_MENU_CHANNELS.command, listener);
       };
     }
   }
