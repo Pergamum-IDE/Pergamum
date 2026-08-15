@@ -239,14 +239,14 @@ describe("workspace navigation", () => {
 
   it("routes Activity Bar Workspace operations through commands", async () => {
     const registry = new CommandRegistry();
-    let selectedMode: SidebarMode = "files";
+    const selectedModes: SidebarMode[] = [];
     let isProjectSettingsOpen = false;
 
     registerWorkspaceCommands(
       registry,
       {
         focusSidebarMode: (mode) => {
-          selectedMode = mode;
+          selectedModes.push(mode);
         },
         toggleProjectSettings: () => {
           isProjectSettingsOpen = !isProjectSettingsOpen;
@@ -278,22 +278,42 @@ describe("workspace navigation", () => {
     const searchButton = buttons.find(
       (button) => button.props["aria-label"] === "activity.searchReplace"
     );
+    const filesButton = buttons.find(
+      (button) => button.props["aria-label"] === "activity.files"
+    );
+    const glossaryButton = buttons.find(
+      (button) => button.props["aria-label"] === "activity.glossary"
+    );
     const settingsButton = buttons.find(
       (button) => button.props["aria-label"] === "activity.projectSettings"
     );
 
+    expect(filesButton).toBeDefined();
     expect(searchButton).toBeDefined();
+    expect(glossaryButton).toBeDefined();
     expect(settingsButton).toBeDefined();
 
+    (filesButton?.props.onClick as () => void)();
     (searchButton?.props.onClick as () => void)();
+    (glossaryButton?.props.onClick as () => void)();
     await Promise.resolve();
 
-    expect(selectedMode).toBe("search");
+    expect(selectedModes).toEqual(["files", "search", "glossary"]);
 
     (settingsButton?.props.onClick as () => void)();
     await Promise.resolve();
 
     expect(isProjectSettingsOpen).toBe(true);
+  });
+
+  it("connects Activity Bar mode selection through Workspace focus commands", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+
+    expect(source).toContain("workspaceFocusCommandIdForMode(mode)");
+    expect(source).toContain(
+      "executeUiCommand(workspaceFocusCommandIdForMode(mode));"
+    );
+    expect(source).toContain("onSelectMode={handleActivityBarModeClick}");
   });
 
   it("positions Project Settings in the secondary Activity Bar group", () => {

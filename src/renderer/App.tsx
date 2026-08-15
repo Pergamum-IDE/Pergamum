@@ -160,7 +160,8 @@ import {
 import {
   createWorkspaceCommandTitles,
   registerWorkspaceCommands,
-  workspaceCommandIds
+  workspaceCommandIds,
+  workspaceFocusCommandIdForMode
 } from "./workspaceCommands";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
 
@@ -365,7 +366,34 @@ export function App(): JSX.Element {
       registry,
       {
         focusSidebarMode: (mode) => {
-          setSidebarMode(mode);
+          const toggled = resolveSidebarToggle(
+            sidebarMode,
+            mode,
+            layout.sidebar.collapsed
+          );
+
+          setSidebarMode(toggled.mode);
+          setLayout((current) => {
+            if (toggled.collapsed) {
+              return current.sidebar.collapsed
+                ? current
+                : {
+                    ...current,
+                    sidebar: { ...current.sidebar, collapsed: true }
+                  };
+            }
+
+            return {
+              ...current,
+              sidebar: {
+                collapsed: false,
+                width: clampSidebarWidth(
+                  current.sidebar.width,
+                  mainAreaRef.current?.clientWidth
+                )
+              }
+            };
+          });
         },
         toggleProjectSettings: () => {
           setIsSettingsOpen((isOpen) => !isOpen);
@@ -480,7 +508,7 @@ export function App(): JSX.Element {
     );
 
     return registry;
-  }, [activeProjectContext, translate]);
+  }, [activeProjectContext, layout.sidebar.collapsed, sidebarMode, translate]);
   const shouldShowWelcome =
     project === null && isOnlyInitialUntitledDocument(openDocumentsState);
   const activeActivityMode = resolveActiveActivityMode(
@@ -728,31 +756,7 @@ export function App(): JSX.Element {
   }
 
   function handleActivityBarModeClick(mode: SidebarMode): void {
-    const toggled = resolveSidebarToggle(
-      sidebarMode,
-      mode,
-      layout.sidebar.collapsed
-    );
-
-    setSidebarMode(toggled.mode);
-    setLayout((current) => {
-      if (toggled.collapsed) {
-        return current.sidebar.collapsed
-          ? current
-          : { ...current, sidebar: { ...current.sidebar, collapsed: true } };
-      }
-
-      return {
-        ...current,
-        sidebar: {
-          collapsed: false,
-          width: clampSidebarWidth(
-            current.sidebar.width,
-            mainAreaRef.current?.clientWidth
-          )
-        }
-      };
-    });
+    executeUiCommand(workspaceFocusCommandIdForMode(mode));
   }
 
   function handleChangeMarkdownEditorPreviewRatio(ratio: number): void {
