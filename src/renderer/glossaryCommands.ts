@@ -91,22 +91,26 @@ export function createGlossaryCommands(
     {
       id: glossaryCommandIds.openEntry,
       title: titles.openEntry,
+      palette: { visible: false },
       execute: (entryId) => controller.openGlossaryEntry(entryId)
     },
     {
       id: glossaryCommandIds.createEntry,
       title: titles.createEntry,
+      palette: { visible: false },
       execute: (input) => controller.createGlossaryEntry(input)
     },
     {
       id: glossaryCommandIds.previousOccurrence,
       title: titles.previousOccurrence,
+      palette: { visible: false },
       execute: (entryId) =>
         controller.navigateToPreviousGlossaryOccurrence(entryId)
     },
     {
       id: glossaryCommandIds.nextOccurrence,
       title: titles.nextOccurrence,
+      palette: { visible: false },
       execute: (entryId) =>
         controller.navigateToNextGlossaryOccurrence(entryId)
     }

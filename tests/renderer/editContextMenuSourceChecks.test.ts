@@ -22,6 +22,25 @@ function allSourceText(): string {
     .join("\n");
 }
 
+/**
+ * CommandPalette.tsx is the one deliberate exception to the no-onKeyDown
+ * rule below: ArrowUp/ArrowDown/Enter/Escape navigation inside its own,
+ * already-focused search input is local widget interaction (Issue #126),
+ * not a competing global shortcut system, and it reuses the existing IME
+ * composition signal rather than adding new composition tracking.
+ */
+function allSourceTextExcludingCommandPalette(): string {
+  return sourceRoots
+    .flatMap(sourceFiles)
+    .filter(
+      (filePath) =>
+        /\.(ts|tsx)$/.test(filePath) &&
+        path.basename(filePath) !== "CommandPalette.tsx"
+    )
+    .map((filePath) => readFileSync(filePath, "utf8"))
+    .join("\n");
+}
+
 function sourceText(filePath: string): string {
   return readFileSync(filePath, "utf8");
 }
@@ -31,12 +50,17 @@ describe("edit context menu source checks", () => {
     const source = allSourceText();
 
     expect(source).not.toContain("globalShortcut");
-    expect(source).not.toMatch(/addEventListener\(["']keydown/);
-    expect(source).not.toContain("onKeyDown");
     expect(source).not.toContain("document.execCommand");
     expect(source).not.toContain("navigator.clipboard");
     expect(source).not.toContain("selectionchange");
     expect(source).not.toContain("clipboardBuffer");
+  });
+
+  it("does not add app-wide keyboard shortcut listeners outside the Command Palette's own input", () => {
+    const source = allSourceTextExcludingCommandPalette();
+
+    expect(source).not.toMatch(/addEventListener\(["']keydown/);
+    expect(source).not.toContain("onKeyDown");
   });
 
   it("keeps Edit command strings defined only in shared command IDs", () => {

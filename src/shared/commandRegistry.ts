@@ -10,12 +10,19 @@ export type CommandId<
   };
 };
 
+export interface CommandPaletteVisibility {
+  readonly visible: boolean;
+}
+
 export interface Command<
   TArgs extends readonly unknown[] = readonly [],
   TResult = void
 > {
   readonly id: CommandId<TArgs, TResult>;
   readonly title: string;
+  readonly description?: string;
+  readonly canonicalLabel?: string;
+  readonly palette?: CommandPaletteVisibility;
   readonly execute: (
     ...args: CommandArgumentList<NoInfer<TArgs>>
   ) => NoInfer<TResult> | Promise<NoInfer<TResult>>;
