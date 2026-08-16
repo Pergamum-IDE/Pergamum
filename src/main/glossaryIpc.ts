@@ -142,10 +142,11 @@ function parseGlossarySurfaceLookupRequest(
 
 async function withCurrentProjectDatabase<T>(
   getCurrentProjectRootPath: CurrentProjectRootPathProvider,
+  logger: DebugLogger,
   operation: (database: ProjectDatabase) => Promise<T>
 ): Promise<T> {
   const projectRootPath = getCurrentProjectRootPath();
-  const database = await openProjectDatabase(projectRootPath);
+  const database = await openProjectDatabase(projectRootPath, logger);
 
   try {
     return await operation(database);
@@ -168,7 +169,8 @@ export function createGlossaryIpcHandlers(
 
       return withCurrentProjectDatabase(
         getCurrentProjectRootPath,
-        (database) => createGlossaryEntry(database, input)
+        logger,
+        (database) => createGlossaryEntry(database, input, logger)
       );
     },
     async getById(rawRequest) {
@@ -176,13 +178,15 @@ export function createGlossaryIpcHandlers(
 
       return withCurrentProjectDatabase(
         getCurrentProjectRootPath,
-        (database) => getGlossaryEntryById(database, request.id)
+        logger,
+        (database) => getGlossaryEntryById(database, request.id, logger)
       );
     },
     async list() {
       return withCurrentProjectDatabase(
         getCurrentProjectRootPath,
-        listGlossaryEntries
+        logger,
+        (database) => listGlossaryEntries(database, logger)
       );
     },
     async lookupSurface(rawRequest) {
@@ -190,7 +194,8 @@ export function createGlossaryIpcHandlers(
 
       return withCurrentProjectDatabase(
         getCurrentProjectRootPath,
-        (database) => lookupGlossarySurface(database, request)
+        logger,
+        (database) => lookupGlossarySurface(database, request, logger)
       );
     },
     async update(rawRequest) {
@@ -203,7 +208,8 @@ export function createGlossaryIpcHandlers(
 
         return await withCurrentProjectDatabase(
           getCurrentProjectRootPath,
-          (database) => updateGlossaryEntry(database, validatedInput)
+          logger,
+          (database) => updateGlossaryEntry(database, validatedInput, logger)
         );
       } catch (error) {
         const documentRef = input
@@ -236,9 +242,10 @@ export function createGlossaryIpcHandlers(
 
       return withCurrentProjectDatabase(
         getCurrentProjectRootPath,
+        logger,
         async (database) => {
           try {
-            await deleteGlossaryEntry(database, request.id);
+            await deleteGlossaryEntry(database, request.id, logger);
           } catch (error) {
             if (!isMissingGlossaryEntryError(error)) {
               throw error;

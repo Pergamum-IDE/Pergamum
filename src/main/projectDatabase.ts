@@ -3,6 +3,12 @@ import Database, {
   type Database as BetterSqliteDatabase,
   type RunResult
 } from "better-sqlite3";
+import {
+  dbOperationResult,
+  withDbOperationLog,
+  type DbOperationLogger
+} from "./dbOperationLog";
+import { getDebugLogger } from "./debugLogger";
 
 export const projectDatabaseFileName = "pergamum.db";
 export const currentProjectDatabaseSchemaVersion = 1;
@@ -503,18 +509,29 @@ async function initializeProjectDatabase(
 }
 
 export async function openProjectDatabase(
-  projectRootPath: string
+  projectRootPath: string,
+  logger: DbOperationLogger = getDebugLogger()
 ): Promise<ProjectDatabase> {
   const databasePath = resolveProjectDatabasePath(projectRootPath);
-  const sqliteDatabase = await openSqliteDatabase(databasePath);
-  const database = new SqliteProjectDatabase(databasePath, sqliteDatabase);
 
-  try {
-    await database.exec("PRAGMA foreign_keys = ON");
-    await initializeProjectDatabase(database);
-    return database;
-  } catch (error) {
-    await database.close();
-    throw error;
-  }
+  return withDbOperationLog(
+    {
+      logger,
+      dbOperation: "initialize",
+      dbEntityKind: "database"
+    },
+    async () => {
+      const sqliteDatabase = await openSqliteDatabase(databasePath);
+      const database = new SqliteProjectDatabase(databasePath, sqliteDatabase);
+
+      try {
+        await database.exec("PRAGMA foreign_keys = ON");
+        await initializeProjectDatabase(database);
+        return dbOperationResult(database);
+      } catch (error) {
+        await database.close();
+        throw error;
+      }
+    }
+  );
 }

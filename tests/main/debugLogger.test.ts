@@ -565,6 +565,70 @@ describe("debug logger", () => {
       "error"
     ]);
   });
+
+  it("uses DB operation event levels from the main-process catalog", () => {
+    const logger = createTestLogger(
+      enabledOptions([
+        new Date(2026, 7, 16, 9, 0, 0, 1),
+        new Date(2026, 7, 16, 9, 0, 0, 2),
+        new Date(2026, 7, 16, 9, 0, 0, 3),
+        new Date(2026, 7, 16, 9, 0, 0, 4)
+      ])
+    );
+
+    logger.log({
+      level: "debug",
+      event: "db.operation.started",
+      details: {
+        dbOperationId: "dbOperation.1",
+        dbOperation: "read",
+        dbEntityKind: "glossaryEntry"
+      }
+    });
+    logger.log({
+      level: "debug",
+      event: "db.operation.succeeded",
+      details: {
+        dbOperationId: "dbOperation.1",
+        dbOperation: "read",
+        dbEntityKind: "glossaryEntry",
+        result: "succeeded",
+        durationMs: 1,
+        count: 0
+      }
+    });
+    logger.log({
+      level: "debug",
+      event: "db.operation.skipped",
+      details: {
+        dbOperationId: "dbOperation.2",
+        dbOperation: "update",
+        dbEntityKind: "glossaryEntry",
+        result: "ignored",
+        reason: "not_found",
+        durationMs: 0
+      }
+    });
+    logger.log({
+      level: "debug",
+      event: "db.operation.failed",
+      details: {
+        dbOperationId: "dbOperation.3",
+        dbOperation: "delete",
+        dbEntityKind: "glossaryEntry",
+        result: "failed",
+        durationMs: 2,
+        error: { category: "database" }
+      }
+    });
+
+    expect(logger.getSnapshot().events.map((event) => event.level)).toEqual([
+      "debug",
+      "debug",
+      "debug",
+      "error"
+    ]);
+  });
 });
 
 function createTestLogger(

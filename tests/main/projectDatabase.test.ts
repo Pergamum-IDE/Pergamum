@@ -2,7 +2,7 @@ import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   currentProjectDatabaseSchemaVersion,
   openProjectDatabase,
@@ -103,6 +103,42 @@ describe("project database", () => {
     );
   });
 
+  it("logs database initialization without count or project path", async () => {
+    const logger = debugLoggerMock();
+
+    database = await openProjectDatabase(projectRootPath, logger);
+
+    expect(dbLogEvents(logger).map((event) => event.event)).toEqual([
+      "db.operation.started",
+      "db.operation.succeeded"
+    ]);
+    expect(dbLogEvents(logger)[0]).toMatchObject({
+      level: "debug",
+      event: "db.operation.started",
+      details: {
+        dbOperationId: expect.any(String),
+        dbOperation: "initialize",
+        dbEntityKind: "database"
+      }
+    });
+    expect(dbLogEvents(logger)[1]).toMatchObject({
+      level: "debug",
+      event: "db.operation.succeeded",
+      details: {
+        dbOperationId: dbLogEvents(logger)[0].details?.dbOperationId,
+        dbOperation: "initialize",
+        dbEntityKind: "database",
+        result: "succeeded",
+        durationMs: expect.any(Number)
+      }
+    });
+    expect(dbLogEvents(logger)[1].details).not.toHaveProperty("count");
+    expect(JSON.stringify(dbLogEvents(logger))).not.toContain(projectRootPath);
+    expect(JSON.stringify(dbLogEvents(logger))).not.toContain(
+      projectDatabaseFileName
+    );
+  });
+
   it("enables foreign keys for each opened connection", async () => {
     database = await openProjectDatabase(projectRootPath);
 
@@ -118,10 +154,33 @@ describe("project database", () => {
     await database.exec("PRAGMA user_version = 999");
     await database.close();
     database = null;
+    const logger = debugLoggerMock();
 
-    await expect(openProjectDatabase(projectRootPath)).rejects.toMatchObject({
+    await expect(
+      openProjectDatabase(projectRootPath, logger)
+    ).rejects.toMatchObject({
       code: "PROJECT_DATABASE_SCHEMA_ERROR"
     });
+    expect(dbLogEvents(logger).map((event) => event.event)).toEqual([
+      "db.operation.started",
+      "db.operation.failed"
+    ]);
+    expect(dbLogEvents(logger)[1]).toMatchObject({
+      level: "error",
+      event: "db.operation.failed",
+      details: {
+        dbOperation: "initialize",
+        dbEntityKind: "database",
+        result: "failed",
+        durationMs: expect.any(Number),
+        error: {
+          name: "ProjectDatabaseError",
+          code: "PROJECT_DATABASE_SCHEMA_ERROR",
+          category: "database"
+        }
+      }
+    });
+    expect(JSON.stringify(dbLogEvents(logger))).not.toContain(projectRootPath);
   });
 
   it("rejects an incompatible prototype version 1 schema", async () => {
@@ -408,4 +467,14 @@ async function insertCanonicalForm(
     `,
     [id, entryId, surface, timestamp, timestamp]
   );
+}
+
+function debugLoggerMock(): { log: ReturnType<typeof vi.fn> } {
+  return {
+    log: vi.fn()
+  };
+}
+
+function dbLogEvents(logger: { log: ReturnType<typeof vi.fn> }) {
+  return logger.log.mock.calls.map((call) => call[0]);
 }

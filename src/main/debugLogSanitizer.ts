@@ -5,6 +5,8 @@ import {
   debugLogEncodingAssumptions,
   debugLogExtensions,
   debugLogApplicationMenuTriggers,
+  debugLogDbEntityKinds,
+  debugLogDbOperations,
   debugLogLineEndingKinds,
   debugLogOperations,
   debugLogPathKinds,
@@ -18,6 +20,8 @@ import {
   knownDebugLogCommandIds,
   knownDebugLogStatusKeys,
   type DebugLogArch,
+  type DebugLogDbEntityKind,
+  type DebugLogDbOperation,
   type DebugLogDetails,
   type DebugLogEditorIdKind,
   type DebugLogEncodingAssumption,
@@ -307,6 +311,28 @@ export function sanitizeDebugLogDetails(
           value
         );
         break;
+      case "dbOperationId":
+        {
+          const dbOperationId = sanitizeSafeCode(value);
+
+          if (dbOperationId) {
+            sanitized.dbOperationId = dbOperationId;
+          }
+        }
+        break;
+      case "dbOperation":
+        if (includesValue(debugLogDbOperations, value)) {
+          sanitized.dbOperation = value as DebugLogDbOperation;
+        } else {
+          droppedKeyCount += 1;
+        }
+        break;
+      case "dbEntityKind":
+        sanitized.dbEntityKind = enumOrUnknown<DebugLogDbEntityKind>(
+          debugLogDbEntityKinds,
+          value
+        );
+        break;
       case "result":
         sanitized.result = enumOrUnknown<DebugLogResult>(
           debugLogResults,
@@ -472,6 +498,14 @@ export function sanitizeDebugLogDetails(
 
         if (durationMs !== undefined) {
           sanitized.durationMs = durationMs;
+        }
+        break;
+      }
+      case "count": {
+        const count = sanitizeNonNegativeInteger(value);
+
+        if (count !== undefined) {
+          sanitized.count = count;
         }
         break;
       }

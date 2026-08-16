@@ -1,7 +1,7 @@
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   createGlossaryEntry,
   deleteGlossaryEntry,
@@ -51,6 +51,85 @@ describe("glossary store", () => {
 
   it("lists an empty glossary from a new project database", async () => {
     await expect(listGlossaryEntries(database!)).resolves.toEqual([]);
+  });
+
+  it("logs empty glossary list as succeeded with count zero", async () => {
+    const logger = debugLoggerMock();
+
+    await expect(listGlossaryEntries(database!, logger)).resolves.toEqual([]);
+
+    expect(dbLogEvents(logger).map((event) => event.event)).toEqual([
+      "db.operation.started",
+      "db.operation.succeeded"
+    ]);
+    expect(dbLogEvents(logger)[1]).toMatchObject({
+      level: "debug",
+      event: "db.operation.succeeded",
+      details: {
+        dbOperation: "list",
+        dbEntityKind: "glossaryEntry",
+        result: "succeeded",
+        count: 0
+      }
+    });
+    expect(JSON.stringify(dbLogEvents(logger))).not.toContain(
+      "db.operation.skipped"
+    );
+  });
+
+  it("logs missing glossary entry reads as succeeded with count zero", async () => {
+    const logger = debugLoggerMock();
+
+    await expect(
+      getGlossaryEntryById(database!, missingEntryId, logger)
+    ).resolves.toBeNull();
+
+    expect(dbLogEvents(logger).map((event) => event.event)).toEqual([
+      "db.operation.started",
+      "db.operation.succeeded"
+    ]);
+    expect(dbLogEvents(logger)[1]).toMatchObject({
+      event: "db.operation.succeeded",
+      details: {
+        dbOperation: "read",
+        dbEntityKind: "glossaryEntry",
+        result: "succeeded",
+        count: 0
+      }
+    });
+    expect(JSON.stringify(dbLogEvents(logger))).not.toContain(
+      "db.operation.skipped"
+    );
+  });
+
+  it("logs glossary create without surface or description content", async () => {
+    const logger = debugLoggerMock();
+
+    await createGlossaryEntry(
+      database!,
+      {
+        kind: "person",
+        canonicalSurface: "エリシア・フォン・アルセリア",
+        description: "アルセリア王国の第三皇女"
+      },
+      logger
+    );
+
+    expect(dbLogEvents(logger).map((event) => event.event)).toEqual([
+      "db.operation.started",
+      "db.operation.succeeded"
+    ]);
+    expect(dbLogEvents(logger)[1]).toMatchObject({
+      event: "db.operation.succeeded",
+      details: {
+        dbOperation: "create",
+        dbEntityKind: "glossaryEntry",
+        result: "succeeded",
+        count: 1
+      }
+    });
+    expect(JSON.stringify(dbLogEvents(logger))).not.toContain("エリシア");
+    expect(JSON.stringify(dbLogEvents(logger))).not.toContain("第三皇女");
   });
 
   it("creates an entry and its canonical form transactionally", async () => {
@@ -232,6 +311,178 @@ describe("glossary store", () => {
     await expect(
       deleteGlossaryEntry(database!, missingEntryId)
     ).rejects.toBeInstanceOf(GlossaryStoreError);
+  });
+
+  it("logs update precondition misses as skipped before running update", async () => {
+    const logger = debugLoggerMock();
+
+    await expect(
+      updateGlossaryEntry(
+        database!,
+        {
+          id: missingEntryId,
+          kind: "term",
+          description: "更新できない",
+          canonicalSurface: "存在しない用語",
+          forms: []
+        },
+        logger
+      )
+    ).rejects.toBeInstanceOf(GlossaryStoreError);
+
+    const events = dbLogEvents(logger);
+
+    expect(events.map((event) => event.event)).toEqual([
+      "db.operation.started",
+      "db.operation.skipped"
+    ]);
+    expect(events[1].details.dbOperationId).toBe(
+      events[0].details.dbOperationId
+    );
+    expect(events[1]).toMatchObject({
+      level: "debug",
+      event: "db.operation.skipped",
+      details: {
+        dbOperation: "update",
+        dbEntityKind: "glossaryEntry",
+        result: "ignored",
+        reason: "not_found",
+        durationMs: expect.any(Number)
+      }
+    });
+  });
+
+  it("logs create validation failures as skipped without content details", async () => {
+    const logger = debugLoggerMock();
+
+    await expect(
+      createGlossaryEntry(
+        database!,
+        {
+          kind: "term",
+          canonicalSurface: " ",
+          description: "invalid"
+        },
+        logger
+      )
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
+
+    expect(dbLogEvents(logger)).toEqual([
+      {
+        level: "debug",
+        event: "db.operation.skipped",
+        details: {
+          dbOperationId: expect.any(String),
+          dbOperation: "create",
+          dbEntityKind: "glossaryEntry",
+          result: "ignored",
+          reason: "validation_failed",
+          durationMs: expect.any(Number)
+        }
+      }
+    ]);
+    expect(JSON.stringify(dbLogEvents(logger))).not.toContain("invalid");
+  });
+
+  it("logs update validation failures as skipped without DB access", async () => {
+    const logger = debugLoggerMock();
+
+    await expect(
+      updateGlossaryEntry(
+        database!,
+        {
+          id: missingEntryId,
+          kind: "term",
+          canonicalSurface: " ",
+          description: "invalid update text",
+          forms: []
+        },
+        logger
+      )
+    ).rejects.toBeInstanceOf(GlossaryValidationError);
+
+    expect(dbLogEvents(logger)).toEqual([
+      {
+        level: "debug",
+        event: "db.operation.skipped",
+        details: {
+          dbOperationId: expect.any(String),
+          dbOperation: "update",
+          dbEntityKind: "glossaryEntry",
+          result: "ignored",
+          reason: "validation_failed",
+          durationMs: expect.any(Number)
+        }
+      }
+    ]);
+    expect(JSON.stringify(dbLogEvents(logger))).not.toContain(
+      "invalid update text"
+    );
+  });
+
+  it("logs update precondition read failures as failed without unsafe details", async () => {
+    const logger = debugLoggerMock();
+    const unsafeSurface = "禁書庫";
+    const unsafeDescription = "読者入力の説明";
+    const readError = Object.assign(
+      new Error(
+        `SELECT * FROM glossary_entries parameters ${missingEntryId} ${unsafeSurface} ${unsafeDescription} C:\\Users\\technerd\\novel.md row data`
+      ),
+      {
+        code: "SQLITE_IOERR",
+        stack: `raw stack ${unsafeDescription}`
+      }
+    );
+
+    await expect(
+      updateGlossaryEntry(
+        databaseWithFailingGet(database!, readError),
+        {
+          id: missingEntryId,
+          kind: "term",
+          canonicalSurface: unsafeSurface,
+          description: unsafeDescription,
+          forms: []
+        },
+        logger
+      )
+    ).rejects.toBe(readError);
+
+    const events = dbLogEvents(logger);
+
+    expect(events.map((event) => event.event)).toEqual([
+      "db.operation.started",
+      "db.operation.failed"
+    ]);
+    expect(events[1].details.dbOperationId).toBe(
+      events[0].details.dbOperationId
+    );
+    expect(events[1]).toMatchObject({
+      level: "error",
+      event: "db.operation.failed",
+      details: {
+        dbOperation: "update",
+        dbEntityKind: "glossaryEntry",
+        result: "failed",
+        durationMs: expect.any(Number),
+        error: {
+          name: "Error",
+          code: "SQLITE_IOERR",
+          category: "database"
+        }
+      }
+    });
+
+    const serializedEvents = JSON.stringify(events);
+
+    expect(serializedEvents).not.toContain("SELECT * FROM glossary_entries");
+    expect(serializedEvents).not.toContain("parameters");
+    expect(serializedEvents).not.toContain(missingEntryId);
+    expect(serializedEvents).not.toContain(unsafeSurface);
+    expect(serializedEvents).not.toContain(unsafeDescription);
+    expect(serializedEvents).not.toContain("novel.md");
+    expect(serializedEvents).not.toContain("row data");
+    expect(serializedEvents).not.toContain("raw stack");
   });
 
   it("rejects invalid glossary input", async () => {
@@ -500,6 +751,41 @@ describe("glossary store", () => {
     });
   });
 
+  it("logs zero-row glossary surface lookup as succeeded with count zero", async () => {
+    const logger = debugLoggerMock();
+
+    await expect(
+      lookupGlossarySurface(
+        database!,
+        {
+          surface: "帝国"
+        },
+        logger
+      )
+    ).resolves.toEqual({
+      status: "none",
+      surface: "帝国"
+    });
+
+    expect(dbLogEvents(logger).map((event) => event.event)).toEqual([
+      "db.operation.started",
+      "db.operation.succeeded"
+    ]);
+    expect(dbLogEvents(logger)[1]).toMatchObject({
+      event: "db.operation.succeeded",
+      details: {
+        dbOperation: "read",
+        dbEntityKind: "glossaryForm",
+        result: "succeeded",
+        count: 0
+      }
+    });
+    expect(JSON.stringify(dbLogEvents(logger))).not.toContain(
+      "db.operation.skipped"
+    );
+    expect(JSON.stringify(dbLogEvents(logger))).not.toContain("帝国");
+  });
+
   it("rejects invalid database rows during domain conversion", () => {
     expect(() =>
       glossaryEntryFromDatabaseRows(
@@ -539,4 +825,33 @@ function canonicalFormOf(entry: GlossaryEntry): GlossaryForm {
 
 function nonCanonicalFormsOf(entry: GlossaryEntry): GlossaryForm[] {
   return entry.forms.filter((form) => !form.isCanonical);
+}
+
+function debugLoggerMock(): { log: ReturnType<typeof vi.fn> } {
+  return {
+    log: vi.fn()
+  };
+}
+
+function dbLogEvents(logger: { log: ReturnType<typeof vi.fn> }) {
+  return logger.log.mock.calls.map((call) => call[0]);
+}
+
+function databaseWithFailingGet(
+  database: ProjectDatabase,
+  error: unknown
+): ProjectDatabase {
+  const get: ProjectDatabase["get"] = async () => {
+    throw error;
+  };
+
+  return {
+    databasePath: database.databasePath,
+    run: database.run.bind(database),
+    get,
+    all: database.all.bind(database),
+    exec: database.exec.bind(database),
+    transaction: database.transaction.bind(database),
+    close: database.close.bind(database)
+  };
 }

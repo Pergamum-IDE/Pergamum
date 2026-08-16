@@ -36,7 +36,7 @@ describe("debug log details sanitizer", () => {
         documentRef: "document:session:001",
         fileName: "secret-title.md",
         absolutePath: "C:\\Users\\name\\Documents\\secret-title.md",
-        count: 12
+        itemCount: 12
       },
       context({
         documentRefs: ["document:session:001"]
@@ -50,7 +50,7 @@ describe("debug log details sanitizer", () => {
     expect(JSON.stringify(details)).not.toContain("fileName");
     expect(JSON.stringify(details)).not.toContain("secret-title");
     expect(JSON.stringify(details)).not.toContain("absolutePath");
-    expect(details).not.toHaveProperty("count");
+    expect(details).not.toHaveProperty("itemCount");
   });
 
   it("normalizes enum-like values and known catalogs", () => {
@@ -148,6 +148,74 @@ describe("debug log details sanitizer", () => {
       requestedSurface: "unknownEditable",
       delegatedSurface: "unknownEditable"
     });
+  });
+
+  it("accepts safe DB operation diagnostics and drops unsafe DB details", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        dbOperationId: "dbOperation.12",
+        dbOperation: "read",
+        dbEntityKind: "glossaryEntry",
+        result: "succeeded",
+        reason: "validation_failed",
+        durationMs: 12.5,
+        count: 0,
+        sql: "SELECT * FROM glossary_entries",
+        parameters: ["secret"],
+        markdownContent: "本文",
+        glossarySurface: "王都アルセリア",
+        glossaryDescription: "首都",
+        absolutePath: "C:\\Users\\name\\novel.md",
+        rowData: { surface: "王都アルセリア" }
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      dbOperationId: "dbOperation.12",
+      dbOperation: "read",
+      dbEntityKind: "glossaryEntry",
+      result: "succeeded",
+      reason: "validation_failed",
+      durationMs: 12.5,
+      count: 0,
+      droppedKeyCount: 7
+    });
+    expect(JSON.stringify(details)).not.toContain("SELECT");
+    expect(JSON.stringify(details)).not.toContain("secret");
+    expect(JSON.stringify(details)).not.toContain("本文");
+    expect(JSON.stringify(details)).not.toContain("王都");
+    expect(JSON.stringify(details)).not.toContain("novel.md");
+  });
+
+  it("handles invalid DB enum details according to each catalog policy", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        dbOperation: "migrate",
+        dbEntityKind: "settings",
+        reason: "custom_reason"
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      dbEntityKind: "unknown",
+      reason: "unknown",
+      droppedKeyCount: 1
+    });
+    expect(details).not.toHaveProperty("dbOperation");
+  });
+
+  it("drops invalid DB operation IDs and counts", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        dbOperationId: "db operation with spaces",
+        count: -1
+      },
+      context()
+    );
+
+    expect(details).toBeUndefined();
   });
 
   it("uses main-process runtime values instead of renderer-provided versions", () => {

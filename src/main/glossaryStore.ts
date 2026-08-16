@@ -14,6 +14,18 @@ import {
   type GlossarySurfaceLookupResult,
   type UpdateGlossaryEntryInput
 } from "../shared/glossary";
+import type {
+  DebugLogDbEntityKind,
+  DebugLogDbOperation
+} from "../shared/debugLog";
+import {
+  dbOperationResult,
+  logDbOperationSkipped,
+  skipDbOperation,
+  withDbOperationLog,
+  type DbOperationLogger
+} from "./dbOperationLog";
+import { getDebugLogger } from "./debugLogger";
 import { createUuidv7 } from "./ids";
 import type { ProjectDatabase } from "./projectDatabase";
 
@@ -105,6 +117,25 @@ function notFound(id: string): GlossaryStoreError {
     "GLOSSARY_ENTRY_NOT_FOUND",
     `Glossary entry not found: ${id}`
   );
+}
+
+function validateOrLogDbSkipped<T>(
+  logger: DbOperationLogger,
+  dbOperation: DebugLogDbOperation,
+  dbEntityKind: DebugLogDbEntityKind,
+  validate: () => T
+): T {
+  try {
+    return validate();
+  } catch (error) {
+    logDbOperationSkipped({
+      logger,
+      dbOperation,
+      dbEntityKind,
+      reason: "validation_failed"
+    });
+    throw error;
+  }
 }
 
 export function glossaryFormFromDatabaseRow(
@@ -281,77 +312,93 @@ async function listSurfaceMatchRows(
 
 export async function createGlossaryEntry(
   database: ProjectDatabase,
-  input: CreateGlossaryEntryInput
+  input: CreateGlossaryEntryInput,
+  logger: DbOperationLogger = getDebugLogger()
 ): Promise<GlossaryEntry> {
-  const validatedInput = validateCreateGlossaryEntryInput(input);
+  const validatedInput = validateOrLogDbSkipped(
+    logger,
+    "create",
+    "glossaryEntry",
+    () => validateCreateGlossaryEntryInput(input)
+  );
   const entryId = createUuidv7();
   const canonicalFormId = createUuidv7();
   const timestamp = nowTimestamp();
 
-  return database.transaction(async () => {
-    await database.run(
-      `
-        INSERT INTO glossary_entries (
-          id,
-          kind,
-          description,
-          created_at,
-          updated_at
-        )
-        VALUES (?, ?, ?, ?, ?)
-      `,
-      [
-        entryId,
-        validatedInput.kind,
-        validatedInput.description,
-        timestamp,
-        timestamp
-      ]
-    );
-    await database.run(
-      `
-        INSERT INTO glossary_forms (
-          id,
-          entry_id,
-          surface,
-          relation,
-          warning_policy,
-          match_boundary_start,
-          match_boundary_end,
-          is_canonical,
-          created_at,
-          updated_at
-        )
-        VALUES (?, ?, ?, NULL, NULL, ?, ?, 1, ?, ?)
-      `,
-      [
-        canonicalFormId,
-        entryId,
-        validatedInput.canonicalSurface,
-        validatedInput.matchBoundaryStart ??
-          DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
-        validatedInput.matchBoundaryEnd ??
-          DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
-        timestamp,
-        timestamp
-      ]
-    );
+  return withDbOperationLog(
+    {
+      logger,
+      dbOperation: "create",
+      dbEntityKind: "glossaryEntry"
+    },
+    async () => {
+      const entry = await database.transaction(async () => {
+        await database.run(
+          `
+            INSERT INTO glossary_entries (
+              id,
+              kind,
+              description,
+              created_at,
+              updated_at
+            )
+            VALUES (?, ?, ?, ?, ?)
+          `,
+          [
+            entryId,
+            validatedInput.kind,
+            validatedInput.description,
+            timestamp,
+            timestamp
+          ]
+        );
+        await database.run(
+          `
+            INSERT INTO glossary_forms (
+              id,
+              entry_id,
+              surface,
+              relation,
+              warning_policy,
+              match_boundary_start,
+              match_boundary_end,
+              is_canonical,
+              created_at,
+              updated_at
+            )
+            VALUES (?, ?, ?, NULL, NULL, ?, ?, 1, ?, ?)
+          `,
+          [
+            canonicalFormId,
+            entryId,
+            validatedInput.canonicalSurface,
+            validatedInput.matchBoundaryStart ??
+              DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
+            validatedInput.matchBoundaryEnd ??
+              DEFAULT_GLOSSARY_FORM_MATCH_BOUNDARY,
+            timestamp,
+            timestamp
+          ]
+        );
 
-    const entry = await getGlossaryEntryById(database, entryId);
+        const createdEntry = await readGlossaryEntryById(database, entryId);
 
-    if (!entry) {
-      throw notFound(entryId);
+        if (!createdEntry) {
+          throw notFound(entryId);
+        }
+
+        return createdEntry;
+      });
+
+      return dbOperationResult(entry, 1);
     }
-
-    return entry;
-  });
+  );
 }
 
-export async function getGlossaryEntryById(
+async function readGlossaryEntryById(
   database: ProjectDatabase,
   id: string
 ): Promise<GlossaryEntry | null> {
-  const validatedId = validateGlossaryEntryId(id);
   const row = await database.get<GlossaryEntryRow>(
     `
       SELECT
@@ -363,18 +410,44 @@ export async function getGlossaryEntryById(
       FROM glossary_entries
       WHERE id = ?
     `,
-    [validatedId]
+    [id]
   );
 
   if (!row) {
     return null;
   }
 
-  const formRows = await listFormsForEntry(database, validatedId);
+  const formRows = await listFormsForEntry(database, id);
   return glossaryEntryFromDatabaseRows(row, formRows);
 }
 
-export async function listGlossaryEntries(
+export async function getGlossaryEntryById(
+  database: ProjectDatabase,
+  id: string,
+  logger: DbOperationLogger = getDebugLogger()
+): Promise<GlossaryEntry | null> {
+  const validatedId = validateOrLogDbSkipped(
+    logger,
+    "read",
+    "glossaryEntry",
+    () => validateGlossaryEntryId(id)
+  );
+
+  return withDbOperationLog(
+    {
+      logger,
+      dbOperation: "read",
+      dbEntityKind: "glossaryEntry"
+    },
+    async () => {
+      const entry = await readGlossaryEntryById(database, validatedId);
+
+      return dbOperationResult(entry, entry ? 1 : 0);
+    }
+  );
+}
+
+async function readGlossaryEntries(
   database: ProjectDatabase
 ): Promise<GlossaryEntry[]> {
   const rows = await database.all<GlossaryEntryRow>(`
@@ -403,166 +476,247 @@ export async function listGlossaryEntries(
   );
 }
 
+export async function listGlossaryEntries(
+  database: ProjectDatabase,
+  logger: DbOperationLogger = getDebugLogger()
+): Promise<GlossaryEntry[]> {
+  return withDbOperationLog(
+    {
+      logger,
+      dbOperation: "list",
+      dbEntityKind: "glossaryEntry"
+    },
+    async () => {
+      const entries = await readGlossaryEntries(database);
+
+      return dbOperationResult(entries, entries.length);
+    }
+  );
+}
+
 export async function updateGlossaryEntry(
   database: ProjectDatabase,
-  input: UpdateGlossaryEntryInput
+  input: UpdateGlossaryEntryInput,
+  logger: DbOperationLogger = getDebugLogger()
 ): Promise<GlossaryEntry> {
-  const entry = validateUpdateGlossaryEntryInput(input);
+  const entry = validateOrLogDbSkipped(
+    logger,
+    "update",
+    "glossaryEntry",
+    () => validateUpdateGlossaryEntryInput(input)
+  );
   const timestamp = nowTimestamp();
 
-  if (!(await getGlossaryEntryById(database, entry.id))) {
-    throw notFound(entry.id);
-  }
+  return withDbOperationLog(
+    {
+      logger,
+      dbOperation: "update",
+      dbEntityKind: "glossaryEntry"
+    },
+    async () => {
+      if (!(await readGlossaryEntryById(database, entry.id))) {
+        skipDbOperation("not_found", notFound(entry.id));
+      }
 
-  return database.transaction(async () => {
-    const entryResult = await database.run(
-      `
-        UPDATE glossary_entries
-        SET
-          kind = ?,
-          description = ?,
-          updated_at = ?
-        WHERE id = ?
-      `,
-      [entry.kind, entry.description, timestamp, entry.id]
-    );
+      const updatedEntry = await database.transaction(async () => {
+        const entryResult = await database.run(
+          `
+            UPDATE glossary_entries
+            SET
+              kind = ?,
+              description = ?,
+              updated_at = ?
+            WHERE id = ?
+          `,
+          [entry.kind, entry.description, timestamp, entry.id]
+        );
 
-    if (entryResult.changes === 0) {
-      throw notFound(entry.id);
+        if (entryResult.changes === 0) {
+          throw notFound(entry.id);
+        }
+
+        await database.run(
+          `
+            DELETE FROM glossary_forms
+            WHERE entry_id = ?
+              AND is_canonical = 0
+          `,
+          [entry.id]
+        );
+
+        const canonicalResult = await database.run(
+          `
+            UPDATE glossary_forms
+            SET
+              surface = ?,
+              match_boundary_start = COALESCE(?, match_boundary_start),
+              match_boundary_end = COALESCE(?, match_boundary_end),
+              updated_at = ?
+            WHERE entry_id = ?
+              AND is_canonical = 1
+          `,
+          [
+            entry.canonicalSurface,
+            entry.matchBoundaryStart ?? null,
+            entry.matchBoundaryEnd ?? null,
+            timestamp,
+            entry.id
+          ]
+        );
+
+        if (canonicalResult.changes !== 1) {
+          throw new GlossaryValidationError(
+            "Glossary entry must contain exactly one canonical form."
+          );
+        }
+
+        for (const form of entry.forms) {
+          await database.run(
+            `
+              INSERT INTO glossary_forms (
+                id,
+                entry_id,
+                surface,
+                relation,
+                warning_policy,
+                match_boundary_start,
+                match_boundary_end,
+                is_canonical,
+                created_at,
+                updated_at
+              )
+              VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
+            `,
+            [
+              form.id ?? createUuidv7(),
+              entry.id,
+              form.surface,
+              form.relation,
+              form.warningPolicy,
+              form.matchBoundaryStart,
+              form.matchBoundaryEnd,
+              timestamp,
+              timestamp
+            ]
+          );
+        }
+
+        const updatedEntryResult = await readGlossaryEntryById(
+          database,
+          entry.id
+        );
+
+        if (!updatedEntryResult) {
+          throw notFound(entry.id);
+        }
+
+        return updatedEntryResult;
+      });
+
+      return dbOperationResult(updatedEntry, 1);
     }
-
-    await database.run(
-      `
-        DELETE FROM glossary_forms
-        WHERE entry_id = ?
-          AND is_canonical = 0
-      `,
-      [entry.id]
-    );
-
-    const canonicalResult = await database.run(
-      `
-        UPDATE glossary_forms
-        SET
-          surface = ?,
-          match_boundary_start = COALESCE(?, match_boundary_start),
-          match_boundary_end = COALESCE(?, match_boundary_end),
-          updated_at = ?
-        WHERE entry_id = ?
-          AND is_canonical = 1
-      `,
-      [
-        entry.canonicalSurface,
-        entry.matchBoundaryStart ?? null,
-        entry.matchBoundaryEnd ?? null,
-        timestamp,
-        entry.id
-      ]
-    );
-
-    if (canonicalResult.changes !== 1) {
-      throw new GlossaryValidationError(
-        "Glossary entry must contain exactly one canonical form."
-      );
-    }
-
-    for (const form of entry.forms) {
-      await database.run(
-        `
-          INSERT INTO glossary_forms (
-            id,
-            entry_id,
-            surface,
-            relation,
-            warning_policy,
-            match_boundary_start,
-            match_boundary_end,
-            is_canonical,
-            created_at,
-            updated_at
-          )
-          VALUES (?, ?, ?, ?, ?, ?, ?, 0, ?, ?)
-        `,
-        [
-          form.id ?? createUuidv7(),
-          entry.id,
-          form.surface,
-          form.relation,
-          form.warningPolicy,
-          form.matchBoundaryStart,
-          form.matchBoundaryEnd,
-          timestamp,
-          timestamp
-        ]
-      );
-    }
-
-    const updatedEntry = await getGlossaryEntryById(database, entry.id);
-
-    if (!updatedEntry) {
-      throw notFound(entry.id);
-    }
-
-    return updatedEntry;
-  });
+  );
 }
 
 export async function deleteGlossaryEntry(
   database: ProjectDatabase,
-  id: string
+  id: string,
+  logger: DbOperationLogger = getDebugLogger()
 ): Promise<void> {
-  const validatedId = validateGlossaryEntryId(id);
-  const result = await database.run(
-    "DELETE FROM glossary_entries WHERE id = ?",
-    [validatedId]
+  const validatedId = validateOrLogDbSkipped(
+    logger,
+    "delete",
+    "glossaryEntry",
+    () => validateGlossaryEntryId(id)
   );
 
-  if (result.changes === 0) {
-    throw notFound(validatedId);
-  }
+  await withDbOperationLog(
+    {
+      logger,
+      dbOperation: "delete",
+      dbEntityKind: "glossaryEntry"
+    },
+    async () => {
+      const result = await database.run(
+        "DELETE FROM glossary_entries WHERE id = ?",
+        [validatedId]
+      );
+
+      if (result.changes === 0) {
+        throw notFound(validatedId);
+      }
+
+      return dbOperationResult(undefined, result.changes);
+    }
+  );
 }
 
 export async function lookupGlossarySurface(
   database: ProjectDatabase,
-  input: GlossarySurfaceLookupInput
+  input: GlossarySurfaceLookupInput,
+  logger: DbOperationLogger = getDebugLogger()
 ): Promise<GlossarySurfaceLookupResult> {
-  const { surface } = validateGlossarySurfaceLookupInput(input);
-  const matchRows = await listSurfaceMatchRows(database, surface);
-
-  if (matchRows.length === 0) {
-    return {
-      status: "none",
-      surface
-    };
-  }
-
-  const entryIds = Array.from(
-    new Set(matchRows.map((row) => stringColumn(row.entry_id, "entry_id")))
+  const { surface } = validateOrLogDbSkipped(
+    logger,
+    "read",
+    "glossaryForm",
+    () => validateGlossarySurfaceLookupInput(input)
   );
-  const formsByEntryId = await listFormsForEntries(database, entryIds);
-  const matches = matchRows.map((row) => {
-    const entryId = stringColumn(row.entry_id, "entry_id");
 
-    return {
-      entry: glossaryEntryFromDatabaseRows(
-        entryRowFromSurfaceMatchRow(row),
-        formsByEntryId.get(entryId) ?? []
-      ),
-      form: glossaryFormFromDatabaseRow(formRowFromSurfaceMatchRow(row))
-    };
-  });
+  return withDbOperationLog<GlossarySurfaceLookupResult>(
+    {
+      logger,
+      dbOperation: "read",
+      dbEntityKind: "glossaryForm"
+    },
+    async () => {
+      const matchRows = await listSurfaceMatchRows(database, surface);
 
-  if (matches.length === 1) {
-    return {
-      status: "unique",
-      surface,
-      match: matches[0]
-    };
-  }
+      if (matchRows.length === 0) {
+        return dbOperationResult(
+          {
+            status: "none",
+            surface
+          },
+          0
+        );
+      }
 
-  return {
-    status: "ambiguous",
-    surface,
-    matches
-  };
+      const entryIds = Array.from(
+        new Set(matchRows.map((row) => stringColumn(row.entry_id, "entry_id")))
+      );
+      const formsByEntryId = await listFormsForEntries(database, entryIds);
+      const matches = matchRows.map((row) => {
+        const entryId = stringColumn(row.entry_id, "entry_id");
+
+        return {
+          entry: glossaryEntryFromDatabaseRows(
+            entryRowFromSurfaceMatchRow(row),
+            formsByEntryId.get(entryId) ?? []
+          ),
+          form: glossaryFormFromDatabaseRow(formRowFromSurfaceMatchRow(row))
+        };
+      });
+
+      if (matches.length === 1) {
+        return dbOperationResult(
+          {
+            status: "unique",
+            surface,
+            match: matches[0]
+          },
+          matchRows.length
+        );
+      }
+
+      return dbOperationResult(
+        {
+          status: "ambiguous",
+          surface,
+          matches
+        },
+        matchRows.length
+      );
+    }
+  );
 }
