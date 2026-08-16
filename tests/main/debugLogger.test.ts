@@ -566,6 +566,59 @@ describe("debug logger", () => {
     ]);
   });
 
+  it("logs command.ignored at debug level, distinct from command.invoked and command.failed", () => {
+    const logger = createTestLogger(
+      enabledOptions([
+        new Date(2026, 7, 15, 11, 0, 0, 1),
+        new Date(2026, 7, 15, 11, 0, 0, 2),
+        new Date(2026, 7, 15, 11, 0, 0, 3)
+      ])
+    );
+
+    logger.log({
+      level: "debug",
+      event: "command.invoked",
+      details: { commandId: "editor.document.save" }
+    });
+    logger.log({
+      level: "error",
+      event: "command.ignored",
+      details: {
+        commandId: "editor.document.save",
+        result: "ignored",
+        reason: "disabled_command"
+      }
+    });
+    logger.log({
+      level: "debug",
+      event: "command.failed",
+      details: {
+        commandId: "editor.document.save",
+        operation: "unknown",
+        result: "failed",
+        statusKey: "status.commandFailed"
+      }
+    });
+
+    const snapshot = logger.getSnapshot();
+
+    expect(snapshot.events.map((event) => event.event)).toEqual([
+      "command.invoked",
+      "command.ignored",
+      "command.failed"
+    ]);
+    expect(snapshot.events.map((event) => event.level)).toEqual([
+      "debug",
+      "debug",
+      "error"
+    ]);
+    expect(snapshot.events[1].details).toEqual({
+      commandId: "editor.document.save",
+      result: "ignored",
+      reason: "disabled_command"
+    });
+  });
+
   it("uses DB operation event levels from the main-process catalog", () => {
     const logger = createTestLogger(
       enabledOptions([

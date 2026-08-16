@@ -1018,6 +1018,15 @@ export function App(): JSX.Element {
     });
 
     if (!commandRegistry.isEnabled(commandId, ...args)) {
+      logRendererDebugEvent({
+        level: "debug",
+        event: "command.ignored",
+        details: {
+          commandId: String(commandId),
+          result: "ignored",
+          reason: "disabled_command"
+        }
+      });
       return;
     }
 

@@ -36,6 +36,56 @@ describe("toolbar command wiring", () => {
     );
   });
 
+  it("logs command.ignored with disabled_command before returning from a disabled command", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const guardIndex = source.indexOf(
+      "if (!commandRegistry.isEnabled(commandId, ...args)) {"
+    );
+    const executeIndex = source.indexOf(
+      "void commandRegistry.execute(commandId, ...args)"
+    );
+
+    expect(guardIndex).toBeGreaterThan(-1);
+    expect(executeIndex).toBeGreaterThan(-1);
+    expect(guardIndex).toBeLessThan(executeIndex);
+
+    const guardBlock = source.slice(guardIndex, executeIndex);
+
+    expect(guardBlock).toContain('event: "command.ignored"');
+    expect(guardBlock).toContain('level: "debug"');
+    expect(guardBlock).toContain("commandId: String(commandId)");
+    expect(guardBlock).toContain('result: "ignored"');
+    expect(guardBlock).toContain('reason: "disabled_command"');
+    expect(guardBlock.indexOf('event: "command.ignored"')).toBeLessThan(
+      guardBlock.indexOf("return;")
+    );
+    expect(source).not.toContain('event: "command.succeeded"');
+  });
+
+  it("keeps executeUiCommand free of raw key, selection, clipboard, and content logging", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const startIndex = source.indexOf("function executeUiCommand<");
+    const endIndex = source.indexOf(
+      "executeUiCommandRef.current = (commandId) => {"
+    );
+
+    expect(startIndex).toBeGreaterThan(-1);
+    expect(endIndex).toBeGreaterThan(startIndex);
+
+    const executeUiCommandSource = source.slice(startIndex, endIndex);
+
+    expect(executeUiCommandSource).not.toContain("KeyboardEvent");
+    expect(executeUiCommandSource).not.toContain("selectedText");
+    expect(executeUiCommandSource).not.toContain("selectionText");
+    expect(executeUiCommandSource).not.toContain("clipboard");
+    expect(executeUiCommandSource).not.toContain("surface");
+    expect(executeUiCommandSource).not.toContain("description");
+    expect(executeUiCommandSource).not.toContain("innerText");
+    expect(executeUiCommandSource).not.toContain("textContent");
+    expect(executeUiCommandSource).not.toContain(".value");
+    expect(executeUiCommandSource).not.toContain("path");
+  });
+
   it("uses ref delegation for stateful Toolbar commands", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
 

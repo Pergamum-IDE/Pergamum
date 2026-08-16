@@ -56,6 +56,20 @@ describe("debug log catalog", () => {
     expect([...contextMenuSurfaces]).not.toContain("unsupported");
   });
 
+  it("includes command.ignored alongside command.invoked and command.failed", () => {
+    expect(debugLogEventNames).toEqual(
+      expect.arrayContaining([
+        "command.invoked",
+        "command.ignored",
+        "command.failed"
+      ])
+    );
+  });
+
+  it("includes disabled_command in the reason catalog", () => {
+    expect(debugLogReasons).toContain("disabled_command");
+  });
+
   it("includes the DB operation debug events", () => {
     expect(debugLogEventNames).toEqual(
       expect.arrayContaining([
