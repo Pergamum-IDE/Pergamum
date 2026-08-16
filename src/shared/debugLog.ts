@@ -44,6 +44,10 @@ export const debugLogEventNames = [
   "edit.command.delegated",
   "edit.command.ignored",
   "edit.command.failed",
+  "db.operation.started",
+  "db.operation.succeeded",
+  "db.operation.failed",
+  "db.operation.skipped",
   "save.requested",
   "save.in_flight.ignored",
   "save.started",
@@ -91,6 +95,29 @@ export const debugLogOperations = [
 
 export type DebugLogOperation = (typeof debugLogOperations)[number];
 
+export const debugLogDbOperations = [
+  "create",
+  "read",
+  "update",
+  "delete",
+  "upsert",
+  "list",
+  "count",
+  "initialize",
+  "transaction"
+] as const;
+
+export type DebugLogDbOperation = (typeof debugLogDbOperations)[number];
+
+export const debugLogDbEntityKinds = [
+  "glossaryEntry",
+  "glossaryForm",
+  "database",
+  "unknown"
+] as const;
+
+export type DebugLogDbEntityKind = (typeof debugLogDbEntityKinds)[number];
+
 export const debugLogResults = [
   "succeeded",
   "failed",
@@ -112,6 +139,12 @@ export const debugLogEditorIdKinds = [
 export type DebugLogEditorIdKind = (typeof debugLogEditorIdKinds)[number];
 
 export const debugLogReasons = [
+  "validation_failed",
+  "context_stale",
+  "not_found",
+  "no_changes",
+  "database_unavailable",
+  "transaction_inactive",
   "invalid_command",
   "window_unavailable",
   "web_contents_destroyed",
@@ -229,6 +262,9 @@ export interface DebugLogDetails {
   delegatedSurface?: ContextMenuSurface;
   hasSelection?: boolean;
   operation?: DebugLogOperation;
+  dbOperationId?: string;
+  dbOperation?: DebugLogDbOperation;
+  dbEntityKind?: DebugLogDbEntityKind;
   result?: DebugLogResult;
   reason?: DebugLogReason;
   trigger?: DebugLogApplicationMenuTrigger;
@@ -258,6 +294,7 @@ export interface DebugLogDetails {
   encodingAssumption?: DebugLogEncodingAssumption;
 
   durationMs?: number;
+  count?: number;
 
   preSinkQueuedEventCount?: number;
   droppedEventCount?: number;
