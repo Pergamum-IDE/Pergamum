@@ -8,6 +8,7 @@ import {
   type GlossaryWarningPolicy
 } from "../shared/glossary";
 import type { Translate, TranslationKey } from "../shared/i18n";
+import { pergamumContextSurfaceAttribute } from "../shared/editContextMenu";
 import { GlossaryFormAdvancedMatchingSettings } from "./GlossaryFormAdvancedMatchingSettings";
 import type {
   GlossaryEntryDraft,
@@ -89,6 +90,9 @@ export function GlossaryEditor({
           <input
             type="text"
             value={form.surface}
+            {...{
+              [pergamumContextSurfaceAttribute]: "glossaryFormSurface"
+            }}
             onChange={(event) =>
               onChangeFormSurface(form.id, event.target.value)
             }
@@ -194,6 +198,9 @@ export function GlossaryEditor({
               type="text"
               required
               value={draft.canonicalSurface}
+              {...{
+                [pergamumContextSurfaceAttribute]: "glossaryCanonicalInput"
+              }}
               onChange={(event) =>
                 onChangeCanonicalSurface(event.target.value)
               }
@@ -248,6 +255,7 @@ export function GlossaryEditor({
             <MarkdownEditor
               value={draft.description}
               onChange={onChangeDescription}
+              contextSurface="glossaryDescription"
             />
           </section>
 

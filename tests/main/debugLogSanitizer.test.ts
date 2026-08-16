@@ -108,6 +108,48 @@ describe("debug log details sanitizer", () => {
     });
   });
 
+  it("accepts safe context menu diagnostics and drops disallowed detail keys", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        interactionId: "contextMenu.12",
+        commandId: "editor.selection.cut",
+        requestedSurface: "markdownEditor",
+        delegatedSurface: "unknownEditable",
+        hasSelection: false,
+        itemCount: 4,
+        clipboardText: "secret",
+        selectedText: "secret"
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      interactionId: "contextMenu.12",
+      commandId: "editor.selection.cut",
+      requestedSurface: "markdownEditor",
+      delegatedSurface: "unknownEditable",
+      hasSelection: false,
+      droppedKeyCount: 3
+    });
+    expect(JSON.stringify(details)).not.toContain("secret");
+    expect(details).not.toHaveProperty("itemCount");
+  });
+
+  it("normalizes unsupported surface strings to unknownEditable", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        requestedSurface: "unsupported",
+        delegatedSurface: "custom"
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      requestedSurface: "unknownEditable",
+      delegatedSurface: "unknownEditable"
+    });
+  });
+
   it("uses main-process runtime values instead of renderer-provided versions", () => {
     const details = sanitizeDebugLogDetails(
       {

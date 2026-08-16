@@ -3,6 +3,10 @@ import { EditorView } from "@codemirror/view";
 import { basicSetup } from "codemirror";
 import { useEffect, useRef } from "react";
 import { EditorSelection, EditorState } from "@codemirror/state";
+import {
+  pergamumContextSurfaceAttribute,
+  type EditableContextSurface
+} from "../shared/editContextMenu";
 
 interface MarkdownEditorPendingSelection {
   start: number;
@@ -14,13 +18,15 @@ interface MarkdownEditorProps {
   onChange: (value: string) => void;
   pendingSelection?: MarkdownEditorPendingSelection | null;
   onPendingSelectionApplied?: () => void;
+  contextSurface?: EditableContextSurface;
 }
 
 export function MarkdownEditor({
   value,
   onChange,
   pendingSelection,
-  onPendingSelectionApplied
+  onPendingSelectionApplied,
+  contextSurface
 }: MarkdownEditorProps): JSX.Element {
   const hostRef = useRef<HTMLDivElement | null>(null);
   const viewRef = useRef<EditorView | null>(null);
@@ -95,5 +101,13 @@ export function MarkdownEditor({
     onPendingSelectionApplied?.();
   }, [pendingSelection, onPendingSelectionApplied]);
 
-  return <div className="editorHost" ref={hostRef} />;
+  return (
+    <div
+      className="editorHost"
+      ref={hostRef}
+      {...(contextSurface
+        ? { [pergamumContextSurfaceAttribute]: contextSurface }
+        : {})}
+    />
+  );
 }

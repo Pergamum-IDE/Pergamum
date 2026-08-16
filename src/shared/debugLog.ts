@@ -1,4 +1,12 @@
-import { applicationCommandIds, editorCommandIds } from "./commandIds";
+import {
+  applicationCommandIds,
+  editCommandIds,
+  editorCommandIds
+} from "./commandIds";
+import {
+  contextMenuSurfaces,
+  type ContextMenuSurface
+} from "./editContextMenu";
 
 export const debugLogLevels = ["debug", "info", "warn", "error"] as const;
 
@@ -28,6 +36,14 @@ export const debugLogEventNames = [
   "ime.save.pending.executed",
   "ime.save.pending.cleared",
   "ime.focus.checked",
+  "contextMenu.requested",
+  "contextMenu.opened",
+  "contextMenu.suppressed",
+  "contextMenu.command.selected",
+  "edit.command.requested",
+  "edit.command.delegated",
+  "edit.command.ignored",
+  "edit.command.failed",
   "save.requested",
   "save.in_flight.ignored",
   "save.started",
@@ -99,12 +115,15 @@ export const debugLogReasons = [
   "invalid_command",
   "window_unavailable",
   "web_contents_destroyed",
+  "native_delegation_unavailable",
   "focus_left_app_shell",
   "active_editor_changed",
   "project_context_changed",
   "unmount",
   "composition_restarted",
   "manual_clear",
+  "unsupported_surface",
+  "disabled_command",
   "unsupported_editor",
   "glossary_not_dirty",
   "glossary_already_saving",
@@ -205,6 +224,10 @@ export interface DebugLogDetails {
 
   commandId?: string;
   editorIdKind?: DebugLogEditorIdKind;
+  interactionId?: string;
+  requestedSurface?: ContextMenuSurface;
+  delegatedSurface?: ContextMenuSurface;
+  hasSelection?: boolean;
   operation?: DebugLogOperation;
   result?: DebugLogResult;
   reason?: DebugLogReason;
@@ -280,6 +303,7 @@ export const knownDebugLogCommandIds = [
   editorCommandIds.openMarkdownDocument,
   editorCommandIds.saveDocument,
   applicationCommandIds.toggleRecentProjects,
+  ...editCommandIds,
   "workspace.files.focus",
   "workspace.search.focus",
   "workspace.glossary.focus",
@@ -337,4 +361,10 @@ export function isDebugLogLevel(value: unknown): value is DebugLogLevel {
 
 export function isDebugLogEventName(value: unknown): value is DebugLogEventName {
   return includesValue(debugLogEventNames, value);
+}
+
+export function isDebugLogContextMenuSurface(
+  value: unknown
+): value is ContextMenuSurface {
+  return includesValue(contextMenuSurfaces, value);
 }

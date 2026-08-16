@@ -2,6 +2,7 @@ import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it, vi } from "vitest";
 import type { GlossaryEntry } from "../../src/shared/glossary";
+import { pergamumContextSurfaceAttribute } from "../../src/shared/editContextMenu";
 import type { Translate } from "../../src/shared/i18n";
 import { GlossaryEditor } from "../../src/renderer/GlossaryEditor";
 import { GlossaryFormAdvancedMatchingSettings } from "../../src/renderer/GlossaryFormAdvancedMatchingSettings";
@@ -511,5 +512,23 @@ describe("GlossaryEditor", () => {
     expect(markup).toContain("王都");
     expect(markup).toMatch(/<input[^>]*value="王都"/);
     expect(markup).toMatch(/<input[^>]*value="首都"/);
+  });
+
+  it("marks only supported Glossary edit fields as context menu surfaces", () => {
+    const markup = renderToStaticMarkup(
+      React.createElement(GlossaryEditor, glossaryEditorProps())
+    );
+
+    expect(markup).toContain(
+      `${pergamumContextSurfaceAttribute}="glossaryCanonicalInput"`
+    );
+    expect(markup).toContain(
+      `${pergamumContextSurfaceAttribute}="glossaryDescription"`
+    );
+    expect(markup.match(/data-pergamum-context-surface="glossaryFormSurface"/g))
+      .toHaveLength(2);
+    expect(markup).not.toContain(
+      `${pergamumContextSurfaceAttribute}="unknownEditable"`
+    );
   });
 });

@@ -533,6 +533,38 @@ describe("debug logger", () => {
     expect(snapshot.events.map((event) => event.seq)).toEqual([4]);
     expect(snapshot.uiDroppedEventCount).toBe(3);
   });
+
+  it("uses debug level for context menu routing and error level for edit delegation failures", () => {
+    const logger = createTestLogger(
+      enabledOptions([new Date(2026, 7, 15, 10, 0, 0, 1)])
+    );
+
+    logger.log({
+      level: "debug",
+      event: "contextMenu.requested",
+      details: {
+        interactionId: "contextMenu.1",
+        requestedSurface: "markdownEditor"
+      }
+    });
+    logger.log({
+      level: "debug",
+      event: "edit.command.failed",
+      details: {
+        interactionId: "contextMenu.1",
+        commandId: "editor.selection.cut",
+        requestedSurface: "markdownEditor",
+        delegatedSurface: "unknownEditable",
+        result: "failed",
+        reason: "web_contents_destroyed"
+      }
+    });
+
+    expect(logger.getSnapshot().events.map((event) => event.level)).toEqual([
+      "debug",
+      "error"
+    ]);
+  });
 });
 
 function createTestLogger(

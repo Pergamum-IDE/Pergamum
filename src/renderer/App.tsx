@@ -3,14 +3,15 @@ import {
   useMemo,
   useRef,
   useState,
-  type FocusEvent as ReactFocusEvent
+  type FocusEvent as ReactFocusEvent,
+  type MouseEvent as ReactMouseEvent
 } from "react";
 import type {
   PergamumProject,
   ProjectDocument,
   SaveApplicationSettingsRequest
 } from "../shared/api";
-import type { FileMenuCommandId } from "../shared/commandIds";
+import type { EditCommandId, FileMenuCommandId } from "../shared/commandIds";
 import type {
   DebugLogEditorIdKind,
   DebugLogSaveTargetKind
@@ -76,6 +77,14 @@ import {
 } from "./debugLog";
 import { DebugLogPanel } from "./DebugLogPanel";
 import { EditorSurface } from "./EditorSurface";
+import {
+  createContextMenuInteractionIdFactory,
+  delegatedContextSurfaceFromDocument,
+  executeContextMenuEditCommand,
+  handleEditContextMenuEvent,
+  hasSelectionInDocument,
+  type NativeEditCommandContext
+} from "./editContextMenuBridge";
 import {
   createEditorCommandTitles,
   editorCommandIds,
@@ -286,6 +295,8 @@ export function App(): JSX.Element {
   const saveCurrentDocumentCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
+  const nativeEditCommandContextRef =
+    useRef<NativeEditCommandContext | null>(null);
   const toggleRecentProjectsCommandRef = useRef<() => void>(() => undefined);
   const canSaveCurrentDocumentCommandRef = useRef<() => boolean>(() => false);
   const executeUiCommandRef = useRef<(commandId: FileMenuCommandId) => void>(
@@ -353,6 +364,10 @@ export function App(): JSX.Element {
     []
   );
   const saveInFlightGuard = useMemo(() => createSaveInFlightGuard(), []);
+  const nextContextMenuInteractionId = useMemo(
+    () => createContextMenuInteractionIdFactory(),
+    []
+  );
 
   const activeDocument = activeOpenDocument(openDocumentsState);
   const currentEditor = activeCurrentEditor(openDocumentsState);
@@ -475,7 +490,10 @@ export function App(): JSX.Element {
       {
         openMarkdownDocument: () => openMarkdownDocumentCommandRef.current(),
         saveCurrentDocument: () => saveCurrentDocumentCommandRef.current(),
-        canSaveCurrentDocument: () => canSaveCurrentDocumentCommandRef.current()
+        canSaveCurrentDocument: () => canSaveCurrentDocumentCommandRef.current(),
+        delegateNativeEditCommand: (commandId) =>
+          delegateNativeEditCommand(commandId),
+        canDelegateNativeEditCommand: () => true
       },
       createEditorCommandTitles(translate)
     );
@@ -626,6 +644,43 @@ export function App(): JSX.Element {
 
     return registry;
   }, [activeProjectContext, layout.sidebar.collapsed, sidebarMode, translate]);
+  useEffect(
+    () =>
+      window.pergamum.contextMenu.onCommandSelected((selection) => {
+        void executeContextMenuEditCommand(selection, {
+          commandRegistry,
+          editorIdKind: debugEditorIdKind(activeDocument.id),
+          delegatedSurface: delegatedContextSurfaceFromDocument(),
+          hasSelection: hasSelectionInDocument(),
+          log: logRendererDebugEvent,
+          setNativeEditCommandContext: (context) => {
+            nativeEditCommandContextRef.current = context;
+          },
+          clearNativeEditCommandContext: (context) => {
+            if (nativeEditCommandContextRef.current === context) {
+              nativeEditCommandContextRef.current = null;
+            }
+          }
+        }).catch((error) => {
+          logRendererDebugEvent({
+            level: "error",
+            event: "command.failed",
+            details: {
+              commandId: selection.commandId,
+              operation: "unknown",
+              result: "failed",
+              statusKey: "status.commandFailed",
+              error: rendererDebugErrorInfo(error)
+            }
+          });
+          setStatus({
+            key: "status.commandFailed",
+            values: { message: errorMessage(error, translate) }
+          });
+        });
+      }),
+    [activeDocument.id, commandRegistry, translate]
+  );
   const shouldShowWelcome =
     project === null && isOnlyInitialUntitledDocument(openDocumentsState);
   const activeActivityMode = resolveActiveActivityMode(
@@ -988,6 +1043,31 @@ export function App(): JSX.Element {
   executeUiCommandRef.current = (commandId) => {
     executeUiCommand(commandId);
   };
+
+  async function delegateNativeEditCommand(
+    commandId: EditCommandId
+  ): Promise<void> {
+    const context = nativeEditCommandContextRef.current;
+
+    if (!context || context.commandId !== commandId) {
+      return;
+    }
+
+    await window.pergamum.edit.delegateNativeEdit(context);
+  }
+
+  function handleContextMenuCapture(
+    event: ReactMouseEvent<HTMLElement>
+  ): void {
+    handleEditContextMenuEvent(event, {
+      commandRegistry,
+      nextInteractionId: nextContextMenuInteractionId,
+      editorIdKind: debugEditorIdKind(activeDocument.id),
+      hasSelection: () => hasSelectionInDocument(),
+      log: logRendererDebugEvent,
+      popupEditMenu: window.pergamum.contextMenu.popupEditMenu
+    });
+  }
 
   function handleCompositionStartCapture(): void {
     imeCompositionSaveGuard.handleCompositionStart();
@@ -1910,6 +1990,7 @@ export function App(): JSX.Element {
       onCompositionStartCapture={handleCompositionStartCapture}
       onCompositionEndCapture={handleCompositionEndCapture}
       onBlurCapture={handleAppBlurCapture}
+      onContextMenuCapture={handleContextMenuCapture}
     >
       <header className="toolbar">
         <div className="documentTitle">

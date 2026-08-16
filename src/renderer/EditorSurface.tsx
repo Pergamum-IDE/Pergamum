@@ -260,6 +260,7 @@ function MarkdownEditorSurface({
           onChange={onChangeMarkdownContent}
           pendingSelection={pendingSelection}
           onPendingSelectionApplied={onPendingSelectionApplied}
+          contextSurface="markdownEditor"
         />
       </section>
 

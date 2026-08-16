@@ -1,13 +1,46 @@
 import { contextBridge, ipcRenderer } from "electron";
 import {
   APPLICATION_MENU_CHANNELS,
+  CONTEXT_MENU_CHANNELS,
   DEBUG_LOG_CHANNELS,
+  EDIT_CHANNELS,
   FILE_CHANNELS,
   GLOSSARY_CHANNELS,
   PROJECT_CHANNELS,
   SETTINGS_CHANNELS,
   type PergamumApi
 } from "../shared/api";
+import {
+  isEditContextMenuCommandId,
+  isEditableContextSurface,
+  type EditContextMenuCommandSelection
+} from "../shared/editContextMenu";
+
+function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
+}
+
+function contextMenuCommandSelectionFromUnknown(
+  value: unknown
+): EditContextMenuCommandSelection | null {
+  if (!isRecord(value)) {
+    return null;
+  }
+
+  if (
+    typeof value.interactionId !== "string" ||
+    !isEditContextMenuCommandId(value.commandId) ||
+    !isEditableContextSurface(value.requestedSurface)
+  ) {
+    return null;
+  }
+
+  return {
+    interactionId: value.interactionId,
+    commandId: value.commandId,
+    requestedSurface: value.requestedSurface
+  };
+}
 
 const pergamumApi: PergamumApi = {
   files: {
@@ -95,6 +128,33 @@ const pergamumApi: PergamumApi = {
         ipcRenderer.off(APPLICATION_MENU_CHANNELS.command, listener);
       };
     }
+  },
+  contextMenu: {
+    popupEditMenu: (request) =>
+      ipcRenderer.invoke(CONTEXT_MENU_CHANNELS.popupEditMenu, request),
+    onCommandSelected: (callback) => {
+      const listener = (
+        _event: Electron.IpcRendererEvent,
+        selection: unknown
+      ) => {
+        const validatedSelection =
+          contextMenuCommandSelectionFromUnknown(selection);
+
+        if (validatedSelection) {
+          callback(validatedSelection);
+        }
+      };
+
+      ipcRenderer.on(CONTEXT_MENU_CHANNELS.commandSelected, listener);
+
+      return () => {
+        ipcRenderer.off(CONTEXT_MENU_CHANNELS.commandSelected, listener);
+      };
+    }
+  },
+  edit: {
+    delegateNativeEdit: (request) =>
+      ipcRenderer.invoke(EDIT_CHANNELS.delegateNativeEdit, request)
   }
 };
 
