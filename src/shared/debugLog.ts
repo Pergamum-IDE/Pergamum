@@ -24,6 +24,7 @@ export const debugLogEventNames = [
   "application_menu.command.sent",
   "application_menu.command.received",
   "command.invoked",
+  "command.ignored",
   "command.failed",
   "document.open.failed",
   "document.save.failed",

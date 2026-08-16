@@ -76,6 +76,7 @@ const eventLevelCatalog: Record<DebugLogEventName, DebugLogLevel> = {
   "application_menu.command.sent": "debug",
   "application_menu.command.received": "debug",
   "command.invoked": "debug",
+  "command.ignored": "debug",
   "command.failed": "error",
   "document.open.failed": "error",
   "document.save.failed": "error",
