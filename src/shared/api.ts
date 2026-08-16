@@ -14,6 +14,11 @@ import type {
   RendererDebugLogRequest,
   SanitizedDebugLogEvent
 } from "./debugLog";
+import type {
+  EditContextMenuCommandSelection,
+  EditContextMenuPopupRequest,
+  NativeEditDelegationRequest
+} from "./editContextMenu";
 
 export type {
   ApplicationSettings,
@@ -78,6 +83,15 @@ export const DEBUG_LOG_CHANNELS = {
 
 export const APPLICATION_MENU_CHANNELS = {
   command: "applicationMenu:command"
+} as const;
+
+export const CONTEXT_MENU_CHANNELS = {
+  popupEditMenu: "contextMenu:popupEditMenu",
+  commandSelected: "contextMenu:commandSelected"
+} as const;
+
+export const EDIT_CHANNELS = {
+  delegateNativeEdit: "edit:delegateNativeEdit"
 } as const;
 
 export interface MarkdownFile {
@@ -193,5 +207,16 @@ export interface PergamumApi {
   };
   applicationMenu: {
     onCommand: (callback: (commandId: string) => void) => () => void;
+  };
+  contextMenu: {
+    popupEditMenu: (request: EditContextMenuPopupRequest) => Promise<boolean>;
+    onCommandSelected: (
+      callback: (selection: EditContextMenuCommandSelection) => void
+    ) => () => void;
+  };
+  edit: {
+    delegateNativeEdit: (
+      request: NativeEditDelegationRequest
+    ) => Promise<boolean>;
   };
 }

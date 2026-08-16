@@ -9,6 +9,7 @@ import {
   setDebugLogger,
   type DebugLogger
 } from "./debugLogger";
+import { registerContextMenuIpc } from "./contextMenuIpc";
 import { registerDebugLogIpc } from "./debugLogIpc";
 import { registerFileIpc } from "./fileIpc";
 import { registerGlossaryIpc } from "./glossaryIpc";
@@ -117,6 +118,7 @@ app.whenReady().then(async () => {
     debugLogger
   });
   registerDebugLogIpc(debugLogger);
+  registerContextMenuIpc(debugLogger);
   registerFileIpc(debugLogger);
   registerGlossaryIpc(debugLogger);
   registerProjectIpc(debugLogger);

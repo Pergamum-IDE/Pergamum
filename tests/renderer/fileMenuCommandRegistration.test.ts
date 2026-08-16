@@ -24,11 +24,17 @@ describe("File menu command registration", () => {
       {
         openMarkdownDocument: () => undefined,
         saveCurrentDocument: () => undefined,
-        canSaveCurrentDocument: () => true
+        canSaveCurrentDocument: () => true,
+        delegateNativeEditCommand: () => undefined,
+        canDelegateNativeEditCommand: () => true
       },
       {
         openMarkdownDocument: "Open Markdown File",
-        saveDocument: "Save"
+        saveDocument: "Save",
+        cutSelection: "Cut",
+        copySelection: "Copy",
+        pasteSelection: "Paste",
+        selectAllSelection: "Select All"
       }
     );
 

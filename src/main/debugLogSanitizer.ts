@@ -13,6 +13,7 @@ import {
   debugLogResults,
   debugLogSaveTargetKinds,
   debugLogSizeBuckets,
+  isDebugLogContextMenuSurface,
   type DebugLogApplicationMenuTrigger,
   knownDebugLogCommandIds,
   knownDebugLogStatusKeys,
@@ -273,6 +274,33 @@ export function sanitizeDebugLogDetails(
           value
         );
         break;
+      case "interactionId":
+        {
+          const interactionId = sanitizeSafeCode(value);
+
+          if (interactionId) {
+            sanitized.interactionId = interactionId;
+          }
+        }
+        break;
+      case "requestedSurface":
+        sanitized.requestedSurface = isDebugLogContextMenuSurface(value)
+          ? value
+          : "unknownEditable";
+        break;
+      case "delegatedSurface":
+        sanitized.delegatedSurface = isDebugLogContextMenuSurface(value)
+          ? value
+          : "unknownEditable";
+        break;
+      case "hasSelection": {
+        const hasSelection = sanitizeBoolean(value);
+
+        if (hasSelection !== undefined) {
+          sanitized.hasSelection = hasSelection;
+        }
+        break;
+      }
       case "operation":
         sanitized.operation = enumOrUnknown<DebugLogOperation>(
           debugLogOperations,
