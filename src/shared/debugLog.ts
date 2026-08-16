@@ -1,5 +1,6 @@
 import {
   applicationCommandIds,
+  commandPaletteCommandIds,
   editCommandIds,
   editorCommandIds
 } from "./commandIds";
@@ -341,6 +342,7 @@ export const knownDebugLogCommandIds = [
   editorCommandIds.openMarkdownDocument,
   editorCommandIds.saveDocument,
   applicationCommandIds.toggleRecentProjects,
+  commandPaletteCommandIds.open,
   ...editCommandIds,
   "workspace.files.focus",
   "workspace.search.focus",

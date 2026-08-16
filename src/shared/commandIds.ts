@@ -5,6 +5,10 @@ export const applicationCommandIds = {
   toggleRecentProjects: defineCommandId("app.recentProjects.toggle")
 } as const;
 
+export const commandPaletteCommandIds = {
+  open: defineCommandId("workbench.commandPalette.open")
+} as const;
+
 export const editorCommandIds = {
   openMarkdownDocument: defineCommandId("editor.document.markdown.open"),
   saveDocument: defineCommandId("editor.document.save"),
@@ -31,7 +35,8 @@ export const fileMenuCommandIds = [
   applicationCommandIds.openProject,
   editorCommandIds.openMarkdownDocument,
   editorCommandIds.saveDocument,
-  applicationCommandIds.toggleRecentProjects
+  applicationCommandIds.toggleRecentProjects,
+  commandPaletteCommandIds.open
 ] as const;
 
 export type FileMenuCommandId = (typeof fileMenuCommandIds)[number];

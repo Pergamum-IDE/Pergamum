@@ -4,6 +4,7 @@ import type { MenuItemConstructorOptions } from "electron";
 import { APPLICATION_MENU_CHANNELS } from "../../src/shared/api";
 import {
   applicationCommandIds,
+  commandPaletteCommandIds,
   editorCommandIds,
   fileMenuCommandIds
 } from "../../src/shared/commandIds";
@@ -78,9 +79,18 @@ describe("application menu", () => {
       editorCommandIds.saveDocument,
       applicationCommandIds.toggleRecentProjects
     ]);
-    expect(send.mock.calls.map((call) => call[1])).toEqual([
-      ...fileMenuCommandIds
-    ]);
+  });
+
+  it("keeps the application-menu-sendable allowlist a superset of the File menu", () => {
+    for (const commandId of [
+      applicationCommandIds.openProject,
+      editorCommandIds.openMarkdownDocument,
+      editorCommandIds.saveDocument,
+      applicationCommandIds.toggleRecentProjects
+    ]) {
+      expect(fileMenuCommandIds).toContain(commandId);
+    }
+    expect(fileMenuCommandIds).toContain(commandPaletteCommandIds.open);
   });
 
   it("rejects command IDs outside the File menu allowlist in main", () => {
@@ -244,6 +254,48 @@ describe("application menu", () => {
       );
     }
   });
+
+  it("adds a Command Palette item to the View menu with a CommandOrControl+Shift+P accelerator", () => {
+    const viewItems = viewMenuItems("win32");
+    const item = viewItems.find(
+      (candidate) => candidate.label === "Command Palette..."
+    );
+
+    expect(item).toBeTruthy();
+    expect(item?.accelerator).toBe("CommandOrControl+Shift+P");
+  });
+
+  it("sends the Command Palette open command from the View menu item", () => {
+    const { window, send } = menuWindowMock();
+    const viewItems = viewMenuItems("win32", { getMainWindow: () => window });
+
+    clickCommandItems(viewItems);
+
+    expect(send).toHaveBeenCalledWith(
+      APPLICATION_MENU_CHANNELS.command,
+      commandPaletteCommandIds.open
+    );
+  });
+
+  it("binds F1 to the Command Palette open command as a hidden item", () => {
+    const viewItems = viewMenuItems("win32");
+    const f1Item = viewItems.find((candidate) => candidate.accelerator === "F1");
+
+    expect(f1Item).toBeTruthy();
+    expect(f1Item?.visible).toBe(false);
+    expect(f1Item?.acceleratorWorksWhenHidden).toBe(true);
+
+    const { window, send } = menuWindowMock();
+
+    viewMenuItems("win32", { getMainWindow: () => window }).find(
+      (candidate) => candidate.accelerator === "F1"
+    )?.click?.({} as never, null as never, {} as never);
+
+    expect(send).toHaveBeenCalledWith(
+      APPLICATION_MENU_CHANNELS.command,
+      commandPaletteCommandIds.open
+    );
+  });
 });
 
 function emptyMenuOptions(): ApplicationMenuOptions {
@@ -287,6 +339,15 @@ function fileMenuItems(
 ): MenuItemConstructorOptions[] {
   return submenuItems(
     findTopLevelMenu(buildApplicationMenu("en", options, platform), "File")
+  );
+}
+
+function viewMenuItems(
+  platform: NodeJS.Platform,
+  options: ApplicationMenuOptions = emptyMenuOptions()
+): MenuItemConstructorOptions[] {
+  return submenuItems(
+    findTopLevelMenu(buildApplicationMenu("en", options, platform), "View")
   );
 }
 

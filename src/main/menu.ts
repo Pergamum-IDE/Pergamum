@@ -6,6 +6,7 @@ import {
 import { APPLICATION_MENU_CHANNELS } from "../shared/api";
 import {
   applicationCommandIds,
+  commandPaletteCommandIds,
   editorCommandIds,
   isFileMenuCommandId,
   type FileMenuCommandId
@@ -160,10 +161,22 @@ function editMenu(language: Language): MenuItemConstructorOptions {
   };
 }
 
-function viewMenu(language: Language): MenuItemConstructorOptions {
+function viewMenu(
+  language: Language,
+  options: ApplicationMenuOptions
+): MenuItemConstructorOptions {
   return {
     label: label(language, "menu.view"),
     submenu: [
+      commandMenuItem(
+        commandPaletteCommandIds.open,
+        language,
+        "menu.commandPalette",
+        options,
+        "CommandOrControl+Shift+P"
+      ),
+      commandPaletteF1MenuItem(options),
+      { type: "separator" },
       roleItem("reload", language, "menu.reload"),
       roleItem("forceReload", language, "menu.forceReload"),
       roleItem("toggleDevTools", language, "menu.toggleDevTools"),
@@ -174,6 +187,31 @@ function viewMenu(language: Language): MenuItemConstructorOptions {
       { type: "separator" },
       roleItem("togglefullscreen", language, "menu.toggleFullScreen")
     ]
+  };
+}
+
+/**
+ * Electron menu items only carry a single accelerator string, so F1 is bound
+ * via a second, hidden menu item rather than a second visible "Command
+ * Palette..." entry. Hidden items still fire their accelerator by default
+ * (acceleratorWorksWhenHidden defaults to true); it is set explicitly here
+ * to document the intent.
+ */
+function commandPaletteF1MenuItem(
+  options: ApplicationMenuOptions
+): MenuItemConstructorOptions {
+  return {
+    label: "Command Palette (F1)",
+    accelerator: "F1",
+    visible: false,
+    acceleratorWorksWhenHidden: true,
+    click: () => {
+      sendApplicationMenuCommand(
+        options.getMainWindow,
+        commandPaletteCommandIds.open,
+        options.debugLogger
+      );
+    }
   };
 }
 
@@ -264,7 +302,7 @@ export function buildApplicationMenu(
     ...(platform === "darwin" ? [macApplicationMenu(language)] : []),
     fileMenu(language, platform, options),
     editMenu(language),
-    viewMenu(language),
+    viewMenu(language, options),
     ...(platform === "darwin" ? [macWindowMenu(language)] : []),
     helpMenu(language)
   ];

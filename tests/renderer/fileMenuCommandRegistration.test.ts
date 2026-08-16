@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import { fileMenuCommandIds } from "../../src/shared/commandIds";
 import { CommandRegistry } from "../../src/shared/commandRegistry";
 import { registerApplicationCommands } from "../../src/renderer/applicationCommands";
+import { registerCommandPaletteCommands } from "../../src/renderer/commandPaletteCommands";
 import { registerEditorCommands } from "../../src/renderer/editorCommands";
 
 describe("File menu command registration", () => {
@@ -36,6 +37,11 @@ describe("File menu command registration", () => {
         pasteSelection: "Paste",
         selectAllSelection: "Select All"
       }
+    );
+    registerCommandPaletteCommands(
+      registry,
+      { openCommandPalette: () => undefined },
+      { open: "Command Palette", openDescription: "Open the Command Palette" }
     );
 
     expect(

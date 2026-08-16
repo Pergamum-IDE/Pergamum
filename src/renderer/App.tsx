@@ -50,6 +50,11 @@ import {
   registerApplicationCommands
 } from "./applicationCommands";
 import { subscribeApplicationMenuCommands } from "./applicationMenuBridge";
+import { CommandPalette } from "./CommandPalette";
+import {
+  createCommandPaletteCommandTitles,
+  registerCommandPaletteCommands
+} from "./commandPaletteCommands";
 import {
   applyStandaloneSaveResult,
   createProjectDocument,
@@ -254,6 +259,7 @@ export function App(): JSX.Element {
   );
   const [isSettingsOpen, setIsSettingsOpen] = useState(false);
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
+  const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [status, setStatus] = useState<StatusMessage>({ key: "app.ready" });
   const [glossaryRefreshToken, setGlossaryRefreshToken] = useState(0);
   const [pendingMarkdownSelection, setPendingMarkdownSelection] =
@@ -640,6 +646,15 @@ export function App(): JSX.Element {
           closeGlossaryOccurrenceTrackingRef.current()
       },
       createGlossaryOccurrencesCommandTitles(translate)
+    );
+    registerCommandPaletteCommands(
+      registry,
+      {
+        openCommandPalette: () => {
+          setIsCommandPaletteOpen((isOpen) => (isOpen ? isOpen : true));
+        }
+      },
+      createCommandPaletteCommandTitles(translate)
     );
 
     return registry;
@@ -2276,6 +2291,19 @@ export function App(): JSX.Element {
         <footer className="statusBar">
           {translate(status.key, status.values)}
         </footer>
+      ) : null}
+
+      {isCommandPaletteOpen ? (
+        <CommandPalette
+          commandRegistry={commandRegistry}
+          translate={translate}
+          isComposing={imeCompositionSaveGuard.isComposing}
+          onExecuteCommand={(commandId) => {
+            executeUiCommand(commandId);
+            setIsCommandPaletteOpen(false);
+          }}
+          onClose={() => setIsCommandPaletteOpen(false)}
+        />
       ) : null}
     </main>
   );
