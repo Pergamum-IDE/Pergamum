@@ -1,0 +1,179 @@
+import { readFileSync } from "node:fs";
+import { describe, expect, it } from "vitest";
+import { CommandRegistry } from "../../src/shared/commandRegistry";
+import {
+  CORE_COMMAND_DOMAINS,
+  DEPRECATED_APP_COMMAND_IDS,
+  RESERVED_COMMAND_NAMESPACE_ROOTS
+} from "../../src/shared/commandTaxonomy";
+import { registerApplicationCommands } from "../../src/renderer/applicationCommands";
+import { registerCommandPaletteCommands } from "../../src/renderer/commandPaletteCommands";
+import { registerEditorCommands } from "../../src/renderer/editorCommands";
+import { registerGlossaryCommands } from "../../src/renderer/glossaryCommands";
+import { registerGlossaryOccurrencesCommands } from "../../src/renderer/glossaryOccurrencesCommands";
+import { registerUtilityWindowCommands } from "../../src/renderer/utilityWindowCommands";
+import { registerWorkspaceCommands } from "../../src/renderer/workspaceCommands";
+
+// This guard matches `register*Commands` by name. A registration function
+// named outside that convention will not be detected, so new command
+// registration functions must follow it.
+//
+// このガードは `register*Commands` という命名でマッチする。規約から外れた名前の
+// 登録関数は検出できないため、新しい command 登録関数はこの命名に従うこと。
+function commandRegistrationCallNames(source: string): readonly string[] {
+  const names = Array.from(
+    source.matchAll(/\b(register[A-Z][A-Za-z]+Commands)\s*\(/g),
+    (match) => match[1]
+  ).filter((name) => name !== "registerCoreCommands");
+
+  return [...new Set(names)].sort();
+}
+
+function firstCommandIdSegment(commandId: string): string {
+  return commandId.split(".")[0] ?? "";
+}
+
+function buildCoreCommandRegistry(): CommandRegistry {
+  const registry = new CommandRegistry();
+
+  registerApplicationCommands(
+    registry,
+    {
+      openProject: () => undefined,
+      toggleRecentProjects: () => undefined
+    },
+    {
+      openProject: "Open Project",
+      toggleRecentProjects: "Toggle Recent Projects"
+    }
+  );
+  registerEditorCommands(
+    registry,
+    {
+      openMarkdownDocument: () => undefined,
+      saveCurrentDocument: () => undefined,
+      canSaveCurrentDocument: () => true,
+      delegateNativeEditCommand: () => undefined,
+      canDelegateNativeEditCommand: () => true
+    },
+    {
+      openMarkdownDocument: "Open Markdown File",
+      saveDocument: "Save",
+      cutSelection: "Cut",
+      copySelection: "Copy",
+      pasteSelection: "Paste",
+      selectAllSelection: "Select All"
+    }
+  );
+  registerWorkspaceCommands(
+    registry,
+    {
+      focusSidebarMode: () => undefined,
+      toggleProjectSettings: () => undefined
+    },
+    {
+      focusFiles: "Focus Files",
+      focusSearch: "Focus Search",
+      focusGlossary: "Focus Glossary",
+      toggleSettings: "Toggle Settings"
+    }
+  );
+  registerUtilityWindowCommands(
+    registry,
+    {
+      openUtilityWindow: () => undefined,
+      closeUtilityWindow: () => undefined,
+      toggleUtilityWindow: () => undefined
+    },
+    {
+      open: "Open Utility Window",
+      close: "Close Utility Window",
+      toggle: "Toggle Utility Window"
+    }
+  );
+  registerGlossaryCommands(
+    registry,
+    {
+      openGlossaryEntry: () => true,
+      createGlossaryEntry: () => true,
+      navigateToPreviousGlossaryOccurrence: () => true,
+      navigateToNextGlossaryOccurrence: () => true
+    },
+    {
+      openEntry: "Open glossary entry",
+      createEntry: "Create glossary entry",
+      previousOccurrence: "Previous occurrence",
+      nextOccurrence: "Next occurrence"
+    }
+  );
+  registerGlossaryOccurrencesCommands(
+    registry,
+    {
+      navigateToPreviousOccurrence: () => true,
+      navigateToNextOccurrence: () => true,
+      openTrackedGlossaryEntry: () => true,
+      closeGlossaryOccurrenceTracking: () => true
+    },
+    {
+      previous: "Previous occurrence",
+      next: "Next occurrence",
+      openEntry: "Open entry",
+      closeTracking: "Close tracking"
+    }
+  );
+  registerCommandPaletteCommands(
+    registry,
+    { openCommandPalette: () => undefined },
+    { open: "Command Palette", openDescription: "Open the Command Palette" }
+  );
+
+  return registry;
+}
+
+function registeredCoreCommandIds(): readonly string[] {
+  return buildCoreCommandRegistry().list().map((command) => String(command.id));
+}
+
+describe("command domain taxonomy", () => {
+  it("keeps the taxonomy registry builder aligned with App command registrations", () => {
+    const appSource = readFileSync("src/renderer/App.tsx", "utf8");
+    const testSource = readFileSync(
+      "tests/shared/commandDomainTaxonomy.test.ts",
+      "utf8"
+    );
+
+    expect(commandRegistrationCallNames(testSource)).toEqual(
+      commandRegistrationCallNames(appSource)
+    );
+  });
+
+  it("registers built-in commands only under known core command domains", () => {
+    const coreCommandDomainSet = new Set<string>(CORE_COMMAND_DOMAINS);
+    const unknownDomainCommandIds = registeredCoreCommandIds().filter(
+      (commandId) =>
+        !coreCommandDomainSet.has(firstCommandIdSegment(commandId))
+    );
+
+    expect(unknownDomainCommandIds).toEqual([]);
+  });
+
+  it("does not register built-in commands under reserved namespace roots", () => {
+    const reservedNamespaceRootSet = new Set<string>(
+      RESERVED_COMMAND_NAMESPACE_ROOTS
+    );
+    const reservedNamespaceCommandIds = registeredCoreCommandIds().filter(
+      (commandId) =>
+        reservedNamespaceRootSet.has(firstCommandIdSegment(commandId))
+    );
+
+    expect(reservedNamespaceCommandIds).toEqual([]);
+  });
+
+  it("freezes registered app commands to the deprecated app command list", () => {
+    const registeredAppCommandIds = registeredCoreCommandIds().filter(
+      (commandId) => firstCommandIdSegment(commandId) === "app"
+    );
+
+    expect(registeredAppCommandIds).toEqual([...DEPRECATED_APP_COMMAND_IDS]);
+  });
+});

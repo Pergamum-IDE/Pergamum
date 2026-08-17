@@ -23,6 +23,7 @@ ADR は、単なる設計メモではありません。
 | ---- | ----- | ------ | ----------- |
 | ADR-0001 | Project Persistence Architecture | Accepted | プロジェクトの永続化方式（Markdown / SQLite / Assets）の基本方針を定義する。 |
 | ADR-0002 | Structured Project Data and Glossary Model | Accepted | 構造化 Project Data の正本、Glossary entity/form model、UUIDv7、snapshot/restore 原則を定義する。 |
+| ADR-0005 | Command Domain Taxonomy | Draft | Command ID domain の責務境界、built-in domain、reserved plugin namespace、collision policy を定義する。 |
 
 ---
 
