@@ -180,17 +180,25 @@ export type DebugLogApplicationMenuTrigger =
   (typeof debugLogApplicationMenuTriggers)[number];
 
 /**
- * Closed enum for `command.blocked`'s `source` detail. Intentionally closed
- * (rather than a free-form string) even though `commandPalette` is the only
- * real value today, so future UI-level block sources stay explicit (#128).
+ * Closed enum for command execution `source` details. Intentionally closed
+ * (rather than a free-form string) so future UI or registry-boundary command
+ * sources stay explicit.
  */
-export const debugLogCommandBlockedSources = [
+export const debugLogCommandExecutionSources = [
+  "activityBar",
+  "applicationMenu",
   "commandPalette",
+  "contextMenu",
+  "documentTabBar",
+  "editorSurface",
+  "toolbar",
+  "utilityWindow",
+  "workspaceSidebar",
   "unknown"
 ] as const;
 
-export type DebugLogCommandBlockedSource =
-  (typeof debugLogCommandBlockedSources)[number];
+export type DebugLogCommandExecutionSource =
+  (typeof debugLogCommandExecutionSources)[number];
 
 export const debugLogSaveTargetKinds = [
   "projectDocument",
@@ -284,7 +292,7 @@ export interface DebugLogDetails {
   result?: DebugLogResult;
   reason?: DebugLogReason;
   trigger?: DebugLogApplicationMenuTrigger;
-  source?: DebugLogCommandBlockedSource;
+  source?: DebugLogCommandExecutionSource;
   statusKey?: string;
 
   hasPendingSave?: boolean;

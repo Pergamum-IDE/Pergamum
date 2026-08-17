@@ -29,7 +29,9 @@ describe("command palette wiring", () => {
     const propsBlock = source.slice(componentIndex, closeIndex);
 
     expect(propsBlock).toContain("onExecuteCommand={(commandId) => {");
-    expect(propsBlock).toContain("executeUiCommand(commandId);");
+    expect(propsBlock).toContain(
+      'executeUiCommand(commandId, { source: "commandPalette" });'
+    );
     expect(propsBlock).toContain("setIsCommandPaletteOpen(false);");
     expect(propsBlock).toContain("onClose={() => setIsCommandPaletteOpen(false)}");
   });
@@ -83,6 +85,8 @@ describe("command palette wiring", () => {
     expect(blockedBlock).toContain('source: "commandPalette"');
     expect(blockedBlock).toContain('reason: "disabled_command"');
     expect(blockedBlock).toContain('level: "debug"');
+    expect(blockedBlock).not.toContain("commandRegistry.execute");
+    expect(blockedBlock).not.toContain("executeUiCommand(");
     expect(blockedBlock).not.toContain("inputValue");
     expect(blockedBlock).not.toContain("query");
     expect(blockedBlock).not.toContain("selection");

@@ -11,6 +11,7 @@ const titles = {
   openProject: "Open Project",
   toggleRecentProjects: "Toggle Recent Projects"
 };
+const executionOptions = { source: "toolbar" } as const;
 
 describe("application commands", () => {
   it("registers app-level project and Recent Projects commands", () => {
@@ -45,8 +46,11 @@ describe("application commands", () => {
       titles
     );
 
-    await registry.execute(applicationCommandIds.openProject);
-    await registry.execute(applicationCommandIds.toggleRecentProjects);
+    await registry.execute(applicationCommandIds.openProject, executionOptions);
+    await registry.execute(
+      applicationCommandIds.toggleRecentProjects,
+      executionOptions
+    );
 
     expect(openProject).toHaveBeenCalledTimes(1);
     expect(toggleRecentProjects).toHaveBeenCalledTimes(1);

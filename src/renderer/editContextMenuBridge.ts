@@ -339,6 +339,7 @@ export async function executeContextMenuEditCommand<TCommandId extends EditComma
   try {
     await input.commandRegistry.execute(
       selection.commandId as CommandId<readonly [], void>,
+      { source: "contextMenu" },
       ...([] as CommandArgumentList<readonly []>)
     );
   } catch (error) {

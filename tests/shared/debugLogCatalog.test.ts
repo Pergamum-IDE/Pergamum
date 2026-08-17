@@ -1,6 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
-  debugLogCommandBlockedSources,
+  debugLogCommandExecutionSources,
   debugLogDbEntityKinds,
   debugLogDbOperations,
   debugLogEventNames,
@@ -77,9 +77,17 @@ describe("debug log catalog", () => {
     );
   });
 
-  it("defines a closed source catalog for command.blocked, with commandPalette as the only real value", () => {
-    expect([...debugLogCommandBlockedSources]).toEqual([
+  it("defines a closed source catalog shared by command.blocked and command.invoked", () => {
+    expect([...debugLogCommandExecutionSources]).toEqual([
+      "activityBar",
+      "applicationMenu",
       "commandPalette",
+      "contextMenu",
+      "documentTabBar",
+      "editorSurface",
+      "toolbar",
+      "utilityWindow",
+      "workspaceSidebar",
       "unknown"
     ]);
   });

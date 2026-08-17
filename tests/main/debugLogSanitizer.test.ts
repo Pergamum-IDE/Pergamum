@@ -82,11 +82,11 @@ describe("debug log details sanitizer", () => {
     });
   });
 
-  it("accepts commandPalette as a known command.blocked source", () => {
+  it("accepts known command execution sources", () => {
     const details = sanitizeDebugLogDetails(
       {
         commandId: "glossary.occurrences.next",
-        source: "commandPalette",
+        source: "utilityWindow",
         reason: "disabled_command"
       },
       context()
@@ -94,7 +94,7 @@ describe("debug log details sanitizer", () => {
 
     expect(details).toEqual({
       commandId: "glossary.occurrences.next",
-      source: "commandPalette",
+      source: "utilityWindow",
       reason: "disabled_command"
     });
   });

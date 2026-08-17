@@ -8,6 +8,7 @@ import {
 } from "../../src/renderer/glossaryCommands";
 
 const entryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abc";
+const executionOptions = { source: "workspaceSidebar" } as const;
 
 const allCommandTitles = {
   openEntry: "Open glossary entry",
@@ -75,7 +76,7 @@ describe("glossary commands", () => {
     registerAllGlossaryCommands(registry, { openGlossaryEntry });
 
     await expect(
-      registry.execute(glossaryCommandIds.openEntry, entryId)
+      registry.execute(glossaryCommandIds.openEntry, executionOptions, entryId)
     ).resolves.toBe(true);
     expect(openGlossaryEntry).toHaveBeenCalledWith(entryId);
   });
@@ -92,7 +93,7 @@ describe("glossary commands", () => {
     registerAllGlossaryCommands(registry, { createGlossaryEntry });
 
     await expect(
-      registry.execute(glossaryCommandIds.createEntry, input)
+      registry.execute(glossaryCommandIds.createEntry, executionOptions, input)
     ).resolves.toBe(true);
     expect(createGlossaryEntry).toHaveBeenCalledWith(input);
   });
@@ -106,7 +107,11 @@ describe("glossary commands", () => {
     });
 
     await expect(
-      registry.execute(glossaryCommandIds.previousOccurrence, entryId)
+      registry.execute(
+        glossaryCommandIds.previousOccurrence,
+        executionOptions,
+        entryId
+      )
     ).resolves.toBe(true);
     expect(navigateToPreviousGlossaryOccurrence).toHaveBeenCalledWith(
       entryId
@@ -122,7 +127,11 @@ describe("glossary commands", () => {
     });
 
     await expect(
-      registry.execute(glossaryCommandIds.nextOccurrence, entryId)
+      registry.execute(
+        glossaryCommandIds.nextOccurrence,
+        executionOptions,
+        entryId
+      )
     ).resolves.toBe(true);
     expect(navigateToNextGlossaryOccurrence).toHaveBeenCalledWith(entryId);
   });

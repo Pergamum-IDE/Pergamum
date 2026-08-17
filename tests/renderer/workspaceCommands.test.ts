@@ -9,6 +9,8 @@ import {
   workspaceFocusCommandIdForMode
 } from "../../src/renderer/workspaceCommands";
 
+const executionOptions = { source: "activityBar" } as const;
+
 describe("workspace commands", () => {
   const titles = {
     focusFiles: "Focus Files",
@@ -52,9 +54,9 @@ describe("workspace commands", () => {
       titles
     );
 
-    await registry.execute(workspaceCommandIds.focusFiles);
-    await registry.execute(workspaceCommandIds.focusSearch);
-    await registry.execute(workspaceCommandIds.focusGlossary);
+    await registry.execute(workspaceCommandIds.focusFiles, executionOptions);
+    await registry.execute(workspaceCommandIds.focusSearch, executionOptions);
+    await registry.execute(workspaceCommandIds.focusGlossary, executionOptions);
 
     expect(focusedModes).toEqual(["files", "search", "glossary"]);
   });
@@ -72,7 +74,7 @@ describe("workspace commands", () => {
       titles
     );
 
-    await registry.execute(workspaceCommandIds.toggleSettings);
+    await registry.execute(workspaceCommandIds.toggleSettings, executionOptions);
 
     expect(toggleProjectSettings).toHaveBeenCalledTimes(1);
   });

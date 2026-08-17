@@ -24,6 +24,7 @@ import {
   CommandDisabledError,
   CommandRegistry,
   type CommandArgumentList,
+  type CommandExecutionOptions,
   type CommandId
 } from "../shared/commandRegistry";
 import {
@@ -693,14 +694,25 @@ export function App(): JSX.Element {
     );
 
     registry.setCommandContextProvider(() => commandContextRef.current);
-    registry.setOnCommandIgnored((commandId) => {
+    registry.setOnCommandIgnored((event) => {
       logRendererDebugEvent({
         level: "debug",
         event: "command.ignored",
         details: {
-          commandId,
+          commandId: event.commandId,
+          source: event.source,
           result: "ignored",
           reason: "disabled_command"
+        }
+      });
+    });
+    registry.setOnCommandInvoked((event) => {
+      logRendererDebugEvent({
+        level: "debug",
+        event: "command.invoked",
+        details: {
+          commandId: event.commandId,
+          source: event.source
         }
       });
     });
@@ -975,6 +987,7 @@ export function App(): JSX.Element {
     try {
       return await commandRegistry.execute(
         glossaryCommandIds.createEntry,
+        { source: "workspaceSidebar" },
         input
       );
     } catch (error) {
@@ -991,7 +1004,9 @@ export function App(): JSX.Element {
   }
 
   function handleActivityBarModeClick(mode: SidebarMode): void {
-    executeUiCommand(workspaceFocusCommandIdForMode(mode));
+    executeUiCommand(workspaceFocusCommandIdForMode(mode), {
+      source: "activityBar"
+    });
   }
 
   function handleChangeMarkdownEditorPreviewRatio(ratio: number): void {
@@ -1070,17 +1085,10 @@ export function App(): JSX.Element {
 
   function executeUiCommand<TArgs extends readonly unknown[], TResult>(
     commandId: CommandId<TArgs, TResult>,
+    options: CommandExecutionOptions,
     ...args: CommandArgumentList<TArgs>
   ): void {
-    logRendererDebugEvent({
-      level: "debug",
-      event: "command.invoked",
-      details: {
-        commandId: String(commandId)
-      }
-    });
-
-    void commandRegistry.execute(commandId, ...args).catch((error) => {
+    void commandRegistry.execute(commandId, options, ...args).catch((error) => {
       if (error instanceof CommandDisabledError) {
         return;
       }
@@ -1104,7 +1112,7 @@ export function App(): JSX.Element {
   }
 
   executeUiCommandRef.current = (commandId) => {
-    executeUiCommand(commandId);
+    executeUiCommand(commandId, { source: "applicationMenu" });
   };
 
   async function delegateNativeEditCommand(
@@ -1661,6 +1669,7 @@ export function App(): JSX.Element {
     try {
       const didOpen = await commandRegistry.execute(
         glossaryCommandIds.openEntry,
+        { source: "utilityWindow" },
         entryId
       );
 
@@ -2071,21 +2080,31 @@ export function App(): JSX.Element {
         </div>
         <button
           type="button"
-          onClick={() => executeUiCommand(applicationCommandIds.openProject)}
+          onClick={() =>
+            executeUiCommand(applicationCommandIds.openProject, {
+              source: "toolbar"
+            })
+          }
         >
           {translate("toolbar.openProject")}
         </button>
         <button
           type="button"
           onClick={() =>
-            executeUiCommand(editorCommandIds.openMarkdownDocument)
+            executeUiCommand(editorCommandIds.openMarkdownDocument, {
+              source: "toolbar"
+            })
           }
         >
           {translate("common.open")}
         </button>
         <button
           type="button"
-          onClick={() => executeUiCommand(editorCommandIds.saveDocument)}
+          onClick={() =>
+            executeUiCommand(editorCommandIds.saveDocument, {
+              source: "toolbar"
+            })
+          }
           disabled={
             !commandRegistry.isEnabledForContext(
               editorCommandIds.saveDocument,
@@ -2098,7 +2117,9 @@ export function App(): JSX.Element {
         <button
           type="button"
           onClick={() =>
-            executeUiCommand(applicationCommandIds.toggleRecentProjects)
+            executeUiCommand(applicationCommandIds.toggleRecentProjects, {
+              source: "toolbar"
+            })
           }
         >
           {translate("toolbar.recentProjects")}
@@ -2112,7 +2133,9 @@ export function App(): JSX.Element {
           translate={translate}
           onSelectMode={handleActivityBarModeClick}
           onToggleProjectSettings={() =>
-            executeUiCommand(workspaceCommandIds.toggleSettings)
+            executeUiCommand(workspaceCommandIds.toggleSettings, {
+              source: "activityBar"
+            })
           }
         />
 
@@ -2173,7 +2196,11 @@ export function App(): JSX.Element {
                         void activateProjectDocument(relativePath);
                       }}
                       onActivateGlossaryEntry={(entryId) => {
-                        executeUiCommand(glossaryCommandIds.openEntry, entryId);
+                        executeUiCommand(
+                          glossaryCommandIds.openEntry,
+                          { source: "workspaceSidebar" },
+                          entryId
+                        );
                       }}
                       onCreateGlossaryEntry={createGlossaryEntryFromSidebar}
                     />
@@ -2199,7 +2226,9 @@ export function App(): JSX.Element {
                   onSelectDocument={activateDocument}
                   isUtilityWindowOpen={layout.utilityWindow.open}
                   onToggleUtilityWindow={() =>
-                    executeUiCommand(utilityWindowCommandIds.toggle)
+                    executeUiCommand(utilityWindowCommandIds.toggle, {
+                      source: "documentTabBar"
+                    })
                   }
                 />
 
@@ -2250,6 +2279,7 @@ export function App(): JSX.Element {
                       if (currentEditor.kind === "glossaryEntry") {
                         executeUiCommand(
                           glossaryCommandIds.previousOccurrence,
+                          { source: "editorSurface" },
                           currentEditor.draft.entry.id
                         );
                       }
@@ -2258,6 +2288,7 @@ export function App(): JSX.Element {
                       if (currentEditor.kind === "glossaryEntry") {
                         executeUiCommand(
                           glossaryCommandIds.nextOccurrence,
+                          { source: "editorSurface" },
                           currentEditor.draft.entry.id
                         );
                       }
@@ -2290,7 +2321,9 @@ export function App(): JSX.Element {
                         translate={translate}
                         onSelectTab={selectUtilityWindowTab}
                         onClose={() =>
-                          executeUiCommand(utilityWindowCommandIds.close)
+                          executeUiCommand(utilityWindowCommandIds.close, {
+                            source: "utilityWindow"
+                          })
                         }
                       >
                         {layout.utilityWindow.activeTab === "debugLog" ? (
@@ -2301,22 +2334,26 @@ export function App(): JSX.Element {
                             translate={translate}
                             onNavigatePrevious={() =>
                               executeUiCommand(
-                                glossaryOccurrencesCommandIds.previous
+                                glossaryOccurrencesCommandIds.previous,
+                                { source: "utilityWindow" }
                               )
                             }
                             onNavigateNext={() =>
                               executeUiCommand(
-                                glossaryOccurrencesCommandIds.next
+                                glossaryOccurrencesCommandIds.next,
+                                { source: "utilityWindow" }
                               )
                             }
                             onOpenEntry={() =>
                               executeUiCommand(
-                                glossaryOccurrencesCommandIds.openEntry
+                                glossaryOccurrencesCommandIds.openEntry,
+                                { source: "utilityWindow" }
                               )
                             }
                             onCloseTracking={() =>
                               executeUiCommand(
-                                glossaryOccurrencesCommandIds.closeTracking
+                                glossaryOccurrencesCommandIds.closeTracking,
+                                { source: "utilityWindow" }
                               )
                             }
                           />
@@ -2344,7 +2381,7 @@ export function App(): JSX.Element {
           isComposing={imeCompositionSaveGuard.isComposing}
           commandContext={commandContext}
           onExecuteCommand={(commandId) => {
-            executeUiCommand(commandId);
+            executeUiCommand(commandId, { source: "commandPalette" });
             setIsCommandPaletteOpen(false);
           }}
           onBlockedCommand={(commandId) => {

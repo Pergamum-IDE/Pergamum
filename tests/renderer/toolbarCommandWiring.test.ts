@@ -6,24 +6,27 @@ describe("toolbar command wiring", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
 
     expect(source).toContain(
-      "executeUiCommand(applicationCommandIds.openProject)"
+      "executeUiCommand(applicationCommandIds.openProject, {"
     );
     expect(source).toContain(
-      "executeUiCommand(editorCommandIds.openMarkdownDocument)"
+      "executeUiCommand(editorCommandIds.openMarkdownDocument, {"
     );
-    expect(source).toContain("executeUiCommand(editorCommandIds.saveDocument)");
     expect(source).toContain(
-      "executeUiCommand(applicationCommandIds.toggleRecentProjects)"
+      "executeUiCommand(editorCommandIds.saveDocument, {"
     );
+    expect(source).toContain(
+      "executeUiCommand(applicationCommandIds.toggleRecentProjects, {"
+    );
+    expect(source).toContain('source: "toolbar"');
   });
 
   it("keeps Toolbar Save disabled state aligned with command enablement", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
     const saveButtonIndex = source.indexOf(
-      "executeUiCommand(editorCommandIds.saveDocument)"
+      "executeUiCommand(editorCommandIds.saveDocument,"
     );
     const nextButtonIndex = source.indexOf(
-      "executeUiCommand(applicationCommandIds.toggleRecentProjects)"
+      "executeUiCommand(applicationCommandIds.toggleRecentProjects,"
     );
 
     expect(saveButtonIndex).toBeGreaterThan(-1);
@@ -70,9 +73,49 @@ describe("toolbar command wiring", () => {
 
     expect(handlerBlock).toContain('event: "command.ignored"');
     expect(handlerBlock).toContain('level: "debug"');
+    expect(handlerBlock).toContain("source: event.source");
     expect(handlerBlock).toContain('result: "ignored"');
     expect(handlerBlock).toContain('reason: "disabled_command"');
     expect(source).not.toContain('event: "command.succeeded"');
+  });
+
+  it("logs command.invoked from the registry's onCommandInvoked handler", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const handlerIndex = source.indexOf("registry.setOnCommandInvoked(");
+    const returnRegistryIndex = source.indexOf("return registry;");
+
+    expect(handlerIndex).toBeGreaterThan(-1);
+    expect(returnRegistryIndex).toBeGreaterThan(-1);
+    expect(handlerIndex).toBeLessThan(returnRegistryIndex);
+
+    const handlerBlock = source.slice(handlerIndex, returnRegistryIndex);
+
+    expect(handlerBlock).toContain('event: "command.invoked"');
+    expect(handlerBlock).toContain("commandId: event.commandId");
+    expect(handlerBlock).toContain("source: event.source");
+  });
+
+  it("keeps UI command.failed emission after registry execution", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const startIndex = source.indexOf("function executeUiCommand<");
+    const endIndex = source.indexOf(
+      "executeUiCommandRef.current = (commandId) => {"
+    );
+
+    expect(startIndex).toBeGreaterThan(-1);
+    expect(endIndex).toBeGreaterThan(startIndex);
+
+    const executeUiCommandSource = source.slice(startIndex, endIndex);
+    const registryExecuteIndex = executeUiCommandSource.indexOf(
+      "commandRegistry.execute(commandId, options, ...args).catch"
+    );
+    const commandFailedIndex = executeUiCommandSource.indexOf(
+      'event: "command.failed"'
+    );
+
+    expect(registryExecuteIndex).toBeGreaterThan(-1);
+    expect(commandFailedIndex).toBeGreaterThan(registryExecuteIndex);
+    expect(executeUiCommandSource).not.toContain('event: "command.invoked"');
   });
 
   it("emits command.ignored from exactly one place for disabled commands", () => {
@@ -94,6 +137,7 @@ describe("toolbar command wiring", () => {
 
     const executeUiCommandSource = source.slice(startIndex, endIndex);
 
+    expect(executeUiCommandSource).not.toContain('event: "command.invoked"');
     expect(executeUiCommandSource).not.toContain("KeyboardEvent");
     expect(executeUiCommandSource).not.toContain("selectedText");
     expect(executeUiCommandSource).not.toContain("selectionText");

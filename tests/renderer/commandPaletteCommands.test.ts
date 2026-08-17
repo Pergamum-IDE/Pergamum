@@ -8,6 +8,7 @@ import {
 } from "../../src/renderer/commandPaletteCommands";
 
 const translate: Translate = (key) => key;
+const executionOptions = { source: "commandPalette" } as const;
 
 describe("command palette commands", () => {
   const titles = {
@@ -45,7 +46,7 @@ describe("command palette commands", () => {
       titles
     );
 
-    await registry.execute(commandPaletteCommandIds.open);
+    await registry.execute(commandPaletteCommandIds.open, executionOptions);
 
     expect(opened).toBe(true);
   });
