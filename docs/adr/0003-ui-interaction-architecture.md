@@ -189,6 +189,15 @@ raw input + active Project Context → canonicalization → EditorId
 
 I-17 の根拠: Result 型を採用すると全 Command が成否の分岐を扱うことになり、TypeScript の例外機構と二重の誤り伝播経路が生じる。Plugin および AI からの呼び出しにおいても、失敗が観測可能であることが正しい。
 
+#### Command execution logging boundary
+
+- **I-42** Command の実行ログ境界は、caller surface と registry execution boundary を区別する。
+  - `command.blocked` は UI surface が registry execution boundary 到達前に発火する。
+  - `command.ignored` は CommandRegistry が registry execution boundary に到達した後、body 実行前に発火する。
+  - `command.invoked` は CommandRegistry が live enablement を通過し、body 実行を開始すると決定した後、body 呼び出し直前に発火する。
+  - 単一の user action に対して `command.blocked` と `command.ignored` は同時に発火してはならない。
+  - `command.ignored` または unknown command では `command.invoked` を発火してはならない。
+
 ### 4. Command ID は公開契約
 
 Pergamum は MIT で公開され、将来 Plugin と AI が Command を参照する。したがって Command ID は事実上の public API である。
