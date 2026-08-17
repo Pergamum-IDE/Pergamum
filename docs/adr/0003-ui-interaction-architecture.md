@@ -198,6 +198,8 @@ I-17 の根拠: Result 型を採用すると全 Command が成否の分岐を扱
   - 単一の user action に対して `command.blocked` と `command.ignored` は同時に発火してはならない。
   - `command.ignored` または unknown command では `command.invoked` を発火してはならない。
 
+- **I-43** Command execution boundary は UX と observability の境界であり、security / privilege boundary ではない。`when` expression や `isEnabled` は command の実行可否を UI / 操作文脈として表すものであり、認可機構として扱ってはならない。Pergamum における privilege separation は renderer から preload / IPC を越えて main process に到達する境界で成立する。
+
 ### 4. Command ID は公開契約
 
 Pergamum は MIT で公開され、将来 Plugin と AI が Command を参照する。したがって Command ID は事実上の public API である。
