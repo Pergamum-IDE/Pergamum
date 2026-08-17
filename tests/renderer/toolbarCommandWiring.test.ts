@@ -19,47 +19,67 @@ describe("toolbar command wiring", () => {
 
   it("keeps Toolbar Save disabled state aligned with command enablement", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
-
-    expect(source).toContain(
-      "disabled={!commandRegistry.isEnabled(editorCommandIds.saveDocument)}"
+    const saveButtonIndex = source.indexOf(
+      "executeUiCommand(editorCommandIds.saveDocument)"
     );
+    const nextButtonIndex = source.indexOf(
+      "executeUiCommand(applicationCommandIds.toggleRecentProjects)"
+    );
+
+    expect(saveButtonIndex).toBeGreaterThan(-1);
+    expect(nextButtonIndex).toBeGreaterThan(saveButtonIndex);
+
+    const saveButtonSource = source.slice(saveButtonIndex, nextButtonIndex);
+
+    expect(saveButtonSource).toContain("commandRegistry.isEnabledForContext(");
+    expect(saveButtonSource).toContain("editorCommandIds.saveDocument");
+    expect(saveButtonSource).toContain("commandContext");
     expect(source).toContain(
       "canSaveCurrentDocumentCommandRef.current = () => canSave"
     );
   });
 
-  it("does not execute disabled UI commands", () => {
+  it("does not execute disabled UI commands, relying on the registry's own enablement check", () => {
+    // #128 follow-up: enablement (both legacy Command.isEnabled and when) is
+    // enforced once, inside CommandRegistry.execute, so every execute() call
+    // site — including direct registry routes — is covered the same way.
+    // executeUiCommand must not re-implement its own pre-check.
     const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const startIndex = source.indexOf("function executeUiCommand<");
+    const endIndex = source.indexOf(
+      "executeUiCommandRef.current = (commandId) => {"
+    );
+    const executeUiCommandSource = source.slice(startIndex, endIndex);
 
-    expect(source).toContain(
-      "if (!commandRegistry.isEnabled(commandId, ...args)) {"
+    expect(executeUiCommandSource).not.toContain("commandRegistry.isEnabled(");
+    expect(executeUiCommandSource).toContain(
+      "if (error instanceof CommandDisabledError) {"
     );
   });
 
-  it("logs command.ignored with disabled_command before returning from a disabled command", () => {
+  it("logs command.ignored with disabled_command from the registry's onCommandIgnored handler", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
-    const guardIndex = source.indexOf(
-      "if (!commandRegistry.isEnabled(commandId, ...args)) {"
-    );
-    const executeIndex = source.indexOf(
-      "void commandRegistry.execute(commandId, ...args)"
-    );
+    const handlerIndex = source.indexOf("registry.setOnCommandIgnored(");
+    const returnRegistryIndex = source.indexOf("return registry;");
 
-    expect(guardIndex).toBeGreaterThan(-1);
-    expect(executeIndex).toBeGreaterThan(-1);
-    expect(guardIndex).toBeLessThan(executeIndex);
+    expect(handlerIndex).toBeGreaterThan(-1);
+    expect(returnRegistryIndex).toBeGreaterThan(-1);
+    expect(handlerIndex).toBeLessThan(returnRegistryIndex);
 
-    const guardBlock = source.slice(guardIndex, executeIndex);
+    const handlerBlock = source.slice(handlerIndex, returnRegistryIndex);
 
-    expect(guardBlock).toContain('event: "command.ignored"');
-    expect(guardBlock).toContain('level: "debug"');
-    expect(guardBlock).toContain("commandId: String(commandId)");
-    expect(guardBlock).toContain('result: "ignored"');
-    expect(guardBlock).toContain('reason: "disabled_command"');
-    expect(guardBlock.indexOf('event: "command.ignored"')).toBeLessThan(
-      guardBlock.indexOf("return;")
-    );
+    expect(handlerBlock).toContain('event: "command.ignored"');
+    expect(handlerBlock).toContain('level: "debug"');
+    expect(handlerBlock).toContain('result: "ignored"');
+    expect(handlerBlock).toContain('reason: "disabled_command"');
     expect(source).not.toContain('event: "command.succeeded"');
+  });
+
+  it("emits command.ignored from exactly one place for disabled commands", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const occurrences = source.match(/event: "command\.ignored"/g) ?? [];
+
+    expect(occurrences).toHaveLength(1);
   });
 
   it("keeps executeUiCommand free of raw key, selection, clipboard, and content logging", () => {

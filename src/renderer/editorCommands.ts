@@ -4,7 +4,12 @@ import {
   editorCommandIds,
   type EditCommandId
 } from "../shared/commandIds";
+import type { CommandEnablementExpression } from "../shared/commandEnablement";
 import type { Translate } from "../shared/i18n";
+
+export const saveDocumentCommandWhen: CommandEnablementExpression = {
+  allOf: [{ key: "editor.hasDocument" }, { key: "editor.isDirty" }]
+};
 
 export { editorCommandIds };
 
@@ -73,7 +78,8 @@ export function createEditorCommands(
 
         return controller.saveCurrentDocument();
       },
-      isEnabled: () => controller.canSaveCurrentDocument()
+      isEnabled: () => controller.canSaveCurrentDocument(),
+      when: saveDocumentCommandWhen
     },
     editCommand(editCommandIds[0], titles.cutSelection, controller),
     editCommand(editCommandIds[1], titles.copySelection, controller),

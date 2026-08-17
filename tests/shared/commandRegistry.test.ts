@@ -1,12 +1,14 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
+  CommandDisabledError,
   CommandRegistry,
   DuplicateCommandIdError,
   InvalidCommandIdError,
   UnknownCommandIdError,
   defineCommandId
 } from "../../src/shared/commandRegistry";
+import { InvalidCommandEnablementExpressionError } from "../../src/shared/commandEnablement";
 
 describe("CommandRegistry", () => {
   it("registers and retrieves a command by stable ID", () => {
@@ -186,6 +188,229 @@ describe("CommandRegistry", () => {
     });
 
     expect(registry.isEnabled(commandId)).toBe(true);
+  });
+
+  it("rejects registration of a command with an invalid when expression", () => {
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.invalidWhen");
+
+    expect(() =>
+      registry.register({
+        id: commandId,
+        title: "Invalid when",
+        execute: () => undefined,
+        when: { allOf: [] }
+      })
+    ).toThrow(InvalidCommandEnablementExpressionError);
+    expect(registry.get(commandId)).toBeNull();
+  });
+
+  it("treats a command without a context provider as disabled when it has a when", async () => {
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.noProvider");
+    const execute = vi.fn();
+
+    registry.register({
+      id: commandId,
+      title: "No provider",
+      execute,
+      when: { key: "editor.isDirty" }
+    });
+
+    await expect(registry.execute(commandId)).rejects.toBeInstanceOf(
+      CommandDisabledError
+    );
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("re-evaluates when live against the injected context provider at execute time", async () => {
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.liveWhen");
+    const execute = vi.fn();
+    let isDirty = false;
+
+    registry.register({
+      id: commandId,
+      title: "Live when",
+      execute,
+      when: { key: "editor.isDirty" }
+    });
+    registry.setCommandContextProvider(() => ({ "editor.isDirty": isDirty }));
+
+    await expect(registry.execute(commandId)).rejects.toBeInstanceOf(
+      CommandDisabledError
+    );
+    expect(execute).not.toHaveBeenCalled();
+
+    isDirty = true;
+    await registry.execute(commandId);
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it("emits through the injected onCommandIgnored handler, not command.execute, when when is false", async () => {
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.ignoredHandler");
+    const execute = vi.fn();
+    const onCommandIgnored = vi.fn();
+
+    registry.register({
+      id: commandId,
+      title: "Ignored handler",
+      execute,
+      when: { key: "editor.isDirty" }
+    });
+    registry.setCommandContextProvider(() => ({}));
+    registry.setOnCommandIgnored(onCommandIgnored);
+
+    await expect(registry.execute(commandId)).rejects.toThrow(
+      CommandDisabledError
+    );
+    expect(onCommandIgnored).toHaveBeenCalledWith(commandId);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("cannot be bypassed by calling execute directly instead of through a UI wrapper", async () => {
+    // Regression guard for #128: direct commandRegistry.execute() routes
+    // (e.g. createGlossaryEntryFromSidebar, openTrackedGlossaryEntry,
+    // editContextMenuBridge) must not be able to run a disabled command's
+    // body just because they skip a UI-layer pre-check.
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.directRoute");
+    const execute = vi.fn();
+
+    registry.register({
+      id: commandId,
+      title: "Direct route",
+      execute,
+      when: { key: "project.isOpen" }
+    });
+    registry.setCommandContextProvider(() => ({ "project.isOpen": false }));
+
+    await expect(registry.execute(commandId)).rejects.toBeInstanceOf(
+      CommandDisabledError
+    );
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects execute when Command.isEnabled returns false, even though when is true", async () => {
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.legacyIsEnabledBlocksExecute");
+    const execute = vi.fn();
+
+    registry.register({
+      id: commandId,
+      title: "Legacy isEnabled blocks execute",
+      execute,
+      isEnabled: () => false,
+      when: { key: "project.isOpen" }
+    });
+    registry.setCommandContextProvider(() => ({ "project.isOpen": true }));
+
+    await expect(registry.execute(commandId)).rejects.toBeInstanceOf(
+      CommandDisabledError
+    );
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects execute when when evaluates false, even though Command.isEnabled is true", async () => {
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.whenBlocksExecute");
+    const execute = vi.fn();
+
+    registry.register({
+      id: commandId,
+      title: "when blocks execute",
+      execute,
+      isEnabled: () => true,
+      when: { key: "project.isOpen" }
+    });
+    registry.setCommandContextProvider(() => ({ "project.isOpen": false }));
+
+    await expect(registry.execute(commandId)).rejects.toBeInstanceOf(
+      CommandDisabledError
+    );
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("rejects execute and emits onCommandIgnored exactly once when both isEnabled and when are false", async () => {
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.bothDisabled");
+    const execute = vi.fn();
+    const onCommandIgnored = vi.fn();
+
+    registry.register({
+      id: commandId,
+      title: "Both disabled",
+      execute,
+      isEnabled: () => false,
+      when: { key: "project.isOpen" }
+    });
+    registry.setCommandContextProvider(() => ({ "project.isOpen": false }));
+    registry.setOnCommandIgnored(onCommandIgnored);
+
+    await expect(registry.execute(commandId)).rejects.toBeInstanceOf(
+      CommandDisabledError
+    );
+    expect(execute).not.toHaveBeenCalled();
+    expect(onCommandIgnored).toHaveBeenCalledTimes(1);
+    expect(onCommandIgnored).toHaveBeenCalledWith(commandId);
+  });
+
+  it("subjects direct execute() routes to Command.isEnabled too, not only when", async () => {
+    // Regression guard for the #128 follow-up: before this change, execute()
+    // enforced only `when`; a command disabled solely via legacy
+    // Command.isEnabled could still run its body through a direct
+    // commandRegistry.execute() route that skips a UI-layer isEnabled
+    // pre-check (e.g. createGlossaryEntryFromSidebar, openTrackedGlossaryEntry).
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.directRouteLegacy");
+    const execute = vi.fn();
+
+    registry.register({
+      id: commandId,
+      title: "Direct route, legacy isEnabled only",
+      execute,
+      isEnabled: () => false
+    });
+
+    await expect(registry.execute(commandId)).rejects.toBeInstanceOf(
+      CommandDisabledError
+    );
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("evaluates isEnabledForContext from both Command.isEnabled and when", () => {
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.enabledForContext");
+
+    registry.register({
+      id: commandId,
+      title: "Enabled for context",
+      execute: () => undefined,
+      isEnabled: () => true,
+      when: { key: "editor.isDirty" }
+    });
+
+    expect(
+      registry.isEnabledForContext(commandId, { "editor.isDirty": true })
+    ).toBe(true);
+    expect(
+      registry.isEnabledForContext(commandId, { "editor.isDirty": false })
+    ).toBe(false);
+  });
+
+  it("evaluates isEnabledForContext as false when legacy isEnabled is false, regardless of when", () => {
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.legacyDisabled");
+
+    registry.register({
+      id: commandId,
+      title: "Legacy disabled",
+      execute: () => undefined,
+      isEnabled: () => false
+    });
+
+    expect(registry.isEnabledForContext(commandId, {})).toBe(false);
   });
 
   it("rejects invalid Command ID syntax", () => {

@@ -1,5 +1,6 @@
 import { describe, expect, it } from "vitest";
 import {
+  debugLogCommandBlockedSources,
   debugLogDbEntityKinds,
   debugLogDbOperations,
   debugLogEventNames,
@@ -68,6 +69,19 @@ describe("debug log catalog", () => {
 
   it("includes disabled_command in the reason catalog", () => {
     expect(debugLogReasons).toContain("disabled_command");
+  });
+
+  it("includes command.blocked as its own event, distinct from command.ignored", () => {
+    expect(debugLogEventNames).toEqual(
+      expect.arrayContaining(["command.blocked"])
+    );
+  });
+
+  it("defines a closed source catalog for command.blocked, with commandPalette as the only real value", () => {
+    expect([...debugLogCommandBlockedSources]).toEqual([
+      "commandPalette",
+      "unknown"
+    ]);
   });
 
   it("includes the DB operation debug events", () => {

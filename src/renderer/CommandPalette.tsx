@@ -4,6 +4,7 @@ import {
   useState,
   type KeyboardEvent as ReactKeyboardEvent
 } from "react";
+import type { CommandContext } from "../shared/commandEnablement";
 import type { CommandId, CommandRegistry } from "../shared/commandRegistry";
 import type { Translate, TranslationKey } from "../shared/i18n";
 import {
@@ -11,7 +12,7 @@ import {
   firstEnabledCommandPaletteIndex,
   listCommandPaletteEntries,
   moveCommandPaletteSelection,
-  resolveCommandPaletteEnterExecution
+  resolveCommandPaletteEnterSelection
 } from "./commandPaletteEntries";
 import {
   resolveQuickAccessInput,
@@ -22,7 +23,17 @@ export interface CommandPaletteProps {
   commandRegistry: CommandRegistry;
   translate: Translate;
   isComposing: () => boolean;
+  /**
+   * The live command context at the moment the Palette renders. Captured
+   * once at mount into an eager, copied snapshot (#128) — the Palette must
+   * not re-read live state while open, both to avoid the DOM focus trap
+   * (opening the Palette steals focus) and to keep display-time enablement
+   * stable until the Palette closes, even if the live context changes.
+   */
+  commandContext: CommandContext;
   onExecuteCommand: (commandId: CommandId<readonly unknown[], unknown>) => void;
+  /** Debug-only UI-level block diagnostic, distinct from `command.ignored`. */
+  onBlockedCommand: (commandId: CommandId<readonly unknown[], unknown>) => void;
   onClose: () => void;
 }
 
@@ -59,13 +70,19 @@ export function CommandPalette({
   commandRegistry,
   translate,
   isComposing,
+  commandContext,
   onExecuteCommand,
+  onBlockedCommand,
   onClose
 }: CommandPaletteProps): JSX.Element {
+  const [snapshot] = useState<CommandContext>(() => commandContext);
   const [inputValue, setInputValue] = useState(initialInputValue);
   const [selectedIndex, setSelectedIndex] = useState<number | null>(() =>
     firstEnabledCommandPaletteIndex(
-      filterCommandPaletteEntries(listCommandPaletteEntries(commandRegistry), "")
+      filterCommandPaletteEntries(
+        listCommandPaletteEntries(commandRegistry, snapshot),
+        ""
+      )
     )
   );
   const inputRef = useRef<HTMLInputElement | null>(null);
@@ -85,7 +102,7 @@ export function CommandPalette({
   const entries =
     mode === "command"
       ? filterCommandPaletteEntries(
-          listCommandPaletteEntries(commandRegistry),
+          listCommandPaletteEntries(commandRegistry, snapshot),
           query
         )
       : [];
@@ -101,7 +118,7 @@ export function CommandPalette({
     }
 
     const nextEntries = filterCommandPaletteEntries(
-      listCommandPaletteEntries(commandRegistry),
+      listCommandPaletteEntries(commandRegistry, snapshot),
       resolved.query
     );
 
@@ -111,7 +128,12 @@ export function CommandPalette({
   function executeEntryAt(index: number): void {
     const entry = entries[index];
 
-    if (!entry || !entry.enabled) {
+    if (!entry) {
+      return;
+    }
+
+    if (!entry.enabled) {
+      onBlockedCommand(entry.id);
       return;
     }
 
@@ -147,14 +169,22 @@ export function CommandPalette({
           return;
         }
         event.preventDefault();
-        const commandId = resolveCommandPaletteEnterExecution(
+
+        const entry = resolveCommandPaletteEnterSelection(
           entries,
           selectedIndex
         );
 
-        if (commandId) {
-          onExecuteCommand(commandId);
+        if (!entry) {
+          return;
         }
+
+        if (!entry.enabled) {
+          onBlockedCommand(entry.id);
+          return;
+        }
+
+        onExecuteCommand(entry.id);
         return;
       }
       default:

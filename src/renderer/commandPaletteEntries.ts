@@ -1,3 +1,4 @@
+import type { CommandContext } from "../shared/commandEnablement";
 import type { CommandId, CommandRegistry } from "../shared/commandRegistry";
 
 export interface CommandPaletteEntry {
@@ -13,9 +14,14 @@ export interface CommandPaletteEntry {
  * sets `palette.visible = false`. Commands that require arguments must set
  * this explicitly at the definition site, since arity information is erased
  * once commands are type-erased into the registry.
+ *
+ * `context` is the eager, copied value snapshot taken when the Palette
+ * opened. It governs `when`-based enablement display only; legacy
+ * `Command.isEnabled` is still evaluated live (unchanged pre-#128 behavior).
  */
 export function listCommandPaletteEntries(
-  registry: CommandRegistry
+  registry: CommandRegistry,
+  context: CommandContext = {}
 ): CommandPaletteEntry[] {
   return registry
     .list()
@@ -25,7 +31,7 @@ export function listCommandPaletteEntries(
       label: command.title,
       description: command.description,
       canonicalLabel: command.canonicalLabel,
-      enabled: registry.isEnabled(command.id)
+      enabled: registry.isEnabledForContext(command.id, context)
     }));
 }
 
@@ -77,15 +83,18 @@ export function moveCommandPaletteSelection(
   return Math.min(Math.max(next, 0), entriesLength - 1);
 }
 
-export function resolveCommandPaletteEnterExecution(
+/**
+ * Resolves which entry (if any) Enter would act on, regardless of its
+ * enabled state — the caller decides whether that means executing the
+ * command or reporting a UI-level block (#128).
+ */
+export function resolveCommandPaletteEnterSelection(
   entries: readonly CommandPaletteEntry[],
   selectedIndex: number | null
-): CommandPaletteEntry["id"] | null {
+): CommandPaletteEntry | null {
   if (selectedIndex === null) {
     return null;
   }
 
-  const entry = entries[selectedIndex];
-
-  return entry && entry.enabled ? entry.id : null;
+  return entries[selectedIndex] ?? null;
 }

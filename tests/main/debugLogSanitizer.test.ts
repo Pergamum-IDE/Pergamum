@@ -63,6 +63,7 @@ describe("debug log details sanitizer", () => {
         editorIdKind: "custom",
         reason: "custom_reason",
         trigger: "shortcut",
+        source: "bogusSource",
         saveTargetKind: "custom_target"
       },
       context()
@@ -76,7 +77,25 @@ describe("debug log details sanitizer", () => {
       editorIdKind: "unknown",
       reason: "unknown",
       trigger: "unknown",
+      source: "unknown",
       saveTargetKind: "unknown"
+    });
+  });
+
+  it("accepts commandPalette as a known command.blocked source", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        commandId: "glossary.occurrences.next",
+        source: "commandPalette",
+        reason: "disabled_command"
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      commandId: "glossary.occurrences.next",
+      source: "commandPalette",
+      reason: "disabled_command"
     });
   });
 
