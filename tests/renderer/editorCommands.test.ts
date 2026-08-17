@@ -1,11 +1,15 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
-import { CommandRegistry } from "../../src/shared/commandRegistry";
+import {
+  CommandDisabledError,
+  CommandRegistry
+} from "../../src/shared/commandRegistry";
 import { editCommandIds } from "../../src/shared/commandIds";
 import {
   createEditorCommandTitles,
   editorCommandIds,
-  registerEditorCommands
+  registerEditorCommands,
+  saveDocumentCommandWhen
 } from "../../src/renderer/editorCommands";
 
 const titles = {
@@ -43,6 +47,14 @@ function registerEditorCommandSet(
     },
     titles
   );
+
+  // `editor.document.save` now also carries a `when` (#128); tests in this
+  // file exercise the pre-existing Command.isEnabled/controller wiring, so
+  // default the live context to permissive unless a test overrides it.
+  registry.setCommandContextProvider(() => ({
+    "editor.hasDocument": true,
+    "editor.isDirty": true
+  }));
 }
 
 describe("editor commands", () => {
@@ -134,6 +146,10 @@ describe("editor commands", () => {
   });
 
   it("does not run save when the current editor cannot be saved", async () => {
+    // Since the #128 follow-up, CommandRegistry.execute enforces
+    // Command.isEnabled itself, so this is now rejected at the registry
+    // boundary (CommandDisabledError) rather than by the command body's own
+    // internal early-return.
     const registry = new CommandRegistry();
     const saveCurrentDocument = vi.fn();
 
@@ -142,9 +158,54 @@ describe("editor commands", () => {
       canSaveCurrentDocument: () => false
     });
 
-    await registry.execute(editorCommandIds.saveDocument);
+    await expect(
+      registry.execute(editorCommandIds.saveDocument)
+    ).rejects.toBeInstanceOf(CommandDisabledError);
 
     expect(saveCurrentDocument).not.toHaveBeenCalled();
+  });
+
+  it("declares editor.document.save's when as hasDocument and isDirty", () => {
+    expect(saveDocumentCommandWhen).toEqual({
+      allOf: [{ key: "editor.hasDocument" }, { key: "editor.isDirty" }]
+    });
+  });
+
+  it("blocks save execution via the registry when the live context is not dirty, even though Command.isEnabled allows it", async () => {
+    const registry = new CommandRegistry();
+    const saveCurrentDocument = vi.fn();
+
+    registerEditorCommandSet(registry, {
+      saveCurrentDocument,
+      canSaveCurrentDocument: () => true
+    });
+    registry.setCommandContextProvider(() => ({
+      "editor.hasDocument": true,
+      "editor.isDirty": false
+    }));
+
+    await expect(
+      registry.execute(editorCommandIds.saveDocument)
+    ).rejects.toBeInstanceOf(CommandDisabledError);
+    expect(saveCurrentDocument).not.toHaveBeenCalled();
+  });
+
+  it("allows save execution once the live context reports hasDocument and isDirty", async () => {
+    const registry = new CommandRegistry();
+    const saveCurrentDocument = vi.fn();
+
+    registerEditorCommandSet(registry, {
+      saveCurrentDocument,
+      canSaveCurrentDocument: () => true
+    });
+    registry.setCommandContextProvider(() => ({
+      "editor.hasDocument": true,
+      "editor.isDirty": true
+    }));
+
+    await registry.execute(editorCommandIds.saveDocument);
+
+    expect(saveCurrentDocument).toHaveBeenCalledTimes(1);
   });
 
   it("creates localized command titles from command i18n keys", () => {

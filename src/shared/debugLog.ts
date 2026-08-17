@@ -26,6 +26,7 @@ export const debugLogEventNames = [
   "application_menu.command.received",
   "command.invoked",
   "command.ignored",
+  "command.blocked",
   "command.failed",
   "document.open.failed",
   "document.save.failed",
@@ -178,6 +179,19 @@ export const debugLogApplicationMenuTriggers = [
 export type DebugLogApplicationMenuTrigger =
   (typeof debugLogApplicationMenuTriggers)[number];
 
+/**
+ * Closed enum for `command.blocked`'s `source` detail. Intentionally closed
+ * (rather than a free-form string) even though `commandPalette` is the only
+ * real value today, so future UI-level block sources stay explicit (#128).
+ */
+export const debugLogCommandBlockedSources = [
+  "commandPalette",
+  "unknown"
+] as const;
+
+export type DebugLogCommandBlockedSource =
+  (typeof debugLogCommandBlockedSources)[number];
+
 export const debugLogSaveTargetKinds = [
   "projectDocument",
   "standaloneMarkdown",
@@ -270,6 +284,7 @@ export interface DebugLogDetails {
   result?: DebugLogResult;
   reason?: DebugLogReason;
   trigger?: DebugLogApplicationMenuTrigger;
+  source?: DebugLogCommandBlockedSource;
   statusKey?: string;
 
   hasPendingSave?: boolean;

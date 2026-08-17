@@ -3,7 +3,11 @@ import {
   type Command,
   type CommandRegistry
 } from "../shared/commandRegistry";
+import type { CommandEnablementExpression } from "../shared/commandEnablement";
 import type { Translate } from "../shared/i18n";
+
+export const glossaryOccurrenceTrackingCommandWhen: CommandEnablementExpression =
+  { key: "glossary.occurrences.tracking.active" };
 
 export const glossaryOccurrencesCommandIds = {
   previous: defineCommandId<readonly [], boolean>(
@@ -53,12 +57,14 @@ export function createGlossaryOccurrencesCommands(
     {
       id: glossaryOccurrencesCommandIds.previous,
       title: titles.previous,
-      execute: () => controller.navigateToPreviousOccurrence()
+      execute: () => controller.navigateToPreviousOccurrence(),
+      when: glossaryOccurrenceTrackingCommandWhen
     },
     {
       id: glossaryOccurrencesCommandIds.next,
       title: titles.next,
-      execute: () => controller.navigateToNextOccurrence()
+      execute: () => controller.navigateToNextOccurrence(),
+      when: glossaryOccurrenceTrackingCommandWhen
     },
     {
       id: glossaryOccurrencesCommandIds.openEntry,
@@ -68,7 +74,8 @@ export function createGlossaryOccurrencesCommands(
     {
       id: glossaryOccurrencesCommandIds.closeTracking,
       title: titles.closeTracking,
-      execute: () => controller.closeGlossaryOccurrenceTracking()
+      execute: () => controller.closeGlossaryOccurrenceTracking(),
+      when: glossaryOccurrenceTrackingCommandWhen
     }
   ];
 }

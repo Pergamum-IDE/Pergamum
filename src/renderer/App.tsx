@@ -12,11 +12,13 @@ import type {
   SaveApplicationSettingsRequest
 } from "../shared/api";
 import type { EditCommandId, FileMenuCommandId } from "../shared/commandIds";
+import type { CommandContext } from "../shared/commandEnablement";
 import type {
   DebugLogEditorIdKind,
   DebugLogSaveTargetKind
 } from "../shared/debugLog";
 import {
+  CommandDisabledError,
   CommandRegistry,
   type CommandArgumentList,
   type CommandId
@@ -55,6 +57,7 @@ import {
   createCommandPaletteCommandTitles,
   registerCommandPaletteCommands
 } from "./commandPaletteCommands";
+import { buildCommandContextSnapshot } from "./commandContextSnapshot";
 import {
   applyStandaloneSaveResult,
   createProjectDocument,
@@ -305,6 +308,12 @@ export function App(): JSX.Element {
     useRef<NativeEditCommandContext | null>(null);
   const toggleRecentProjectsCommandRef = useRef<() => void>(() => undefined);
   const canSaveCurrentDocumentCommandRef = useRef<() => boolean>(() => false);
+  /**
+   * Holds the current live command context. Read lazily by the
+   * CommandRegistry's injected context provider so `when` re-evaluation at
+   * execution time never sees a stale closure (#128).
+   */
+  const commandContextRef = useRef<CommandContext>({});
   const executeUiCommandRef = useRef<(commandId: FileMenuCommandId) => void>(
     () => undefined
   );
@@ -475,6 +484,29 @@ export function App(): JSX.Element {
     currentEditor.kind === "markdown"
       ? Boolean(activeMarkdownDocument)
       : canSaveGlossaryEntry;
+  const commandContext = useMemo(
+    () =>
+      buildCommandContextSnapshot({
+        projectIsOpen: project !== null,
+        editorHasDocument:
+          currentEditor.kind === "markdown"
+            ? Boolean(activeMarkdownDocument)
+            : currentEditor.kind === "glossaryEntry",
+        editorIsDirty: isDirty,
+        editorKindMarkdown: currentEditor.kind === "markdown",
+        editorKindGlossary: currentEditor.kind === "glossaryEntry",
+        occurrenceTrackingActive:
+          glossaryOccurrenceTrackingState.kind === "active"
+      }),
+    [
+      project,
+      currentEditor.kind,
+      activeMarkdownDocument,
+      isDirty,
+      glossaryOccurrenceTrackingState.kind
+    ]
+  );
+  commandContextRef.current = commandContext;
   const translate = useMemo(
     () => (key: TranslationKey, values?: TranslationValues) =>
       t(displayLanguage, key, values),
@@ -656,6 +688,19 @@ export function App(): JSX.Element {
       },
       createCommandPaletteCommandTitles(translate)
     );
+
+    registry.setCommandContextProvider(() => commandContextRef.current);
+    registry.setOnCommandIgnored((commandId) => {
+      logRendererDebugEvent({
+        level: "debug",
+        event: "command.ignored",
+        details: {
+          commandId,
+          result: "ignored",
+          reason: "disabled_command"
+        }
+      });
+    });
 
     return registry;
   }, [activeProjectContext, layout.sidebar.collapsed, sidebarMode, translate]);
@@ -1032,20 +1077,11 @@ export function App(): JSX.Element {
       }
     });
 
-    if (!commandRegistry.isEnabled(commandId, ...args)) {
-      logRendererDebugEvent({
-        level: "debug",
-        event: "command.ignored",
-        details: {
-          commandId: String(commandId),
-          result: "ignored",
-          reason: "disabled_command"
-        }
-      });
-      return;
-    }
-
     void commandRegistry.execute(commandId, ...args).catch((error) => {
+      if (error instanceof CommandDisabledError) {
+        return;
+      }
+
       logRendererDebugEvent({
         level: "error",
         event: "command.failed",
@@ -2047,7 +2083,12 @@ export function App(): JSX.Element {
         <button
           type="button"
           onClick={() => executeUiCommand(editorCommandIds.saveDocument)}
-          disabled={!commandRegistry.isEnabled(editorCommandIds.saveDocument)}
+          disabled={
+            !commandRegistry.isEnabledForContext(
+              editorCommandIds.saveDocument,
+              commandContext
+            )
+          }
         >
           {translate("common.save")}
         </button>
@@ -2298,9 +2339,21 @@ export function App(): JSX.Element {
           commandRegistry={commandRegistry}
           translate={translate}
           isComposing={imeCompositionSaveGuard.isComposing}
+          commandContext={commandContext}
           onExecuteCommand={(commandId) => {
             executeUiCommand(commandId);
             setIsCommandPaletteOpen(false);
+          }}
+          onBlockedCommand={(commandId) => {
+            logRendererDebugEvent({
+              level: "debug",
+              event: "command.blocked",
+              details: {
+                commandId: String(commandId),
+                source: "commandPalette",
+                reason: "disabled_command"
+              }
+            });
           }}
           onClose={() => setIsCommandPaletteOpen(false)}
         />

@@ -5,7 +5,7 @@ import {
   firstEnabledCommandPaletteIndex,
   listCommandPaletteEntries,
   moveCommandPaletteSelection,
-  resolveCommandPaletteEnterExecution,
+  resolveCommandPaletteEnterSelection,
   type CommandPaletteEntry
 } from "../../src/renderer/commandPaletteEntries";
 
@@ -74,6 +74,47 @@ describe("listCommandPaletteEntries", () => {
     });
 
     expect(listCommandPaletteEntries(registry)).toHaveLength(1);
+  });
+
+  it("reports when-gated commands as disabled against a context snapshot", () => {
+    const registry = new CommandRegistry();
+
+    registry.register({
+      id: defineCommandId("test.command.whenGated"),
+      title: "When gated",
+      execute: () => undefined,
+      when: { key: "editor.isDirty" }
+    });
+
+    expect(
+      listCommandPaletteEntries(registry, { "editor.isDirty": false })
+    ).toEqual([
+      {
+        id: "test.command.whenGated",
+        label: "When gated",
+        description: undefined,
+        canonicalLabel: undefined,
+        enabled: false
+      }
+    ]);
+    expect(
+      listCommandPaletteEntries(registry, { "editor.isDirty": true })
+    ).toMatchObject([{ enabled: true }]);
+  });
+
+  it("treats a missing snapshot the same as an empty context", () => {
+    const registry = new CommandRegistry();
+
+    registry.register({
+      id: defineCommandId("test.command.whenGated"),
+      title: "When gated",
+      execute: () => undefined,
+      when: { key: "editor.isDirty" }
+    });
+
+    expect(listCommandPaletteEntries(registry)).toMatchObject([
+      { enabled: false }
+    ]);
   });
 });
 
@@ -172,27 +213,29 @@ describe("moveCommandPaletteSelection", () => {
   });
 });
 
-describe("resolveCommandPaletteEnterExecution", () => {
+describe("resolveCommandPaletteEnterSelection", () => {
   const entries: CommandPaletteEntry[] = [
     { id: defineCommandId("test.enabled"), label: "Enabled", enabled: true },
     { id: defineCommandId("test.disabled"), label: "Disabled", enabled: false }
   ];
 
-  it("returns the command id for an enabled selection", () => {
-    expect(resolveCommandPaletteEnterExecution(entries, 0)).toBe(
-      "test.enabled"
+  it("returns the entry for an enabled selection", () => {
+    expect(resolveCommandPaletteEnterSelection(entries, 0)).toEqual(
+      entries[0]
     );
   });
 
-  it("returns null when the selected entry is disabled", () => {
-    expect(resolveCommandPaletteEnterExecution(entries, 1)).toBeNull();
+  it("returns the entry even when it is disabled, for the caller to decide", () => {
+    expect(resolveCommandPaletteEnterSelection(entries, 1)).toEqual(
+      entries[1]
+    );
   });
 
   it("returns null when nothing is selected", () => {
-    expect(resolveCommandPaletteEnterExecution(entries, null)).toBeNull();
+    expect(resolveCommandPaletteEnterSelection(entries, null)).toBeNull();
   });
 
   it("is not confused by an out-of-range index", () => {
-    expect(resolveCommandPaletteEnterExecution(entries, 99)).toBeNull();
+    expect(resolveCommandPaletteEnterSelection(entries, 99)).toBeNull();
   });
 });

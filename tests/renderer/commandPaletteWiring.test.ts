@@ -60,4 +60,31 @@ describe("command palette wiring", () => {
     expect(source).not.toContain(".log(");
     expect(source).not.toContain("clipboard");
   });
+
+  it("passes an eager command context snapshot down to the Palette", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const componentIndex = source.indexOf("<CommandPalette");
+    const closeIndex = source.indexOf("/>", componentIndex);
+    const propsBlock = source.slice(componentIndex, closeIndex);
+
+    expect(propsBlock).toContain("commandContext={commandContext}");
+  });
+
+  it("wires a debug-only command.blocked emission for UI-level disabled blocks, distinct from command.ignored", () => {
+    const source = readFileSync("src/renderer/App.tsx", "utf8");
+    const componentIndex = source.indexOf("<CommandPalette");
+    const closeIndex = source.indexOf("/>", componentIndex);
+    const propsBlock = source.slice(componentIndex, closeIndex);
+    const blockedStart = propsBlock.indexOf("onBlockedCommand={");
+    const blockedBlock = propsBlock.slice(blockedStart);
+
+    expect(blockedStart).toBeGreaterThan(-1);
+    expect(blockedBlock).toContain('event: "command.blocked"');
+    expect(blockedBlock).toContain('source: "commandPalette"');
+    expect(blockedBlock).toContain('reason: "disabled_command"');
+    expect(blockedBlock).toContain('level: "debug"');
+    expect(blockedBlock).not.toContain("inputValue");
+    expect(blockedBlock).not.toContain("query");
+    expect(blockedBlock).not.toContain("selection");
+  });
 });

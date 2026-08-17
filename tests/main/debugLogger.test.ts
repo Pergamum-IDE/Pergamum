@@ -107,7 +107,7 @@ describe("debug logger", () => {
       timestamp: "1999-01-01T00:00:00.000+00:00",
       details: {
         commandId: "workspace.files.focus",
-        source: "renderer",
+        bogusField: "renderer",
         message: "free form",
         fileName: "secret.md",
         absolutePath: "C:\\Users\\name\\secret.md",
@@ -211,7 +211,7 @@ describe("debug logger", () => {
         electronVersion: "renderer-electron",
         nodeVersion: "renderer-node",
         debugMode: false,
-        source: "renderer",
+        bogusField: "renderer",
         message: "free form"
       }
     });

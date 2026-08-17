@@ -5,6 +5,7 @@ import {
   debugLogEncodingAssumptions,
   debugLogExtensions,
   debugLogApplicationMenuTriggers,
+  debugLogCommandBlockedSources,
   debugLogDbEntityKinds,
   debugLogDbOperations,
   debugLogLineEndingKinds,
@@ -17,6 +18,7 @@ import {
   debugLogSizeBuckets,
   isDebugLogContextMenuSurface,
   type DebugLogApplicationMenuTrigger,
+  type DebugLogCommandBlockedSource,
   knownDebugLogCommandIds,
   knownDebugLogStatusKeys,
   type DebugLogArch,
@@ -348,6 +350,12 @@ export function sanitizeDebugLogDetails(
       case "trigger":
         sanitized.trigger = enumOrUnknown<DebugLogApplicationMenuTrigger>(
           debugLogApplicationMenuTriggers,
+          value
+        );
+        break;
+      case "source":
+        sanitized.source = enumOrUnknown<DebugLogCommandBlockedSource>(
+          debugLogCommandBlockedSources,
           value
         );
         break;
