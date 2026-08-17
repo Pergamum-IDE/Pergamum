@@ -2,6 +2,10 @@ import { describe, expect, it } from "vitest";
 import { CommandRegistry } from "../../src/shared/commandRegistry";
 import type { Translate } from "../../src/shared/i18n";
 import {
+  filterCommandPaletteEntries,
+  listCommandPaletteEntries
+} from "../../src/renderer/commandPaletteEntries";
+import {
   commandPaletteCommandIds,
   createCommandPaletteCommandTitles,
   registerCommandPaletteCommands
@@ -29,7 +33,23 @@ describe("command palette commands", () => {
 
     expect(command?.title).toBe(titles.open);
     expect(command?.description).toBe(titles.openDescription);
-    expect(command?.canonicalLabel).toBe("Command Palette: Open");
+    expect(command?.canonicalLabel).toBeUndefined();
+    expect(command?.palette).toEqual({ visible: false });
+  });
+
+  it("keeps the open command registered but hides it from Command Palette results", () => {
+    const registry = new CommandRegistry();
+
+    registerCommandPaletteCommands(
+      registry,
+      { openCommandPalette: () => undefined },
+      titles
+    );
+
+    expect(registry.get(commandPaletteCommandIds.open)).not.toBeNull();
+    expect(listCommandPaletteEntries(registry)).toEqual([]);
+    expect(filterCommandPaletteEntries(listCommandPaletteEntries(registry), "open"))
+      .toEqual([]);
   });
 
   it("delegates execution to the controller", async () => {

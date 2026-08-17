@@ -33,7 +33,7 @@ export function createCommandPaletteCommands(
       id: commandPaletteCommandIds.open,
       title: titles.open,
       description: titles.openDescription,
-      canonicalLabel: "Command Palette: Open",
+      palette: { visible: false },
       execute: () => controller.openCommandPalette()
     }
   ];
