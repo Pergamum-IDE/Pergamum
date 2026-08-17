@@ -11,7 +11,10 @@ import type {
   ProjectDocument,
   SaveApplicationSettingsRequest
 } from "../shared/api";
-import type { EditCommandId, FileMenuCommandId } from "../shared/commandIds";
+import type {
+  ApplicationMenuCommandId,
+  EditCommandId
+} from "../shared/commandIds";
 import type { CommandContext } from "../shared/commandEnablement";
 import type {
   DebugLogEditorIdKind,
@@ -314,9 +317,9 @@ export function App(): JSX.Element {
    * execution time never sees a stale closure (#128).
    */
   const commandContextRef = useRef<CommandContext>({});
-  const executeUiCommandRef = useRef<(commandId: FileMenuCommandId) => void>(
-    () => undefined
-  );
+  const executeUiCommandRef = useRef<
+    (commandId: ApplicationMenuCommandId) => void
+  >(() => undefined);
   const mainAreaRef = useRef<HTMLElement | null>(null);
   const editorAreaBodyRef = useRef<HTMLElement | null>(null);
   const sidebarWidthAtDragStartRef = useRef(layout.sidebar.width);

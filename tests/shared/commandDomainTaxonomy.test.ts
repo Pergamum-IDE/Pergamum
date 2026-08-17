@@ -3,7 +3,6 @@ import { describe, expect, it } from "vitest";
 import { CommandRegistry } from "../../src/shared/commandRegistry";
 import {
   CORE_COMMAND_DOMAINS,
-  DEPRECATED_APP_COMMAND_IDS,
   RESERVED_COMMAND_NAMESPACE_ROOTS
 } from "../../src/shared/commandTaxonomy";
 import { registerApplicationCommands } from "../../src/renderer/applicationCommands";
@@ -169,11 +168,14 @@ describe("command domain taxonomy", () => {
     expect(reservedNamespaceCommandIds).toEqual([]);
   });
 
-  it("freezes registered app commands to the deprecated app command list", () => {
+  it("no longer registers any command under the deprecated app domain (#130)", () => {
+    // DEPRECATED_APP_COMMAND_IDS was removed once the last app.* command ID
+    // was renamed; this replaces the old "frozen list" assertion with a
+    // direct check that the deprecated domain is empty going forward.
     const registeredAppCommandIds = registeredCoreCommandIds().filter(
       (commandId) => firstCommandIdSegment(commandId) === "app"
     );
 
-    expect(registeredAppCommandIds).toEqual([...DEPRECATED_APP_COMMAND_IDS]);
+    expect(registeredAppCommandIds).toEqual([]);
   });
 });

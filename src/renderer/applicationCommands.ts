@@ -20,8 +20,8 @@ export function createApplicationCommandTitles(
   translate: Translate
 ): ApplicationCommandTitles {
   return {
-    openProject: translate("command.app.project.open"),
-    toggleRecentProjects: translate("command.app.recentProjects.toggle")
+    openProject: translate("command.workspace.project.open"),
+    toggleRecentProjects: translate("command.workspace.recentProjects.toggle")
   };
 }
 

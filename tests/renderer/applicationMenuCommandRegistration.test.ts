@@ -1,12 +1,12 @@
 import { describe, expect, it } from "vitest";
-import { fileMenuCommandIds } from "../../src/shared/commandIds";
+import { applicationMenuCommandIds } from "../../src/shared/commandIds";
 import { CommandRegistry } from "../../src/shared/commandRegistry";
 import { registerApplicationCommands } from "../../src/renderer/applicationCommands";
 import { registerCommandPaletteCommands } from "../../src/renderer/commandPaletteCommands";
 import { registerEditorCommands } from "../../src/renderer/editorCommands";
 
-describe("File menu command registration", () => {
-  it("registers every allowlisted File menu command in the renderer registry", () => {
+describe("application menu command registration", () => {
+  it("registers every allowlisted application menu command in the renderer registry", () => {
     const registry = new CommandRegistry();
 
     registerApplicationCommands(
@@ -45,7 +45,7 @@ describe("File menu command registration", () => {
     );
 
     expect(
-      fileMenuCommandIds.map((commandId) => registry.get(commandId))
-    ).toEqual(fileMenuCommandIds.map(() => expect.any(Object)));
+      applicationMenuCommandIds.map((commandId) => registry.get(commandId))
+    ).toEqual(applicationMenuCommandIds.map(() => expect.any(Object)));
   });
 });

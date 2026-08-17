@@ -26,8 +26,8 @@ describe("application commands", () => {
     );
 
     expect(registry.list().map((command) => command.id)).toEqual([
-      "app.project.open",
-      "app.recentProjects.toggle"
+      "workspace.project.open",
+      "workspace.recentProjects.toggle"
     ]);
   });
 
@@ -56,8 +56,8 @@ describe("application commands", () => {
     const translate = vi.fn((key: string) => `translated:${key}`);
 
     expect(createApplicationCommandTitles(translate)).toEqual({
-      openProject: "translated:command.app.project.open",
-      toggleRecentProjects: "translated:command.app.recentProjects.toggle"
+      openProject: "translated:command.workspace.project.open",
+      toggleRecentProjects: "translated:command.workspace.recentProjects.toggle"
     });
   });
 
