@@ -2,8 +2,8 @@ import { describe, expect, it } from "vitest";
 import { knownDebugLogCommandIds } from "../../src/shared/debugLog";
 import {
   applicationCommandIds,
-  editorCommandIds,
-  fileMenuCommandIds
+  applicationMenuCommandIds,
+  editorCommandIds
 } from "../../src/shared/commandIds";
 
 describe("shortcut command ID scope", () => {
@@ -13,7 +13,7 @@ describe("shortcut command ID scope", () => {
       applicationCommandIds.toggleRecentProjects,
       editorCommandIds.openMarkdownDocument,
       editorCommandIds.saveDocument,
-      ...fileMenuCommandIds,
+      ...applicationMenuCommandIds,
       ...knownDebugLogCommandIds
     ];
 

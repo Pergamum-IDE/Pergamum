@@ -5,7 +5,7 @@ import {
 } from "../../src/shared/commandIds";
 import {
   createImeCompositionSaveGuard,
-  type FileMenuCommandExecutor,
+  type ApplicationMenuAllowedCommandExecutor,
   type ImeCompositionSaveGuardLogger
 } from "../../src/renderer/imeCompositionSaveGuard";
 import { createSaveInFlightGuard } from "../../src/renderer/saveInFlightGuard";
@@ -19,7 +19,7 @@ describe("IME composition save guard", () => {
     vi.useFakeTimers();
     const log = vi.fn<ImeCompositionSaveGuardLogger>();
     const guard = createImeCompositionSaveGuard({ log });
-    const execute = vi.fn<FileMenuCommandExecutor>();
+    const execute = vi.fn<ApplicationMenuAllowedCommandExecutor>();
 
     guard.handleCompositionStart();
     expect(guard.handleCommand(editorCommandIds.saveDocument, execute)).toBe(
@@ -46,7 +46,7 @@ describe("IME composition save guard", () => {
     vi.useFakeTimers();
     const log = vi.fn<ImeCompositionSaveGuardLogger>();
     const guard = createImeCompositionSaveGuard({ log });
-    const execute = vi.fn<FileMenuCommandExecutor>();
+    const execute = vi.fn<ApplicationMenuAllowedCommandExecutor>();
 
     guard.handleCompositionStart();
     guard.handleCommand(editorCommandIds.saveDocument, execute);
@@ -88,7 +88,7 @@ describe("IME composition save guard", () => {
   it("does not queue multiple pending saves during one composition", () => {
     vi.useFakeTimers();
     const guard = createImeCompositionSaveGuard();
-    const execute = vi.fn<FileMenuCommandExecutor>();
+    const execute = vi.fn<ApplicationMenuAllowedCommandExecutor>();
 
     guard.handleCompositionStart();
     guard.handleCommand(editorCommandIds.saveDocument, execute);
@@ -103,7 +103,7 @@ describe("IME composition save guard", () => {
   it("keeps a pending save when composition start repeats before composition end", () => {
     vi.useFakeTimers();
     const guard = createImeCompositionSaveGuard();
-    const execute = vi.fn<FileMenuCommandExecutor>();
+    const execute = vi.fn<ApplicationMenuAllowedCommandExecutor>();
 
     guard.handleCompositionStart();
     guard.handleCommand(editorCommandIds.saveDocument, execute);
@@ -119,7 +119,7 @@ describe("IME composition save guard", () => {
   it("does not defer non-save File commands while composing", () => {
     const log = vi.fn<ImeCompositionSaveGuardLogger>();
     const guard = createImeCompositionSaveGuard({ log });
-    const execute = vi.fn<FileMenuCommandExecutor>();
+    const execute = vi.fn<ApplicationMenuAllowedCommandExecutor>();
 
     guard.handleCompositionStart();
     expect(guard.handleCommand(applicationCommandIds.openProject, execute)).toBe(
@@ -150,7 +150,7 @@ describe("IME composition save guard", () => {
   it("does not defer command IDs outside the File menu allowlist", () => {
     const log = vi.fn<ImeCompositionSaveGuardLogger>();
     const guard = createImeCompositionSaveGuard({ log });
-    const execute = vi.fn<FileMenuCommandExecutor>();
+    const execute = vi.fn<ApplicationMenuAllowedCommandExecutor>();
 
     guard.handleCompositionStart();
     expect(guard.handleCommand("workspace.files.focus", execute)).toBe(false);
@@ -175,7 +175,7 @@ describe("IME composition save guard", () => {
     vi.useFakeTimers();
     const log = vi.fn<ImeCompositionSaveGuardLogger>();
     const guard = createImeCompositionSaveGuard({ log });
-    const execute = vi.fn<FileMenuCommandExecutor>();
+    const execute = vi.fn<ApplicationMenuAllowedCommandExecutor>();
 
     guard.handleCompositionStart();
     guard.handleCommand(editorCommandIds.saveDocument, execute);
@@ -199,7 +199,7 @@ describe("IME composition save guard", () => {
     vi.useFakeTimers();
     const log = vi.fn<ImeCompositionSaveGuardLogger>();
     const guard = createImeCompositionSaveGuard({ log });
-    const execute = vi.fn<FileMenuCommandExecutor>();
+    const execute = vi.fn<ApplicationMenuAllowedCommandExecutor>();
 
     guard.handleCompositionStart();
     guard.handleCommand(editorCommandIds.saveDocument, execute);
@@ -223,7 +223,7 @@ describe("IME composition save guard", () => {
     vi.useFakeTimers();
     const log = vi.fn<ImeCompositionSaveGuardLogger>();
     const guard = createImeCompositionSaveGuard({ log });
-    const execute = vi.fn<FileMenuCommandExecutor>();
+    const execute = vi.fn<ApplicationMenuAllowedCommandExecutor>();
 
     guard.handleCompositionStart();
     guard.handleCommand(editorCommandIds.saveDocument, execute);
@@ -248,7 +248,7 @@ describe("IME composition save guard", () => {
     const compositionGuard = createImeCompositionSaveGuard();
     const saveGuard = createSaveInFlightGuard();
     const save = vi.fn(() => new Promise<void>(() => undefined));
-    const execute: FileMenuCommandExecutor = (commandId) => {
+    const execute: ApplicationMenuAllowedCommandExecutor = (commandId) => {
       if (commandId === editorCommandIds.saveDocument) {
         void saveGuard.run(save);
       }

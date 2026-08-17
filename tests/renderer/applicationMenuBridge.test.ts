@@ -4,26 +4,28 @@ import {
   editorCommandIds
 } from "../../src/shared/commandIds";
 import {
-  invokeFileMenuCommand,
+  invokeApplicationMenuCommand,
   subscribeApplicationMenuCommands,
   type ApplicationMenuCommandExecutor,
-  type FileMenuCommandExecutor
+  type ApplicationMenuAllowedCommandExecutor
 } from "../../src/renderer/applicationMenuBridge";
 
 describe("application menu renderer bridge", () => {
-  it("invokes allowlisted File menu commands", () => {
-    const execute = vi.fn<FileMenuCommandExecutor>();
+  it("invokes allowlisted application menu commands", () => {
+    const execute = vi.fn<ApplicationMenuAllowedCommandExecutor>();
 
-    expect(invokeFileMenuCommand(editorCommandIds.saveDocument, execute)).toBe(
-      true
-    );
+    expect(
+      invokeApplicationMenuCommand(editorCommandIds.saveDocument, execute)
+    ).toBe(true);
     expect(execute).toHaveBeenCalledWith(editorCommandIds.saveDocument);
   });
 
-  it("ignores command IDs outside the File menu allowlist", () => {
-    const execute = vi.fn<FileMenuCommandExecutor>();
+  it("ignores command IDs outside the application menu allowlist", () => {
+    const execute = vi.fn<ApplicationMenuAllowedCommandExecutor>();
 
-    expect(invokeFileMenuCommand("workspace.files.focus", execute)).toBe(false);
+    expect(invokeApplicationMenuCommand("workspace.files.focus", execute)).toBe(
+      false
+    );
     expect(execute).not.toHaveBeenCalled();
   });
 

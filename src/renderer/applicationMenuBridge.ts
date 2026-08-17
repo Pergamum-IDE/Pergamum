@@ -1,20 +1,22 @@
 import {
-  isFileMenuCommandId,
-  type FileMenuCommandId
+  isApplicationMenuCommandId,
+  type ApplicationMenuCommandId
 } from "../shared/commandIds";
 
 export type ApplicationMenuCommandSubscription = (
   callback: (commandId: string) => void
 ) => () => void;
 
-export type FileMenuCommandExecutor = (commandId: FileMenuCommandId) => void;
+export type ApplicationMenuAllowedCommandExecutor = (
+  commandId: ApplicationMenuCommandId
+) => void;
 export type ApplicationMenuCommandExecutor = (commandId: string) => void;
 
-export function invokeFileMenuCommand(
+export function invokeApplicationMenuCommand(
   commandId: string,
-  execute: FileMenuCommandExecutor
+  execute: ApplicationMenuAllowedCommandExecutor
 ): boolean {
-  if (!isFileMenuCommandId(commandId)) {
+  if (!isApplicationMenuCommandId(commandId)) {
     return false;
   }
 

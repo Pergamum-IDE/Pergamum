@@ -1,11 +1,13 @@
 import {
   editorCommandIds,
-  isFileMenuCommandId,
-  type FileMenuCommandId
+  isApplicationMenuCommandId,
+  type ApplicationMenuCommandId
 } from "../shared/commandIds";
 import type { DebugLogEventName } from "../shared/debugLog";
 
-export type FileMenuCommandExecutor = (commandId: FileMenuCommandId) => void;
+export type ApplicationMenuAllowedCommandExecutor = (
+  commandId: ApplicationMenuCommandId
+) => void;
 export type CancelScheduledTask = () => void;
 export type ScheduleTask = (callback: () => void) => CancelScheduledTask;
 export type ImePendingSaveClearReason =
@@ -27,8 +29,8 @@ export interface ImeCompositionSaveGuardOptions {
 
 export interface ImeCompositionSaveGuard {
   handleCompositionStart(): void;
-  handleCompositionEnd(execute: FileMenuCommandExecutor): void;
-  handleCommand(commandId: string, execute: FileMenuCommandExecutor): boolean;
+  handleCompositionEnd(execute: ApplicationMenuAllowedCommandExecutor): void;
+  handleCommand(commandId: string, execute: ApplicationMenuAllowedCommandExecutor): boolean;
   clearPendingSave(reason?: ImePendingSaveClearReason): void;
   hasPendingSave(): boolean;
   hasScheduledSave(): boolean;
@@ -161,7 +163,7 @@ export function createImeCompositionSaveGuard({
       });
     },
     handleCommand: (commandId, execute) => {
-      if (!isFileMenuCommandId(commandId)) {
+      if (!isApplicationMenuCommandId(commandId)) {
         log({
           event: "ime.command.ignored",
           details: {

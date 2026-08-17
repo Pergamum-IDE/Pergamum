@@ -8,8 +8,8 @@ import {
   applicationCommandIds,
   commandPaletteCommandIds,
   editorCommandIds,
-  isFileMenuCommandId,
-  type FileMenuCommandId
+  isApplicationMenuCommandId,
+  type ApplicationMenuCommandId
 } from "../shared/commandIds";
 import { t, type Language, type TranslationKey } from "../shared/i18n";
 import type { DebugLogger } from "./debugLogger";
@@ -54,7 +54,7 @@ function roleItem(
 }
 
 function commandMenuItem(
-  commandId: FileMenuCommandId,
+  commandId: ApplicationMenuCommandId,
   language: Language,
   key: TranslationKey,
   options: ApplicationMenuOptions,
@@ -240,7 +240,7 @@ export function sendApplicationMenuCommand(
   commandId: string,
   debugLogger?: Pick<DebugLogger, "log">
 ): boolean {
-  if (!isFileMenuCommandId(commandId)) {
+  if (!isApplicationMenuCommandId(commandId)) {
     logApplicationMenuCommandSent(debugLogger, commandId, "ignored", {
       reason: "invalid_command"
     });

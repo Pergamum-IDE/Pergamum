@@ -4,9 +4,9 @@ import type { MenuItemConstructorOptions } from "electron";
 import { APPLICATION_MENU_CHANNELS } from "../../src/shared/api";
 import {
   applicationCommandIds,
+  applicationMenuCommandIds,
   commandPaletteCommandIds,
-  editorCommandIds,
-  fileMenuCommandIds
+  editorCommandIds
 } from "../../src/shared/commandIds";
 
 const electronMock = vi.hoisted(() => ({
@@ -88,9 +88,9 @@ describe("application menu", () => {
       editorCommandIds.saveDocument,
       applicationCommandIds.toggleRecentProjects
     ]) {
-      expect(fileMenuCommandIds).toContain(commandId);
+      expect(applicationMenuCommandIds).toContain(commandId);
     }
-    expect(fileMenuCommandIds).toContain(commandPaletteCommandIds.open);
+    expect(applicationMenuCommandIds).toContain(commandPaletteCommandIds.open);
   });
 
   it("rejects command IDs outside the File menu allowlist in main", () => {

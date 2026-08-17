@@ -1,8 +1,8 @@
 import { defineCommandId } from "./commandRegistry";
 
 export const applicationCommandIds = {
-  openProject: defineCommandId("app.project.open"),
-  toggleRecentProjects: defineCommandId("app.recentProjects.toggle")
+  openProject: defineCommandId("workspace.project.open"),
+  toggleRecentProjects: defineCommandId("workspace.recentProjects.toggle")
 } as const;
 
 export const commandPaletteCommandIds = {
@@ -31,7 +31,12 @@ export function isEditCommandId(commandId: string): commandId is EditCommandId {
   return (editCommandIds as readonly string[]).includes(commandId);
 }
 
-export const fileMenuCommandIds = [
+/**
+ * Command IDs the application menu bridge is allowed to send/receive over
+ * IPC. Despite the name, this is not File-menu-specific — it also covers
+ * View menu items such as the Command Palette (#130).
+ */
+export const applicationMenuCommandIds = [
   applicationCommandIds.openProject,
   editorCommandIds.openMarkdownDocument,
   editorCommandIds.saveDocument,
@@ -39,10 +44,11 @@ export const fileMenuCommandIds = [
   commandPaletteCommandIds.open
 ] as const;
 
-export type FileMenuCommandId = (typeof fileMenuCommandIds)[number];
+export type ApplicationMenuCommandId =
+  (typeof applicationMenuCommandIds)[number];
 
-export function isFileMenuCommandId(
+export function isApplicationMenuCommandId(
   commandId: string
-): commandId is FileMenuCommandId {
-  return (fileMenuCommandIds as readonly string[]).includes(commandId);
+): commandId is ApplicationMenuCommandId {
+  return (applicationMenuCommandIds as readonly string[]).includes(commandId);
 }
