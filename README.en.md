@@ -366,6 +366,7 @@ Current major ADRs:
 - [ADR-0002: Structured Project Data and Glossary Model](./docs/adr/0002-structured-project-data-and-glossary-model.md)
 - [ADR-0003: UI Interaction Architecture](./docs/adr/0003-ui-interaction-architecture.md)
 - [ADR-0004: Manuscript Non-Destructive Policy](./docs/adr/0004-manuscript-non-destructive-policy.md)
+- [ADR-0005: Command Domain Taxonomy](./docs/adr/0005-command-domain-taxonomy.md)
 
 Some design decisions are made before implementation.
 
