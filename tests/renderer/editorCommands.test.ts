@@ -20,6 +20,7 @@ const titles = {
   pasteSelection: "Paste",
   selectAllSelection: "Select All"
 };
+const executionOptions = { source: "toolbar" } as const;
 
 function registerEditorCommandSet(
   registry: CommandRegistry,
@@ -94,8 +95,11 @@ describe("editor commands", () => {
       saveCurrentDocument
     });
 
-    await registry.execute(editorCommandIds.openMarkdownDocument);
-    await registry.execute(editorCommandIds.saveDocument);
+    await registry.execute(
+      editorCommandIds.openMarkdownDocument,
+      executionOptions
+    );
+    await registry.execute(editorCommandIds.saveDocument, executionOptions);
 
     expect(openMarkdownDocument).toHaveBeenCalledTimes(1);
     expect(saveCurrentDocument).toHaveBeenCalledTimes(1);
@@ -110,7 +114,7 @@ describe("editor commands", () => {
     });
 
     for (const commandId of editCommandIds) {
-      await registry.execute(commandId);
+      await registry.execute(commandId, executionOptions);
     }
 
     expect(delegateNativeEditCommand.mock.calls.map((call) => call[0])).toEqual(
@@ -159,7 +163,7 @@ describe("editor commands", () => {
     });
 
     await expect(
-      registry.execute(editorCommandIds.saveDocument)
+      registry.execute(editorCommandIds.saveDocument, executionOptions)
     ).rejects.toBeInstanceOf(CommandDisabledError);
 
     expect(saveCurrentDocument).not.toHaveBeenCalled();
@@ -185,7 +189,7 @@ describe("editor commands", () => {
     }));
 
     await expect(
-      registry.execute(editorCommandIds.saveDocument)
+      registry.execute(editorCommandIds.saveDocument, executionOptions)
     ).rejects.toBeInstanceOf(CommandDisabledError);
     expect(saveCurrentDocument).not.toHaveBeenCalled();
   });
@@ -203,7 +207,7 @@ describe("editor commands", () => {
       "editor.isDirty": true
     }));
 
-    await registry.execute(editorCommandIds.saveDocument);
+    await registry.execute(editorCommandIds.saveDocument, executionOptions);
 
     expect(saveCurrentDocument).toHaveBeenCalledTimes(1);
   });

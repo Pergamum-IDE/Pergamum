@@ -12,6 +12,7 @@ import {
 } from "../../src/renderer/glossaryOccurrencesCommands";
 
 const translate: Translate = (key) => key;
+const executionOptions = { source: "utilityWindow" } as const;
 
 describe("glossary occurrences commands", () => {
   const titles = {
@@ -73,10 +74,19 @@ describe("glossary occurrences commands", () => {
       "glossary.occurrences.tracking.active": true
     }));
 
-    await registry.execute(glossaryOccurrencesCommandIds.previous);
-    await registry.execute(glossaryOccurrencesCommandIds.next);
-    await registry.execute(glossaryOccurrencesCommandIds.openEntry);
-    await registry.execute(glossaryOccurrencesCommandIds.closeTracking);
+    await registry.execute(
+      glossaryOccurrencesCommandIds.previous,
+      executionOptions
+    );
+    await registry.execute(glossaryOccurrencesCommandIds.next, executionOptions);
+    await registry.execute(
+      glossaryOccurrencesCommandIds.openEntry,
+      executionOptions
+    );
+    await registry.execute(
+      glossaryOccurrencesCommandIds.closeTracking,
+      executionOptions
+    );
 
     expect(calls).toEqual(["previous", "next", "openEntry", "closeTracking"]);
   });
@@ -102,16 +112,19 @@ describe("glossary occurrences commands", () => {
     }));
 
     await expect(
-      registry.execute(glossaryOccurrencesCommandIds.previous)
+      registry.execute(glossaryOccurrencesCommandIds.previous, executionOptions)
     ).resolves.toBe(false);
     await expect(
-      registry.execute(glossaryOccurrencesCommandIds.next)
+      registry.execute(glossaryOccurrencesCommandIds.next, executionOptions)
     ).resolves.toBe(false);
     await expect(
-      registry.execute(glossaryOccurrencesCommandIds.openEntry)
+      registry.execute(glossaryOccurrencesCommandIds.openEntry, executionOptions)
     ).resolves.toBe(false);
     await expect(
-      registry.execute(glossaryOccurrencesCommandIds.closeTracking)
+      registry.execute(
+        glossaryOccurrencesCommandIds.closeTracking,
+        executionOptions
+      )
     ).resolves.toBe(false);
   });
 
@@ -152,17 +165,23 @@ describe("glossary occurrences commands", () => {
     }));
 
     await expect(
-      registry.execute(glossaryOccurrencesCommandIds.previous)
+      registry.execute(glossaryOccurrencesCommandIds.previous, executionOptions)
     ).rejects.toBeInstanceOf(CommandDisabledError);
     await expect(
-      registry.execute(glossaryOccurrencesCommandIds.next)
+      registry.execute(glossaryOccurrencesCommandIds.next, executionOptions)
     ).rejects.toBeInstanceOf(CommandDisabledError);
     await expect(
-      registry.execute(glossaryOccurrencesCommandIds.closeTracking)
+      registry.execute(
+        glossaryOccurrencesCommandIds.closeTracking,
+        executionOptions
+      )
     ).rejects.toBeInstanceOf(CommandDisabledError);
 
     // openEntry has no `when` in this issue's initial scope, so it still runs.
-    await registry.execute(glossaryOccurrencesCommandIds.openEntry);
+    await registry.execute(
+      glossaryOccurrencesCommandIds.openEntry,
+      executionOptions
+    );
 
     expect(calls).toEqual(["openEntry"]);
   });

@@ -10,6 +10,8 @@ import {
 } from "../../src/shared/commandRegistry";
 import { InvalidCommandEnablementExpressionError } from "../../src/shared/commandEnablement";
 
+const executionOptions = { source: "commandPalette" } as const;
+
 describe("CommandRegistry", () => {
   it("registers and retrieves a command by stable ID", () => {
     const registry = new CommandRegistry();
@@ -65,7 +67,7 @@ describe("CommandRegistry", () => {
     const registry = new CommandRegistry();
     const commandId = defineCommandId("test.command.unknown");
 
-    await expect(registry.execute(commandId)).rejects.toThrow(
+    await expect(registry.execute(commandId, executionOptions)).rejects.toThrow(
       UnknownCommandIdError
     );
   });
@@ -81,7 +83,9 @@ describe("CommandRegistry", () => {
       execute
     });
 
-    await expect(registry.execute(commandId)).resolves.toBe("sync-result");
+    await expect(registry.execute(commandId, executionOptions)).resolves.toBe(
+      "sync-result"
+    );
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
@@ -95,7 +99,9 @@ describe("CommandRegistry", () => {
       execute: async () => "async-result"
     });
 
-    await expect(registry.execute(commandId)).resolves.toBe("async-result");
+    await expect(registry.execute(commandId, executionOptions)).resolves.toBe(
+      "async-result"
+    );
   });
 
   it("propagates command arguments and return values", async () => {
@@ -110,7 +116,9 @@ describe("CommandRegistry", () => {
       execute: (left, right) => left + right
     });
 
-    await expect(registry.execute(commandId, 2, 3)).resolves.toBe(5);
+    await expect(
+      registry.execute(commandId, executionOptions, 2, 3)
+    ).resolves.toBe(5);
   });
 
   it("propagates thrown errors as rejected execution", async () => {
@@ -126,7 +134,9 @@ describe("CommandRegistry", () => {
       }
     });
 
-    await expect(registry.execute(commandId)).rejects.toBe(error);
+    await expect(registry.execute(commandId, executionOptions)).rejects.toBe(
+      error
+    );
   });
 
   it("propagates rejected promises as rejected execution", async () => {
@@ -142,7 +152,9 @@ describe("CommandRegistry", () => {
       }
     });
 
-    await expect(registry.execute(commandId)).rejects.toBe(error);
+    await expect(registry.execute(commandId, executionOptions)).rejects.toBe(
+      error
+    );
   });
 
   it("preserves command titles independently from Command IDs", () => {
@@ -217,9 +229,9 @@ describe("CommandRegistry", () => {
       when: { key: "editor.isDirty" }
     });
 
-    await expect(registry.execute(commandId)).rejects.toBeInstanceOf(
-      CommandDisabledError
-    );
+    await expect(
+      registry.execute(commandId, executionOptions)
+    ).rejects.toBeInstanceOf(CommandDisabledError);
     expect(execute).not.toHaveBeenCalled();
   });
 
@@ -237,13 +249,13 @@ describe("CommandRegistry", () => {
     });
     registry.setCommandContextProvider(() => ({ "editor.isDirty": isDirty }));
 
-    await expect(registry.execute(commandId)).rejects.toBeInstanceOf(
-      CommandDisabledError
-    );
+    await expect(
+      registry.execute(commandId, executionOptions)
+    ).rejects.toBeInstanceOf(CommandDisabledError);
     expect(execute).not.toHaveBeenCalled();
 
     isDirty = true;
-    await registry.execute(commandId);
+    await registry.execute(commandId, executionOptions);
     expect(execute).toHaveBeenCalledTimes(1);
   });
 
@@ -262,11 +274,170 @@ describe("CommandRegistry", () => {
     registry.setCommandContextProvider(() => ({}));
     registry.setOnCommandIgnored(onCommandIgnored);
 
-    await expect(registry.execute(commandId)).rejects.toThrow(
-      CommandDisabledError
-    );
-    expect(onCommandIgnored).toHaveBeenCalledWith(commandId);
+    await expect(
+      registry.execute(commandId, executionOptions)
+    ).rejects.toThrow(CommandDisabledError);
+    expect(onCommandIgnored).toHaveBeenCalledWith({
+      commandId,
+      source: "commandPalette"
+    });
     expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("does not emit onCommandInvoked when command execution is ignored", async () => {
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.ignoredNoInvoked");
+    const execute = vi.fn();
+    const onCommandIgnored = vi.fn();
+    const onCommandInvoked = vi.fn();
+
+    registry.register({
+      id: commandId,
+      title: "Ignored no invoked",
+      execute,
+      when: { key: "editor.isDirty" }
+    });
+    registry.setCommandContextProvider(() => ({ "editor.isDirty": false }));
+    registry.setOnCommandIgnored(onCommandIgnored);
+    registry.setOnCommandInvoked(onCommandInvoked);
+
+    await expect(
+      registry.execute(commandId, executionOptions)
+    ).rejects.toBeInstanceOf(CommandDisabledError);
+
+    expect(onCommandIgnored).toHaveBeenCalledTimes(1);
+    expect(onCommandInvoked).not.toHaveBeenCalled();
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("swallows onCommandIgnored handler failures and still rejects disabled commands", async () => {
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.ignoredHandlerFailure");
+    const error = new Error("ignored handler failed");
+    const execute = vi.fn();
+    const onCommandIgnored = vi.fn(() => {
+      throw error;
+    });
+
+    registry.register({
+      id: commandId,
+      title: "Ignored handler failure",
+      execute,
+      when: { key: "editor.isDirty" }
+    });
+    registry.setCommandContextProvider(() => ({ "editor.isDirty": false }));
+    registry.setOnCommandIgnored(onCommandIgnored);
+
+    await expect(
+      registry.execute(commandId, executionOptions)
+    ).rejects.toBeInstanceOf(CommandDisabledError);
+    expect(onCommandIgnored).toHaveBeenCalledTimes(1);
+    expect(execute).not.toHaveBeenCalled();
+  });
+
+  it("emits onCommandInvoked for direct registry execution immediately before the command body", async () => {
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.directInvoked");
+    const events: string[] = [];
+    const onCommandInvoked = vi.fn(() => {
+      events.push("invoked");
+    });
+
+    registry.register({
+      id: commandId,
+      title: "Direct invoked",
+      execute: async () => {
+        events.push("body");
+      }
+    });
+    registry.setOnCommandInvoked(onCommandInvoked);
+
+    await registry.execute(commandId, { source: "workspaceSidebar" });
+
+    expect(onCommandInvoked).toHaveBeenCalledWith({
+      commandId,
+      source: "workspaceSidebar"
+    });
+    expect(events).toEqual(["invoked", "body"]);
+  });
+
+  it("emits onCommandInvoked exactly once for a single command execution", async () => {
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.invokedOnce");
+    const onCommandInvoked = vi.fn();
+
+    registry.register({
+      id: commandId,
+      title: "Invoked once",
+      execute: () => undefined
+    });
+    registry.setOnCommandInvoked(onCommandInvoked);
+
+    await registry.execute(commandId, executionOptions);
+
+    expect(onCommandInvoked).toHaveBeenCalledTimes(1);
+  });
+
+  it("swallows onCommandInvoked handler failures and still invokes the command body", async () => {
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.invokedHandlerFailure");
+    const error = new Error("invoked handler failed");
+    const execute = vi.fn(() => "body result");
+    const onCommandInvoked = vi.fn(() => {
+      throw error;
+    });
+
+    registry.register({
+      id: commandId,
+      title: "Invoked handler failure",
+      execute
+    });
+    registry.setOnCommandInvoked(onCommandInvoked);
+
+    await expect(registry.execute(commandId, executionOptions)).resolves.toBe(
+      "body result"
+    );
+    expect(onCommandInvoked).toHaveBeenCalledTimes(1);
+    expect(execute).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not emit onCommandInvoked or onCommandIgnored for unknown commands", async () => {
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.unknownBoundary");
+    const onCommandIgnored = vi.fn();
+    const onCommandInvoked = vi.fn();
+
+    registry.setOnCommandIgnored(onCommandIgnored);
+    registry.setOnCommandInvoked(onCommandInvoked);
+
+    await expect(
+      registry.execute(commandId, executionOptions)
+    ).rejects.toBeInstanceOf(UnknownCommandIdError);
+
+    expect(onCommandIgnored).not.toHaveBeenCalled();
+    expect(onCommandInvoked).not.toHaveBeenCalled();
+  });
+
+  it("treats unset or reset command logging handlers as no-ops", async () => {
+    const registry = new CommandRegistry();
+    const commandId = defineCommandId("test.command.resetHandlers");
+    const onCommandIgnored = vi.fn();
+    const onCommandInvoked = vi.fn();
+
+    registry.register({
+      id: commandId,
+      title: "Reset handlers",
+      execute: () => undefined
+    });
+    registry.setOnCommandIgnored(onCommandIgnored);
+    registry.setOnCommandInvoked(onCommandInvoked);
+    registry.setOnCommandIgnored(null);
+    registry.setOnCommandInvoked(null);
+
+    await registry.execute(commandId, executionOptions);
+
+    expect(onCommandIgnored).not.toHaveBeenCalled();
+    expect(onCommandInvoked).not.toHaveBeenCalled();
   });
 
   it("cannot be bypassed by calling execute directly instead of through a UI wrapper", async () => {
@@ -286,9 +457,9 @@ describe("CommandRegistry", () => {
     });
     registry.setCommandContextProvider(() => ({ "project.isOpen": false }));
 
-    await expect(registry.execute(commandId)).rejects.toBeInstanceOf(
-      CommandDisabledError
-    );
+    await expect(
+      registry.execute(commandId, executionOptions)
+    ).rejects.toBeInstanceOf(CommandDisabledError);
     expect(execute).not.toHaveBeenCalled();
   });
 
@@ -306,9 +477,9 @@ describe("CommandRegistry", () => {
     });
     registry.setCommandContextProvider(() => ({ "project.isOpen": true }));
 
-    await expect(registry.execute(commandId)).rejects.toBeInstanceOf(
-      CommandDisabledError
-    );
+    await expect(
+      registry.execute(commandId, executionOptions)
+    ).rejects.toBeInstanceOf(CommandDisabledError);
     expect(execute).not.toHaveBeenCalled();
   });
 
@@ -326,9 +497,9 @@ describe("CommandRegistry", () => {
     });
     registry.setCommandContextProvider(() => ({ "project.isOpen": false }));
 
-    await expect(registry.execute(commandId)).rejects.toBeInstanceOf(
-      CommandDisabledError
-    );
+    await expect(
+      registry.execute(commandId, executionOptions)
+    ).rejects.toBeInstanceOf(CommandDisabledError);
     expect(execute).not.toHaveBeenCalled();
   });
 
@@ -348,12 +519,15 @@ describe("CommandRegistry", () => {
     registry.setCommandContextProvider(() => ({ "project.isOpen": false }));
     registry.setOnCommandIgnored(onCommandIgnored);
 
-    await expect(registry.execute(commandId)).rejects.toBeInstanceOf(
-      CommandDisabledError
-    );
+    await expect(
+      registry.execute(commandId, executionOptions)
+    ).rejects.toBeInstanceOf(CommandDisabledError);
     expect(execute).not.toHaveBeenCalled();
     expect(onCommandIgnored).toHaveBeenCalledTimes(1);
-    expect(onCommandIgnored).toHaveBeenCalledWith(commandId);
+    expect(onCommandIgnored).toHaveBeenCalledWith({
+      commandId,
+      source: "commandPalette"
+    });
   });
 
   it("subjects direct execute() routes to Command.isEnabled too, not only when", async () => {
@@ -373,9 +547,9 @@ describe("CommandRegistry", () => {
       isEnabled: () => false
     });
 
-    await expect(registry.execute(commandId)).rejects.toBeInstanceOf(
-      CommandDisabledError
-    );
+    await expect(
+      registry.execute(commandId, executionOptions)
+    ).rejects.toBeInstanceOf(CommandDisabledError);
     expect(execute).not.toHaveBeenCalled();
   });
 

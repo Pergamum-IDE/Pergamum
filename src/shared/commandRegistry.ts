@@ -4,6 +4,7 @@ import {
   type CommandContext,
   type CommandEnablementExpression
 } from "./commandEnablement";
+import type { DebugLogCommandExecutionSource } from "./debugLog";
 
 declare const commandIdBrand: unique symbol;
 
@@ -62,6 +63,15 @@ export type CommandArgumentList<TArgs extends readonly unknown[]> =
   TArgs extends readonly [...infer TItems] ? TItems : never;
 
 type RegisteredCommand = Command<readonly unknown[], unknown>;
+
+export interface CommandExecutionOptions {
+  readonly source: DebugLogCommandExecutionSource;
+}
+
+export interface CommandExecutionLogEvent {
+  readonly commandId: string;
+  readonly source: DebugLogCommandExecutionSource;
+}
 
 /**
  * Combined enablement: legacy `Command.isEnabled` (imperative, argument-aware)
@@ -146,7 +156,10 @@ export function defineCommandId<
 export class CommandRegistry {
   private readonly commands = new Map<string, RegisteredCommand>();
   private contextProvider: (() => CommandContext) | null = null;
-  private onCommandIgnored: ((commandId: string) => void) | null = null;
+  private onCommandIgnored: ((event: CommandExecutionLogEvent) => void) | null =
+    null;
+  private onCommandInvoked: ((event: CommandExecutionLogEvent) => void) | null =
+    null;
 
   register<TArgs extends readonly unknown[], TResult>(
     command: Command<TArgs, TResult>
@@ -178,8 +191,20 @@ export class CommandRegistry {
    * rejection, so every `execute` call site is covered without each route
    * re-implementing the same logging.
    */
-  setOnCommandIgnored(handler: (commandId: string) => void): void {
+  setOnCommandIgnored(
+    handler: ((event: CommandExecutionLogEvent) => void) | null
+  ): void {
     this.onCommandIgnored = handler;
+  }
+
+  /**
+   * Injects the `command.invoked` emission for registry-level accepted
+   * execution, immediately before the command body starts.
+   */
+  setOnCommandInvoked(
+    handler: ((event: CommandExecutionLogEvent) => void) | null
+  ): void {
+    this.onCommandInvoked = handler;
   }
 
   /**
@@ -221,17 +246,35 @@ export class CommandRegistry {
 
   async execute<TArgs extends readonly unknown[], TResult>(
     commandId: CommandId<TArgs, TResult>,
+    options: CommandExecutionOptions,
     ...args: CommandArgumentList<TArgs>
   ): Promise<Awaited<TResult>> {
     const command = this.require(commandId);
     const liveContext = this.contextProvider ? this.contextProvider() : {};
+    const event: CommandExecutionLogEvent = {
+      commandId: String(commandId),
+      source: options.source
+    };
 
     if (!isCommandEnabled(command, liveContext, args)) {
-      this.onCommandIgnored?.(String(commandId));
+      this.emitCommandExecutionLog(this.onCommandIgnored, event);
       throw new CommandDisabledError(commandId);
     }
 
+    this.emitCommandExecutionLog(this.onCommandInvoked, event);
+
     return (await command.execute(...args)) as Awaited<TResult>;
+  }
+
+  private emitCommandExecutionLog(
+    handler: ((event: CommandExecutionLogEvent) => void) | null,
+    event: CommandExecutionLogEvent
+  ): void {
+    try {
+      handler?.(event);
+    } catch {
+      // Logging failures must not decide command execution behavior.
+    }
   }
 
   private require<TArgs extends readonly unknown[], TResult>(

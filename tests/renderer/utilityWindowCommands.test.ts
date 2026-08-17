@@ -8,6 +8,7 @@ import {
 } from "../../src/renderer/utilityWindowCommands";
 
 const translate: Translate = (key) => key;
+const executionOptions = { source: "utilityWindow" } as const;
 
 describe("utility window commands", () => {
   const titles = {
@@ -56,16 +57,16 @@ describe("utility window commands", () => {
       titles
     );
 
-    await registry.execute(utilityWindowCommandIds.open);
+    await registry.execute(utilityWindowCommandIds.open, executionOptions);
     expect(open).toBe(true);
 
-    await registry.execute(utilityWindowCommandIds.close);
+    await registry.execute(utilityWindowCommandIds.close, executionOptions);
     expect(open).toBe(false);
 
-    await registry.execute(utilityWindowCommandIds.toggle);
+    await registry.execute(utilityWindowCommandIds.toggle, executionOptions);
     expect(open).toBe(true);
 
-    await registry.execute(utilityWindowCommandIds.toggle);
+    await registry.execute(utilityWindowCommandIds.toggle, executionOptions);
     expect(open).toBe(false);
   });
 

@@ -265,10 +265,14 @@ describe("workspace navigation", () => {
       isProjectSettingsOpen,
       translate,
       onSelectMode: (mode) => {
-        void registry.execute(workspaceFocusCommandIdForMode(mode));
+        void registry.execute(workspaceFocusCommandIdForMode(mode), {
+          source: "activityBar"
+        });
       },
       onToggleProjectSettings: () => {
-        void registry.execute(workspaceCommandIds.toggleSettings);
+        void registry.execute(workspaceCommandIds.toggleSettings, {
+          source: "activityBar"
+        });
       }
     });
     const buttons = collectElements(
@@ -311,7 +315,7 @@ describe("workspace navigation", () => {
 
     expect(source).toContain("workspaceFocusCommandIdForMode(mode)");
     expect(source).toContain(
-      "executeUiCommand(workspaceFocusCommandIdForMode(mode));"
+      'executeUiCommand(workspaceFocusCommandIdForMode(mode), {\n      source: "activityBar"\n    });'
     );
     expect(source).toContain("onSelectMode={handleActivityBarModeClick}");
   });
@@ -463,7 +467,7 @@ describe("workspace navigation", () => {
       "return await openEditorFromExplicitActivation(editorId);"
     );
     expect(source).toContain(
-      "executeUiCommand(glossaryCommandIds.openEntry, entryId);"
+      'executeUiCommand(\n                          glossaryCommandIds.openEntry,\n                          { source: "workspaceSidebar" },\n                          entryId\n                        );'
     );
   });
 

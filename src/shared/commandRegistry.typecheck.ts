@@ -11,6 +11,7 @@ const openGlossaryEntryCommandId = defineCommandId<
 const focusFilesCommandId = defineCommandId("workspace.files.focus");
 
 const registry = new CommandRegistry();
+const executionOptions = { source: "commandPalette" } as const;
 
 const openGlossaryEntryCommand: Command<
   readonly [entryId: string],
@@ -29,18 +30,21 @@ registry.register({
   execute: () => undefined
 });
 
-void registry.execute(openGlossaryEntryCommandId, "entry-1");
+void registry.execute(openGlossaryEntryCommandId, executionOptions, "entry-1");
 void registry.isEnabled(openGlossaryEntryCommandId, "entry-1");
+void registry.execute(focusFilesCommandId, executionOptions);
+
+// @ts-expect-error Command execution options are required.
 void registry.execute(focusFilesCommandId);
 
 // @ts-expect-error Command arguments are required by each CommandId.
-void registry.execute(openGlossaryEntryCommandId);
+void registry.execute(openGlossaryEntryCommandId, executionOptions);
 
 // @ts-expect-error Command argument types are checked by each CommandId.
-void registry.execute(openGlossaryEntryCommandId, 1);
+void registry.execute(openGlossaryEntryCommandId, executionOptions, 1);
 
 // @ts-expect-error Enablement arguments share the CommandId argument type.
 void registry.isEnabled(openGlossaryEntryCommandId, 1);
 
 // @ts-expect-error No-argument commands cannot receive arguments.
-void registry.execute(focusFilesCommandId, "entry-1");
+void registry.execute(focusFilesCommandId, executionOptions, "entry-1");
