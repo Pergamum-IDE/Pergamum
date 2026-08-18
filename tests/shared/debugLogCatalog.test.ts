@@ -3,6 +3,8 @@ import {
   debugLogCommandExecutionSources,
   debugLogDbEntityKinds,
   debugLogDbOperations,
+  debugLogDocumentKinds,
+  debugLogEditorKinds,
   debugLogEventNames,
   debugLogReasons,
   type DebugLogDetails
@@ -126,6 +128,61 @@ describe("debug log catalog", () => {
     expect([...debugLogDbEntityKinds]).not.toContain("settings");
     expect([...debugLogDbEntityKinds]).not.toContain("projectConfig");
     expect([...debugLogDbEntityKinds]).not.toContain("recentProject");
+  });
+
+  it("includes the long-document open timing events (#152), and keeps document.open.failed distinct", () => {
+    expect(debugLogEventNames).toEqual(
+      expect.arrayContaining([
+        "document.open.started",
+        "document.open.fileRead.completed",
+        "document.open.editorDocument.applied",
+        "document.open.previewRender.completed",
+        "document.open.usable",
+        "document.open.completed",
+        "document.open.failed"
+      ])
+    );
+    // #152 explicitly does not run/emit a glossary occurrence scan event on
+    // the document-open path (occurrence tracking is Glossary-Editor-only).
+    expect(debugLogEventNames).not.toContain("document.open.glossaryScan.completed");
+  });
+
+  it("includes documentOpenId, fileSizeBytes, documentKind, and editorKind as allowlisted detail keys (#152)", () => {
+    type HasDocumentOpenId = "documentOpenId" extends keyof DebugLogDetails
+      ? true
+      : false;
+    type HasFileSizeBytes = "fileSizeBytes" extends keyof DebugLogDetails
+      ? true
+      : false;
+    type HasDocumentKind = "documentKind" extends keyof DebugLogDetails
+      ? true
+      : false;
+    type HasEditorKind = "editorKind" extends keyof DebugLogDetails
+      ? true
+      : false;
+    const hasDocumentOpenId: HasDocumentOpenId = true;
+    const hasFileSizeBytes: HasFileSizeBytes = true;
+    const hasDocumentKind: HasDocumentKind = true;
+    const hasEditorKind: HasEditorKind = true;
+
+    expect(hasDocumentOpenId).toBe(true);
+    expect(hasFileSizeBytes).toBe(true);
+    expect(hasDocumentKind).toBe(true);
+    expect(hasEditorKind).toBe(true);
+  });
+
+  it("defines documentKind/editorKind as small closed catalogs, not free-form strings", () => {
+    expect([...debugLogDocumentKinds]).toEqual([
+      "file",
+      "project",
+      "untitled",
+      "unknown"
+    ]);
+    expect([...debugLogEditorKinds]).toEqual([
+      "markdown",
+      "glossaryEntry",
+      "unknown"
+    ]);
   });
 
   it("includes the DB skipped reason catalog values", () => {

@@ -682,6 +682,175 @@ describe("debug logger", () => {
       "error"
     ]);
   });
+
+  describe("document open timing (#152)", () => {
+    function logDocumentOpenSuccessEvents(
+      logger: ReturnType<typeof createDebugLogger>
+    ): void {
+      logger.log({
+        level: "debug",
+        event: "document.open.started",
+        details: {
+          documentOpenId: "documentOpen.1",
+          documentKind: "file",
+          editorKind: "markdown"
+        }
+      });
+      logger.log({
+        level: "debug",
+        event: "document.open.fileRead.completed",
+        details: {
+          documentOpenId: "documentOpen.1",
+          durationMs: 42,
+          fileSizeBytes: 1_048_576,
+          lineCount: 9001
+        }
+      });
+      logger.log({
+        level: "debug",
+        event: "document.open.editorDocument.applied",
+        details: { documentOpenId: "documentOpen.1", durationMs: 55 }
+      });
+      logger.log({
+        level: "debug",
+        event: "document.open.previewRender.completed",
+        details: { documentOpenId: "documentOpen.1", durationMs: 900 }
+      });
+      logger.log({
+        level: "debug",
+        event: "document.open.usable",
+        details: { documentOpenId: "documentOpen.1", durationMs: 2800 }
+      });
+      logger.log({
+        level: "debug",
+        event: "document.open.completed",
+        details: {
+          documentOpenId: "documentOpen.1",
+          durationMs: 2800,
+          result: "succeeded"
+        }
+      });
+    }
+
+    it("emits nothing when debug mode is disabled", () => {
+      const logger = createTestLogger({ enabled: false, runtime });
+
+      logDocumentOpenSuccessEvents(logger);
+
+      expect(logger.getSnapshot().events).toEqual([]);
+    });
+
+    it("emits the full document-open timing sequence with numeric durationMs when debug mode is enabled", () => {
+      const logger = createTestLogger(enabledOptions([new Date(2026, 7, 14)]));
+
+      logDocumentOpenSuccessEvents(logger);
+
+      const events = logger.getSnapshot().events;
+
+      expect(events.map((event) => event.event)).toEqual([
+        "document.open.started",
+        "document.open.fileRead.completed",
+        "document.open.editorDocument.applied",
+        "document.open.previewRender.completed",
+        "document.open.usable",
+        "document.open.completed"
+      ]);
+      expect(events.map((event) => event.level)).toEqual([
+        "debug",
+        "debug",
+        "debug",
+        "debug",
+        "debug",
+        "debug"
+      ]);
+      for (const event of events.slice(1)) {
+        expect(typeof event.details?.durationMs).toBe("number");
+      }
+    });
+
+    it("keeps documentOpenId stable across every event belonging to the same open operation", () => {
+      const logger = createTestLogger(enabledOptions([new Date(2026, 7, 14)]));
+
+      logDocumentOpenSuccessEvents(logger);
+
+      const documentOpenIds = logger
+        .getSnapshot()
+        .events.map((event) => event.details?.documentOpenId);
+
+      expect(new Set(documentOpenIds)).toEqual(new Set(["documentOpen.1"]));
+    });
+
+    it("uses a different documentOpenId for a separate open operation", () => {
+      const logger = createTestLogger(enabledOptions([new Date(2026, 7, 14)]));
+
+      logDocumentOpenSuccessEvents(logger);
+      logger.log({
+        level: "debug",
+        event: "document.open.started",
+        details: {
+          documentOpenId: "documentOpen.2",
+          documentKind: "file",
+          editorKind: "markdown"
+        }
+      });
+
+      const documentOpenIds = logger
+        .getSnapshot()
+        .events.map((event) => event.details?.documentOpenId);
+
+      expect(documentOpenIds).toContain("documentOpen.1");
+      expect(documentOpenIds).toContain("documentOpen.2");
+      expect(documentOpenIds[documentOpenIds.length - 1]).not.toBe(
+        documentOpenIds[0]
+      );
+    });
+
+    it("emits document.open.failed at error level, distinct from the debug-level success events", () => {
+      const logger = createTestLogger(enabledOptions([new Date(2026, 7, 14)]));
+
+      logger.log({
+        level: "debug",
+        event: "document.open.started",
+        details: { documentOpenId: "documentOpen.3" }
+      });
+      logger.log({
+        level: "error",
+        event: "document.open.failed",
+        details: {
+          documentOpenId: "documentOpen.3",
+          result: "failed",
+          durationMs: 12,
+          error: { category: "io" }
+        }
+      });
+
+      const events = logger.getSnapshot().events;
+
+      expect(events.map((event) => event.level)).toEqual(["debug", "error"]);
+    });
+
+    it("drops manuscript-shaped detail keys from document-open events instead of writing them", () => {
+      const logger = createTestLogger(enabledOptions([new Date(2026, 7, 14)]));
+
+      logger.log({
+        level: "debug",
+        event: "document.open.fileRead.completed",
+        details: {
+          documentOpenId: "documentOpen.4",
+          durationMs: 42,
+          manuscriptText: "吾輩は猫である。名前はまだ無い。",
+          rawPath: "C:\\Users\\name\\catfood.md"
+        }
+      });
+
+      const serialized = JSON.stringify(logger.getSnapshot());
+
+      expect(serialized).not.toContain("吾輩");
+      expect(serialized).not.toContain("catfood.md");
+      expect(serialized).not.toContain("manuscriptText");
+      expect(serialized).not.toContain("rawPath");
+    });
+  });
 });
 
 function createTestLogger(

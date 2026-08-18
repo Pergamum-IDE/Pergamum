@@ -191,6 +191,7 @@ export const enTranslations = {
   "status.settingsSaveFailed": "Settings save failed: {message}",
   "status.settingsSaved": "Settings saved",
   "status.withDetail": "{status}; {detail}",
+  "tabs.externalMarkdownFile": "This file is outside the project",
   "tabs.openDocuments": "Open documents",
   "tabs.unsaved": "Unsaved",
   "toolbar.openProject": "Open Project",

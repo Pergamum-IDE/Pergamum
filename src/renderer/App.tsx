@@ -84,10 +84,12 @@ import {
 } from "./currentEditor";
 import { DocumentTabBar } from "./DocumentTabBar";
 import {
+  durationSincePerformanceMark,
   logRendererDebugEvent,
   rendererDebugErrorInfo
 } from "./debugLog";
 import { DebugLogPanel } from "./DebugLogPanel";
+import { createDocumentOpenIdFactory } from "./documentOpenId";
 import { EditorSurface } from "./EditorSurface";
 import {
   createContextMenuInteractionIdFactory,
@@ -279,6 +281,16 @@ export function App(): JSX.Element {
   const [glossaryRefreshToken, setGlossaryRefreshToken] = useState(0);
   const [pendingMarkdownSelection, setPendingMarkdownSelection] =
     useState<GlossaryOccurrenceRange | null>(null);
+  /**
+   * In-flight document-open timing correlation (#152). Set at the start of
+   * `openFile()`, read by MarkdownEditorSurface's one-shot preview-render
+   * measurement, then cleared by `handleDocumentOpenMeasured` once the
+   * editor-usable/completed events are logged.
+   */
+  const [documentOpenMeasurement, setDocumentOpenMeasurement] = useState<{
+    documentOpenId: string;
+    startedAt: number;
+  } | null>(null);
   const [
     glossaryOccurrenceTrackingState,
     setGlossaryOccurrenceTrackingState
@@ -396,6 +408,7 @@ export function App(): JSX.Element {
     () => createContextMenuInteractionIdFactory(),
     []
   );
+  const nextDocumentOpenId = useMemo(() => createDocumentOpenIdFactory(), []);
 
   const activeDocument = activeOpenDocument(openDocumentsState);
   const currentEditor = activeCurrentEditor(openDocumentsState);
@@ -1215,22 +1228,150 @@ export function App(): JSX.Element {
     }
   }
 
-  async function openFile(): Promise<void> {
+  /**
+   * Shared instrumentation tail for every markdown document-open path
+   * (#152 follow-up): File menu (`openFile`) and Workspace/File Explorer
+   * (`activateProjectDocument`) both call this around the step that
+   * actually creates/applies the editor, so `documentOpenId` generation
+   * stays centralized (one factory) and this logging boundary is not
+   * duplicated per caller. Each caller still logs its own
+   * `document.open.started` beforehand, since what happens *before* this
+   * point genuinely differs per path (see the two callers below).
+   *
+   * `openStartedAt` is the whole operation's start (used for `usable` /
+   * `completed`'s total duration later, and for this function's own
+   * `completed`/`failed` short-circuits). `editorDocument.applied.durationMs`
+   * is measured separately, starting only once inside this function, right
+   * before `performOpen()` — *not* from `openStartedAt` — so it never
+   * includes time spent before this call (code-review fix: it previously
+   * included OS file-chooser time on the File menu path). That means:
+   *  - File menu: editor creation + state application only — content was
+   *    already loaded by the separate, main-process-timed
+   *    `document.open.fileRead.completed` before this runs.
+   *  - Explorer: project document resolve/read (if not already open —
+   *    `resolveCurrentEditor` returns instantly from cache when it is) +
+   *    editor creation + state application, combined — the whole boundary
+   *    available at this layer. The Explorer path does not get its own
+   *    `fileRead.completed`-equivalent event: doing so would require
+   *    threading `documentOpenId` through the generic
+   *    `EditorNavigation`/`resolveEditor` adapter boundary shared with
+   *    non-markdown (glossary entry) opens, which is the kind of larger
+   *    architectural change #152 explicitly avoids. This is the closest
+   *    honest boundary available without that change.
+   */
+  async function completeInstrumentedDocumentOpen(
+    documentOpenId: string,
+    openStartedAt: number,
+    performOpen: () => Promise<boolean>
+  ): Promise<boolean> {
     try {
-      const file = await window.pergamum.files.openMarkdown();
+      const applyStartedAt = performance.now();
+      const opened = await performOpen();
 
-      if (!file) {
-        setStatus({ key: "status.openCanceled" });
-        return;
+      if (!opened) {
+        // performOpen() completed without throwing but did not actually
+        // apply an editor (e.g. the target was not found, or a newer open
+        // superseded this one) — not a success, and not a thrown failure
+        // either. Closes out document.open.started honestly instead of
+        // leaving it dangling, without fabricating an applied/usable editor.
+        logRendererDebugEvent({
+          level: "debug",
+          event: "document.open.completed",
+          details: {
+            documentOpenId,
+            result: "ignored",
+            durationMs: durationSincePerformanceMark(openStartedAt)
+          }
+        });
+
+        return false;
       }
 
-      const openedDocument = currentDocumentForOpenedFile(
-        file,
-        project,
-        activeProjectContext
+      logRendererDebugEvent({
+        level: "debug",
+        event: "document.open.editorDocument.applied",
+        details: {
+          documentOpenId,
+          durationMs: durationSincePerformanceMark(applyStartedAt)
+        }
+      });
+
+      // Cleared by handleDocumentOpenMeasured once MarkdownEditorSurface has
+      // rendered this document and reported its preview-render duration.
+      setDocumentOpenMeasurement({ documentOpenId, startedAt: openStartedAt });
+
+      return true;
+    } catch (error) {
+      logRendererDebugEvent({
+        level: "error",
+        event: "document.open.failed",
+        details: {
+          documentOpenId,
+          result: "failed",
+          durationMs: durationSincePerformanceMark(openStartedAt),
+          error: rendererDebugErrorInfo(error)
+        }
+      });
+
+      throw error;
+    }
+  }
+
+  async function openFile(): Promise<void> {
+    const documentOpenId = nextDocumentOpenId();
+    const startedAt = performance.now();
+
+    logRendererDebugEvent({
+      level: "debug",
+      event: "document.open.started",
+      details: {
+        documentOpenId,
+        documentKind: "file",
+        editorKind: "markdown"
+      }
+    });
+
+    let file: Awaited<ReturnType<typeof window.pergamum.files.openMarkdown>>;
+
+    try {
+      // The OS open-dialog and the actual file read happen together in one
+      // IPC call; the main process logs document.open.failed itself for a
+      // failure at this stage (see fileIpc.ts), so this catch only needs to
+      // surface status — logging it again here would duplicate that event.
+      file = await window.pergamum.files.openMarkdown(documentOpenId);
+    } catch (error) {
+      setStatus({
+        key: "status.documentOpenFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+      return;
+    }
+
+    if (!file) {
+      logRendererDebugEvent({
+        level: "debug",
+        event: "document.open.completed",
+        details: {
+          documentOpenId,
+          result: "cancelled",
+          durationMs: durationSincePerformanceMark(startedAt)
+        }
+      });
+      setStatus({ key: "status.openCanceled" });
+      return;
+    }
+
+    const openedDocument = currentDocumentForOpenedFile(
+      file,
+      project,
+      activeProjectContext
+    );
+
+    try {
+      await completeInstrumentedDocumentOpen(documentOpenId, startedAt, () =>
+        openDocument(openedDocument)
       );
 
-      await openDocument(openedDocument);
       setStatus({
         key: "status.openedFile",
         values: { name: openedDocument.name }
@@ -1241,6 +1382,56 @@ export function App(): JSX.Element {
         values: { message: errorMessage(error, translate) }
       });
     }
+  }
+
+  /**
+   * Fired once by MarkdownEditorSurface after it has rendered the just-opened
+   * document's preview (#152) — the closest practical point in this
+   * architecture to "the Markdown editor pane can render" / "input can be
+   * accepted", since content has already been pushed into the CodeMirror
+   * view by the time this component's own effect runs (child effects fire
+   * before parent effects). Ignored if it does not match the in-flight
+   * measurement (e.g. a stale call after a newer open already started).
+   */
+  function handleDocumentOpenMeasured(
+    documentOpenId: string,
+    previewRenderDurationMs: number
+  ): void {
+    if (
+      !documentOpenMeasurement ||
+      documentOpenMeasurement.documentOpenId !== documentOpenId
+    ) {
+      return;
+    }
+
+    const usableDurationMs = durationSincePerformanceMark(
+      documentOpenMeasurement.startedAt
+    );
+
+    logRendererDebugEvent({
+      level: "debug",
+      event: "document.open.previewRender.completed",
+      details: {
+        documentOpenId,
+        durationMs: Math.round(previewRenderDurationMs)
+      }
+    });
+    logRendererDebugEvent({
+      level: "debug",
+      event: "document.open.usable",
+      details: { documentOpenId, durationMs: usableDurationMs }
+    });
+    logRendererDebugEvent({
+      level: "debug",
+      event: "document.open.completed",
+      details: {
+        documentOpenId,
+        result: "succeeded",
+        durationMs: usableDurationMs
+      }
+    });
+
+    setDocumentOpenMeasurement(null);
   }
 
   function replaceSavedDocument(
@@ -2062,13 +2253,34 @@ export function App(): JSX.Element {
       return;
     }
 
+    // Workspace/File Explorer pane open path (#152 follow-up). Unlike
+    // openFile(), there is no OS dialog step, so document.open.started can
+    // fire immediately — this path's "started" therefore does not carry
+    // any dialog-interaction time the way the File menu path's does.
+    const documentOpenId = nextDocumentOpenId();
+    const startedAt = performance.now();
+
+    logRendererDebugEvent({
+      level: "debug",
+      event: "document.open.started",
+      details: {
+        documentOpenId,
+        documentKind: "project",
+        editorKind: "markdown"
+      }
+    });
+
     try {
       const documentId = createProjectDocumentEditorId(
         document.relativePath,
         activeProjectContext
       );
 
-      const didOpen = await openEditorFromExplicitActivation(documentId);
+      const didOpen = await completeInstrumentedDocumentOpen(
+        documentOpenId,
+        startedAt,
+        () => openEditorFromExplicitActivation(documentId)
+      );
 
       setStatus(
         didOpen
@@ -2341,6 +2553,8 @@ export function App(): JSX.Element {
                     onPendingMarkdownSelectionApplied={() => {
                       setPendingMarkdownSelection(null);
                     }}
+                    documentOpenId={documentOpenMeasurement?.documentOpenId ?? null}
+                    onDocumentOpenPreviewRendered={handleDocumentOpenMeasured}
                   />
 
                   {layout.utilityWindow.open ? (

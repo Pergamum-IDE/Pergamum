@@ -45,6 +45,15 @@ export function rendererDebugErrorInfo(error: unknown): Record<string, unknown> 
   return info;
 }
 
+/**
+ * Rounded milliseconds since a `performance.now()` mark, for document-open
+ * timing events (#152). `performance.now()` (not `Date.now()`) since it is
+ * monotonic and unaffected by wall-clock adjustments during a measurement.
+ */
+export function durationSincePerformanceMark(startedAt: number): number {
+  return Math.round(performance.now() - startedAt);
+}
+
 export function logRendererDebugEvent(input: {
   level: DebugLogLevel;
   event: DebugLogEventName;

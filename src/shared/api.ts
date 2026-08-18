@@ -166,7 +166,12 @@ export interface GlossarySurfaceLookupRequest {
 
 export interface PergamumApi {
   files: {
-    openMarkdown: () => Promise<MarkdownFile | null>;
+    /**
+     * `documentOpenId` correlates this open's document-open timing debug
+     * events (#152); it is not a persistent id and is not derived from the
+     * file path or content.
+     */
+    openMarkdown: (documentOpenId: string) => Promise<MarkdownFile | null>;
     saveMarkdown: (
       path: string | null,
       content: string

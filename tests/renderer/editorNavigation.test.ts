@@ -108,9 +108,13 @@ describe("EditorNavigation", () => {
     expect(source).toMatch(
       /function activateDocument\(documentId: EditorId\): void \{\s+openEditorFromUi\(documentId\);/
     );
-    expect(source).toContain("await openDocument(openedDocument);");
+    // openFile() and activateProjectDocument() route through openDocument()
+    // / openEditorFromExplicitActivation() via the shared #152 instrumented-
+    // open wrapper rather than awaiting them directly, but both still call
+    // through to the same underlying functions.
+    expect(source).toMatch(/\(\) =>\s*openDocument\(openedDocument\)/);
     expect(source).toContain(
-      "const didOpen = await openEditorFromExplicitActivation(documentId);"
+      "() => openEditorFromExplicitActivation(documentId)"
     );
     expect(source).toMatch(
       /function openEditorFromExplicitActivation\([\s\S]*?return openEditor\(editorId, options\);\s*\}/
