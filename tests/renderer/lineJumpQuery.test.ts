@@ -1,5 +1,6 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import {
+  createLineJumpEditorSnapshot,
   documentLineStartOffset,
   validateLineJumpQuery,
   type LineJumpQueryValidation
@@ -83,5 +84,61 @@ describe("documentLineStartOffset", () => {
 
     expect(documentLineStartOffset(content, 3)).toBe(11);
     expect(documentLineStartOffset(content, 4)).toBeNull();
+  });
+});
+
+describe("createLineJumpEditorSnapshot", () => {
+  it("reports lineCount and getLineText consistent with a plain \"\\n\" split", () => {
+    const snapshot = createLineJumpEditorSnapshot("alpha\nbeta\ngamma");
+
+    expect(snapshot.lineCount).toBe(3);
+    expect(snapshot.getLineText(1)).toBe("alpha");
+    expect(snapshot.getLineText(2)).toBe("beta");
+    expect(snapshot.getLineText(3)).toBe("gamma");
+  });
+
+  it('returns "" for an out-of-range line instead of throwing', () => {
+    const snapshot = createLineJumpEditorSnapshot("alpha\nbeta");
+
+    expect(snapshot.getLineText(0)).toBe("");
+    expect(snapshot.getLineText(-1)).toBe("");
+    expect(snapshot.getLineText(3)).toBe("");
+  });
+
+  it("treats an empty document as a single empty line", () => {
+    const snapshot = createLineJumpEditorSnapshot("");
+
+    expect(snapshot.lineCount).toBe(1);
+    expect(snapshot.getLineText(1)).toBe("");
+  });
+
+  it("splits the content at most once no matter how many times lineCount/getLineText are read (#148 performance)", () => {
+    const splitSpy = vi.spyOn(String.prototype, "split");
+
+    try {
+      const snapshot = createLineJumpEditorSnapshot("a\nb\nc\nd\ne");
+
+      void snapshot.lineCount;
+      snapshot.getLineText(1);
+      snapshot.getLineText(2);
+      snapshot.getLineText(5);
+      void snapshot.lineCount;
+
+      expect(splitSpy).toHaveBeenCalledTimes(1);
+    } finally {
+      splitSpy.mockRestore();
+    }
+  });
+
+  it("does not split at all until lineCount or getLineText is actually read", () => {
+    const splitSpy = vi.spyOn(String.prototype, "split");
+
+    try {
+      createLineJumpEditorSnapshot("a\nb\nc");
+
+      expect(splitSpy).not.toHaveBeenCalled();
+    } finally {
+      splitSpy.mockRestore();
+    }
   });
 });

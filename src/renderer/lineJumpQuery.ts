@@ -79,17 +79,36 @@ export function documentLineStartOffset(
   return offset;
 }
 
-/**
- * Returns the raw text of a 1-based `line` in `content` (excluding its line
- * terminator), or null when `line` exceeds the document's line count. Uses
- * the same "\n"-only line model as {@link documentLineStartOffset}.
- */
-export function documentLineText(content: string, line: number): string | null {
-  const lines = content.split("\n");
+export interface LineJumpEditorSnapshot {
+  readonly lineCount: number;
+  /** Returns "" for an out-of-range line rather than throwing. */
+  readonly getLineText: (line: number) => string;
+}
 
-  if (line < 1 || line > lines.length) {
-    return null;
+/**
+ * Builds a lazily-split, per-call-cheap accessor over `content` (#148). The
+ * "\n" split — the expensive part — runs at most once, on first access to
+ * `lineCount` or `getLineText`, and is then reused for every further access
+ * on this same snapshot. Candidate generation can call `getLineText` up to
+ * `maxCandidates` times per keystroke; without this, each call would
+ * re-split the whole document.
+ */
+export function createLineJumpEditorSnapshot(
+  content: string
+): LineJumpEditorSnapshot {
+  let lines: readonly string[] | null = null;
+
+  function resolveLines(): readonly string[] {
+    if (lines === null) {
+      lines = content.split("\n");
+    }
+    return lines;
   }
 
-  return lines[line - 1];
+  return {
+    get lineCount() {
+      return resolveLines().length;
+    },
+    getLineText: (line) => resolveLines()[line - 1] ?? ""
+  };
 }

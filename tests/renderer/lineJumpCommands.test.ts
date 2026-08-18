@@ -20,14 +20,12 @@ const executionOptions = { source: "commandPalette" } as const;
 function registerLineJumpCommandSet(
   registry: CommandRegistry,
   overrides: Partial<{
-    canGoToLine: (line: number) => boolean;
     goToLine: (line: number) => void;
   }> = {}
 ): void {
   registerLineJumpCommands(
     registry,
     {
-      canGoToLine: () => true,
       goToLine: () => undefined,
       ...overrides
     },
@@ -60,6 +58,14 @@ describe("line jump commands", () => {
     expect(goToLineCommandWhen).toEqual({ key: "editor.kind.markdown" });
   });
 
+  it("declares no isEnabled: range is not a registry enablement gate (#148)", () => {
+    const registry = new CommandRegistry();
+
+    registerLineJumpCommandSet(registry);
+
+    expect(registry.get(editorCommandIds.goToLine)?.isEnabled).toBeUndefined();
+  });
+
   it("routes execution to the controller's goToLine with the 1-based line argument", async () => {
     const registry = new CommandRegistry();
     const goToLine = vi.fn();
@@ -72,14 +78,13 @@ describe("line jump commands", () => {
     expect(goToLine).toHaveBeenCalledWith(42);
   });
 
-  it("reports enablement from the controller's canGoToLine, per candidate line", () => {
+  it("is enabled for any candidate line number as long as editor.kind.markdown holds — range is not checked here", () => {
     const registry = new CommandRegistry();
-    const canGoToLine = vi.fn((line: number) => line <= 10);
 
-    registerLineJumpCommandSet(registry, { canGoToLine });
+    registerLineJumpCommandSet(registry);
 
     expect(registry.isEnabled(editorCommandIds.goToLine, 5)).toBe(true);
-    expect(registry.isEnabled(editorCommandIds.goToLine, 11)).toBe(false);
+    expect(registry.isEnabled(editorCommandIds.goToLine, 99999999)).toBe(true);
   });
 
   it("rejects execution via the registry when the live context is not editor.kind.markdown, without running the body", async () => {
@@ -95,54 +100,50 @@ describe("line jump commands", () => {
     expect(goToLine).not.toHaveBeenCalled();
   });
 
-  it("rejects an out-of-range target at the registry boundary (command.ignored), even with a markdown editor active", async () => {
-    const registry = new CommandRegistry();
-    const goToLine = vi.fn();
-
-    registerLineJumpCommandSet(registry, {
-      goToLine,
-      canGoToLine: (line) => line <= 100
-    });
-    registry.setCommandContextProvider(() => ({ "editor.kind.markdown": true }));
-
-    await expect(
-      registry.execute(editorCommandIds.goToLine, executionOptions, 99999)
-    ).rejects.toBeInstanceOf(CommandDisabledError);
-    expect(goToLine).not.toHaveBeenCalled();
-  });
-
-  it("emits command.ignored (not command.blocked) for a direct out-of-range execution", async () => {
+  it("emits command.ignored (not command.invoked) when editor.kind.markdown is false, regardless of the line argument", async () => {
     const registry = new CommandRegistry();
     const ignored = vi.fn();
+    const invoked = vi.fn();
 
-    registerLineJumpCommandSet(registry, { canGoToLine: () => false });
-    registry.setCommandContextProvider(() => ({ "editor.kind.markdown": true }));
+    registerLineJumpCommandSet(registry);
+    registry.setCommandContextProvider(() => ({ "editor.kind.markdown": false }));
     registry.setOnCommandIgnored(ignored);
+    registry.setOnCommandInvoked(invoked);
 
     await expect(
-      registry.execute(editorCommandIds.goToLine, executionOptions, 99999)
+      registry.execute(editorCommandIds.goToLine, executionOptions, 1)
     ).rejects.toBeInstanceOf(CommandDisabledError);
 
     expect(ignored).toHaveBeenCalledWith({
       commandId: "editor.line.goTo",
       source: "commandPalette"
     });
+    expect(invoked).not.toHaveBeenCalled();
   });
 
-  it("emits command.invoked for a successful execution", async () => {
+  it("does NOT reject an out-of-range target at the registry boundary — it reaches the body and emits command.invoked (#148)", async () => {
     const registry = new CommandRegistry();
+    const goToLine = vi.fn();
     const invoked = vi.fn();
+    const ignored = vi.fn();
 
-    registerLineJumpCommandSet(registry);
+    registerLineJumpCommandSet(registry, { goToLine });
     registry.setCommandContextProvider(() => ({ "editor.kind.markdown": true }));
     registry.setOnCommandInvoked(invoked);
+    registry.setOnCommandIgnored(ignored);
 
-    await registry.execute(editorCommandIds.goToLine, executionOptions, 1);
+    await registry.execute(editorCommandIds.goToLine, executionOptions, 99999);
 
+    // Range validation is the command body's job (the controller's
+    // goToLine, wired in App.tsx to silently no-op past the document's line
+    // count) — the registry boundary itself does not know or care whether
+    // 99999 is in range, so it is reached and invoked normally.
+    expect(goToLine).toHaveBeenCalledWith(99999);
     expect(invoked).toHaveBeenCalledWith({
       commandId: "editor.line.goTo",
       source: "commandPalette"
     });
+    expect(ignored).not.toHaveBeenCalled();
   });
 
   it("creates localized command titles from command i18n keys", () => {

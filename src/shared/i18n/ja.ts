@@ -49,6 +49,7 @@ export const jaTranslations = {
   "commandPalette.lineJump.fullWidthDigits": "半角数字で入力してください",
   "commandPalette.lineJump.goToLine": "{line}行目へ移動",
   "commandPalette.lineJump.invalid": "有効な行番号を入力してください",
+  "commandPalette.lineJump.moreCandidates": "ほかに{count}件の候補があります",
   "commandPalette.lineJump.outOfRange": "行番号が範囲外です",
   "commandPalette.noResults": "一致するコマンドがありません",
   "commandPalette.reserved.file": "ファイルクイックオープンはまだ使用できません",

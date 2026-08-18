@@ -30,7 +30,7 @@ import {
   resolveLineJumpPaletteState,
   type LineJumpPaletteState
 } from "./lineJumpPaletteState";
-import { formatLineJumpLinePreview } from "./lineJumpPreview";
+import type { LineJumpEditorSnapshot } from "./lineJumpQuery";
 import {
   parseQuickAccessInput,
   type QuickAccessMode
@@ -64,13 +64,16 @@ export interface CommandPaletteProps {
    */
   initialInputValue?: string;
   /**
-   * Returns the raw text of `line` (1-based) in the active editor, for the
-   * line jump result's preview (#140 polish), or null when unavailable.
-   * Optional/defaulted so callers that don't need a preview (and existing
-   * tests) are unaffected; formatting (trim/truncate/empty-line detection)
-   * happens in `formatLineJumpLinePreview`, not here.
+   * Line count / line text of the active line-addressable editor, for line
+   * jump candidate generation and preview (#140, expanded to prefix
+   * candidates in #148); null when there is no such editor active. Optional/
+   * defaulted so callers that don't need line jump (and existing tests) are
+   * unaffected. The Palette never inspects editor/document internals
+   * itself — App.tsx supplies this, typically via
+   * `createLineJumpEditorSnapshot`, which caches the "\n" split so up to
+   * `maxCandidates` preview lookups per keystroke stay cheap.
    */
-  resolveLineJumpPreviewLine?: (line: number) => string | null;
+  lineJumpEditorSnapshot?: LineJumpEditorSnapshot | null;
 }
 
 const defaultInputValue = ">";
@@ -243,18 +246,33 @@ export function CommandPalette({
   onBlockedCommand,
   onClose,
   initialInputValue = defaultInputValue,
-  resolveLineJumpPreviewLine = () => null
+  lineJumpEditorSnapshot = null
 }: CommandPaletteProps): JSX.Element {
   const [snapshot] = useState<CommandContext>(() => commandContext);
   const [inputValue, setInputValue] = useState(initialInputValue);
-  const [selectedIndex, setSelectedIndex] = useState<number | null>(() =>
-    firstEnabledCommandPaletteIndex(
+  const [selectedIndex, setSelectedIndex] = useState<number | null>(() => {
+    const initialParsed = parseQuickAccessInput(initialInputValue);
+
+    if (initialParsed.mode === "line") {
+      const initialState = resolveLineJumpPaletteState(
+        initialParsed.query,
+        lineJumpEditorSnapshot
+      );
+
+      return initialState.kind === "executable" ? 0 : null;
+    }
+
+    if (initialParsed.mode !== "command") {
+      return null;
+    }
+
+    return firstEnabledCommandPaletteIndex(
       filterCommandPaletteEntries(
         listCommandPaletteEntries(commandRegistry, snapshot),
         ""
       )
-    )
-  );
+    );
+  });
   const inputRef = useRef<HTMLInputElement | null>(null);
   const selectedItemRef = useRef<HTMLLIElement | null>(null);
 
@@ -279,51 +297,52 @@ export function CommandPalette({
       : [];
   const lineJumpState: LineJumpPaletteState | null =
     mode === "line"
-      ? resolveLineJumpPaletteState(
-          query,
-          snapshot["editor.kind.markdown"] === true,
-          (line) =>
-            commandRegistry.isEnabledForContext(
-              editorCommandIds.goToLine,
-              snapshot,
-              line
-            )
-        )
+      ? resolveLineJumpPaletteState(query, lineJumpEditorSnapshot)
       : null;
-  const lineJumpPreviewText =
-    lineJumpState?.kind === "executable"
-      ? resolveLineJumpPreviewLine(lineJumpState.line)
-      : null;
-  const lineJumpPreview =
-    lineJumpPreviewText !== null
-      ? formatLineJumpLinePreview(lineJumpPreviewText)
-      : null;
-  // The Palette only ever renders a single line-jump result row (executable
-  // or disabled); treat it as selected so it looks consistent with the
-  // footer's Enter-hint state and the command-mode selected row (#140 polish).
-  const lineJumpResultSelected =
-    lineJumpState?.kind === "executable" || lineJumpState?.kind === "disabled";
+  const lineJumpCandidates =
+    lineJumpState?.kind === "executable" ? lineJumpState.candidates : null;
+  // ArrowUp/ArrowDown and scroll-into-view operate on whichever list is
+  // showing: command entries, line jump candidates, or (for the disabled
+  // row, which is always exactly one item) a length of 1.
+  const selectionLength =
+    mode === "command"
+      ? entries.length
+      : (lineJumpCandidates?.length ?? (lineJumpState?.kind === "disabled" ? 1 : 0));
 
   useEffect(() => {
     scrollCommandPaletteSelectionIntoView(selectedItemRef.current);
-  }, [entries.length, mode, query, selectedIndex]);
+  }, [selectionLength, mode, query, selectedIndex]);
 
   function updateInput(value: string): void {
     setInputValue(value);
 
     const resolved = parseQuickAccessInput(value);
 
-    if (resolved.mode !== "command") {
-      setSelectedIndex(null);
+    if (resolved.mode === "command") {
+      const nextEntries = filterCommandPaletteEntries(
+        listCommandPaletteEntries(commandRegistry, snapshot),
+        resolved.query
+      );
+
+      setSelectedIndex(firstEnabledCommandPaletteIndex(nextEntries));
       return;
     }
 
-    const nextEntries = filterCommandPaletteEntries(
-      listCommandPaletteEntries(commandRegistry, snapshot),
-      resolved.query
-    );
+    if (resolved.mode === "line") {
+      // Selection always resets to the first candidate on a query change
+      // (never preserves the previous index — a different query means a
+      // different candidate list, so the old index could point at an
+      // unrelated line, per #148).
+      const nextState = resolveLineJumpPaletteState(
+        resolved.query,
+        lineJumpEditorSnapshot
+      );
 
-    setSelectedIndex(firstEnabledCommandPaletteIndex(nextEntries));
+      setSelectedIndex(nextState.kind === "executable" ? 0 : null);
+      return;
+    }
+
+    setSelectedIndex(null);
   }
 
   function executeEntryAt(index: number): void {
@@ -341,6 +360,17 @@ export function CommandPalette({
     onExecuteCommand(entry.id);
   }
 
+  function executeLineJumpCandidateAt(index: number): void {
+    const candidate = lineJumpCandidates?.[index];
+
+    if (!candidate) {
+      return;
+    }
+
+    onExecuteCommand(editorCommandIds.goToLine, candidate.line);
+  }
+
+  /** Handles Enter for line mode: the disabled row, or the selected candidate. */
   function executeLineJumpResult(): void {
     if (!lineJumpState) {
       return;
@@ -352,7 +382,7 @@ export function CommandPalette({
     }
 
     if (lineJumpState.kind === "executable") {
-      onExecuteCommand(editorCommandIds.goToLine, lineJumpState.line);
+      executeLineJumpCandidateAt(selectedIndex ?? 0);
     }
   }
 
@@ -369,14 +399,14 @@ export function CommandPalette({
       case "ArrowDown": {
         event.preventDefault();
         setSelectedIndex((current) =>
-          moveCommandPaletteSelection(entries.length, current, 1)
+          moveCommandPaletteSelection(selectionLength, current, 1)
         );
         return;
       }
       case "ArrowUp": {
         event.preventDefault();
         setSelectedIndex((current) =>
-          moveCommandPaletteSelection(entries.length, current, -1)
+          moveCommandPaletteSelection(selectionLength, current, -1)
         );
         return;
       }
@@ -459,16 +489,42 @@ export function CommandPalette({
           </button>
         </div>
         {lineJumpState ? (
-          lineJumpResultSelected ? (
+          lineJumpState.kind === "executable" ? (
+            <ul className="commandPaletteList" role="listbox">
+              {lineJumpState.candidates.map((candidate, index) => (
+                <li
+                  key={candidate.line}
+                  role="option"
+                  aria-selected={index === selectedIndex}
+                  aria-disabled="false"
+                  ref={index === selectedIndex ? selectedItemRef : null}
+                  className={commandPaletteItemClassName(
+                    index === selectedIndex,
+                    true
+                  )}
+                  onClick={() => executeLineJumpCandidateAt(index)}
+                >
+                  <div className="commandPaletteItemPrimary">
+                    {translate("commandPalette.lineJump.goToLine", {
+                      line: candidate.line
+                    })}
+                  </div>
+                  <div className="commandPaletteItemSecondary">
+                    {candidate.preview.kind === "empty"
+                      ? translate("commandPalette.lineJump.emptyLine")
+                      : candidate.preview.text}
+                  </div>
+                </li>
+              ))}
+            </ul>
+          ) : lineJumpState.kind === "disabled" ? (
             <ul className="commandPaletteList" role="listbox">
               <li
                 role="option"
-                aria-selected={lineJumpResultSelected}
-                aria-disabled={lineJumpState.kind === "disabled"}
-                className={commandPaletteItemClassName(
-                  lineJumpResultSelected,
-                  lineJumpState.kind === "executable"
-                )}
+                aria-selected="true"
+                aria-disabled="true"
+                ref={selectedItemRef}
+                className={commandPaletteItemClassName(true, false)}
                 onClick={executeLineJumpResult}
               >
                 <div className="commandPaletteItemPrimary">
@@ -476,13 +532,6 @@ export function CommandPalette({
                     line: lineJumpState.line
                   })}
                 </div>
-                {lineJumpPreview ? (
-                  <div className="commandPaletteItemSecondary">
-                    {lineJumpPreview.kind === "empty"
-                      ? translate("commandPalette.lineJump.emptyLine")
-                      : lineJumpPreview.text}
-                  </div>
-                ) : null}
               </li>
             </ul>
           ) : (
