@@ -15,7 +15,8 @@ export const editorCommandIds = {
   cutSelection: defineCommandId("editor.selection.cut"),
   copySelection: defineCommandId("editor.selection.copy"),
   pasteSelection: defineCommandId("editor.selection.paste"),
-  selectAllSelection: defineCommandId("editor.selection.selectAll")
+  selectAllSelection: defineCommandId("editor.selection.selectAll"),
+  goToLine: defineCommandId<readonly [number], void>("editor.line.goTo")
 } as const;
 
 export const editCommandIds = [

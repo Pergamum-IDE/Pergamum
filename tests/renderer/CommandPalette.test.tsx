@@ -19,6 +19,7 @@ import {
   resolveCommandPaletteEnterSelection,
   type CommandPaletteEntry
 } from "../../src/renderer/commandPaletteEntries";
+import { registerLineJumpCommands } from "../../src/renderer/lineJumpCommands";
 
 const translate: Translate = (key) => key;
 const realTranslateEn: Translate = (key, values) => t("en", key, values);
@@ -70,6 +71,9 @@ function renderPalette(overrides: {
   commandContext?: CommandContext;
   translate?: Translate;
   initialInputValue?: string;
+  onExecuteCommand?: (commandId: unknown, ...args: readonly unknown[]) => void;
+  onBlockedCommand?: (commandId: unknown) => void;
+  resolveLineJumpPreviewLine?: (line: number) => string | null;
 } = {}): string {
   return renderToStaticMarkup(
     React.createElement(CommandPalette, {
@@ -78,11 +82,27 @@ function renderPalette(overrides: {
       isComposing: notComposing,
       commandContext: overrides.commandContext ?? {},
       initialInputValue: overrides.initialInputValue,
-      onExecuteCommand: noop,
-      onBlockedCommand: noop,
-      onClose: noop
+      onExecuteCommand: overrides.onExecuteCommand ?? noop,
+      onBlockedCommand: overrides.onBlockedCommand ?? noop,
+      onClose: noop,
+      resolveLineJumpPreviewLine: overrides.resolveLineJumpPreviewLine
     })
   );
+}
+
+function buildLineJumpRegistry(canGoToLine: (line: number) => boolean): CommandRegistry {
+  const registry = new CommandRegistry();
+
+  registerLineJumpCommands(
+    registry,
+    { canGoToLine, goToLine: () => undefined },
+    {
+      goToLine: "Go to Line",
+      goToLineDescription: "Move the cursor to a line in the active editor"
+    }
+  );
+
+  return registry;
 }
 
 describe("CommandPalette", () => {
@@ -476,8 +496,6 @@ describe("CommandPalette reserved Quick Access modes (#145)", () => {
     { initialInputValue: "abc", mode: "file", key: "commandPalette.reserved.file" },
     { initialInputValue: " abc", mode: "file", key: "commandPalette.reserved.file" },
     { initialInputValue: "%abc", mode: "file", key: "commandPalette.reserved.file" },
-    { initialInputValue: ":42", mode: "line", key: "commandPalette.reserved.line" },
-    { initialInputValue: "：42", mode: "line", key: "commandPalette.reserved.line" },
     { initialInputValue: "#intro", mode: "heading", key: "commandPalette.reserved.heading" },
     { initialInputValue: "＃intro", mode: "heading", key: "commandPalette.reserved.heading" },
     { initialInputValue: "@alice", mode: "glossary", key: "commandPalette.reserved.glossary" },
@@ -553,17 +571,25 @@ describe("CommandPalette reserved Quick Access modes (#145)", () => {
     expect(resolveCommandPaletteEnterSelection([], 5)).toBeNull();
   });
 
-  it("still recognizes ':', '#', and '@' as file-mode-adjacent reserved prefixes, not as file queries", () => {
+  it("still recognizes '#' and '@' as file-mode-adjacent reserved prefixes, not as file queries", () => {
     // Unknown leading characters (e.g. "%") fall back to file mode per
-    // #139, but ':' / '#' / '@' are reserved prefixes with their own
-    // messages, distinct from the plain no-prefix file message.
+    // #139, but '#' / '@' are reserved prefixes with their own messages,
+    // distinct from the plain no-prefix file message. ':' is no longer
+    // reserved (#140) — covered separately below.
     const fileMarkup = renderPalette({ initialInputValue: "%abc" });
-    const lineMarkup = renderPalette({ initialInputValue: ":abc" });
+    const headingMarkup = renderPalette({ initialInputValue: "#abc" });
 
     expect(fileMarkup).toContain("commandPalette.reserved.file");
-    expect(fileMarkup).not.toContain("commandPalette.reserved.line");
-    expect(lineMarkup).toContain("commandPalette.reserved.line");
-    expect(lineMarkup).not.toContain("commandPalette.reserved.file");
+    expect(fileMarkup).not.toContain("commandPalette.reserved.heading");
+    expect(headingMarkup).toContain("commandPalette.reserved.heading");
+    expect(headingMarkup).not.toContain("commandPalette.reserved.file");
+  });
+
+  it("no longer treats ':' as a reserved mode (#140): it shows a line-jump message instead", () => {
+    const markup = renderPalette({ initialInputValue: ":abc" });
+
+    expect(markup).toContain("commandPalette.lineJump.invalid");
+    expect(markup).not.toContain("commandPalette.reserved");
   });
 });
 
@@ -580,11 +606,16 @@ describe("CommandPalette snapshot and UI-level block wiring", () => {
     expect(source).not.toContain("resolveQuickAccessInput");
   });
 
-  it("does not implement reserved-mode actions — only the reserved message and mode dispatch (#145)", () => {
-    // Reserved modes are recognized (for the reserved-message switch and
-    // footer suppression) but must not gain their own execution logic here;
-    // that belongs to the future mode issues (#140-#143).
-    expect(source).not.toContain("lineJump");
+  it("implements line mode through the imported pure resolvers, not ad-hoc logic (#140)", () => {
+    expect(source).toContain("resolveLineJumpPaletteState(");
+    expect(source).toContain("resolveLineJumpFooterModel(");
+    expect(source).toContain("lineJumpMessageKey(");
+  });
+
+  it("does not implement the remaining reserved-mode actions — only the reserved message and mode dispatch", () => {
+    // File, heading, and glossary remain reserved (for the reserved-message
+    // switch and footer suppression) but must not gain their own execution
+    // logic here; that belongs to the future mode issues (#141-#143).
     expect(source).not.toContain("symbolJump");
     expect(source).not.toContain("headingSearch");
     expect(source).not.toContain("glossarySearch");
@@ -629,6 +660,456 @@ describe("CommandPalette snapshot and UI-level block wiring", () => {
     expect(body).toContain("if (!entry.enabled) {");
     expect(body.indexOf("onBlockedCommand(entry.id)")).toBeLessThan(
       body.indexOf("onExecuteCommand(entry.id)")
+    );
+  });
+});
+
+describe("CommandPalette line jump mode (#140)", () => {
+  const source = readFileSync("src/renderer/CommandPalette.tsx", "utf8");
+
+  it("does not show command search results in line mode", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      initialInputValue: ":42"
+    });
+
+    expect(markup).not.toContain("commandPaletteEmpty");
+    expect(markup).not.toContain("commandPalette.noResults");
+  });
+
+  it("shows an executable 'Go to line N' result for a valid, in-range query", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      commandContext: { "editor.kind.markdown": true },
+      translate: realTranslateEn,
+      initialInputValue: ":42"
+    });
+
+    expect(markup).toContain("Go to line 42");
+    expect(markup).toContain("commandPaletteItemSelected");
+    expect(markup).toContain('aria-selected="true"');
+    expect(markup).not.toContain("commandPaletteItemDisabled");
+    expect(markup).not.toContain("commandPaletteFooterHintUnavailable");
+  });
+
+  it("normalizes the displayed line number for :007 and :1,000", () => {
+    const registry = buildLineJumpRegistry(() => true);
+    const context = { "editor.kind.markdown": true };
+
+    expect(
+      renderPalette({
+        registry,
+        commandContext: context,
+        translate: realTranslateEn,
+        initialInputValue: ":007"
+      })
+    ).toContain("Go to line 7");
+    expect(
+      renderPalette({
+        registry,
+        commandContext: context,
+        translate: realTranslateEn,
+        initialInputValue: ":1,000"
+      })
+    ).toContain("Go to line 1000");
+  });
+
+  it("shows Enter a line number for an empty query", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      translate: realTranslateEn,
+      initialInputValue: ":"
+    });
+
+    expect(markup).toContain("Enter a line number");
+  });
+
+  it("shows Use half-width digits for full-width digit queries", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      translate: realTranslateEn,
+      initialInputValue: ":１２"
+    });
+
+    expect(markup).toContain("Use half-width digits");
+  });
+
+  it("shows Enter a whole line number for decimal queries", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      translate: realTranslateEn,
+      initialInputValue: ":1.5"
+    });
+
+    expect(markup).toContain("Enter a whole line number");
+  });
+
+  it("shows Enter a valid line number for invalid and unsafe-integer queries", () => {
+    const invalidMarkup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      translate: realTranslateEn,
+      initialInputValue: ":abc"
+    });
+    const unsafeMarkup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      translate: realTranslateEn,
+      initialInputValue: ":9,007,199,254,740,992"
+    });
+
+    expect(invalidMarkup).toContain("Enter a valid line number");
+    expect(unsafeMarkup).toContain("Enter a valid line number");
+  });
+
+  it("shows Line number is out of range when the query is valid but exceeds the active editor", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => false),
+      commandContext: { "editor.kind.markdown": true },
+      translate: realTranslateEn,
+      initialInputValue: ":99999"
+    });
+
+    expect(markup).toContain("Line number is out of range");
+    expect(markup).not.toContain("commandPaletteItem\"");
+  });
+
+  it("treats Number.MAX_SAFE_INTEGER as parser-valid but normally out of range", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => false),
+      commandContext: { "editor.kind.markdown": true },
+      translate: realTranslateEn,
+      initialInputValue: ":9,007,199,254,740,991"
+    });
+
+    expect(markup).toContain("Line number is out of range");
+  });
+
+  it("renders a disabled line-jump result (not a parser message) when the active tab is not an editor", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      commandContext: { "editor.kind.markdown": false },
+      translate: realTranslateEn,
+      initialInputValue: ":1"
+    });
+
+    expect(markup).toContain("Go to line 1");
+    expect(markup).toContain("commandPaletteItemDisabled");
+    expect(markup).toContain("commandPaletteItemSelected");
+    expect(markup).toContain('aria-selected="true"');
+    expect(markup).toContain('aria-disabled="true"');
+    expect(markup).toContain("This command is currently unavailable");
+    expect(markup).toContain("commandPaletteFooterHintUnavailable");
+  });
+
+  it("renders a disabled result, not the generic message, for a Glossary Editor active tab", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      commandContext: { "editor.kind.markdown": false, "editor.kind.glossary": true },
+      translate: realTranslateEn,
+      initialInputValue: ":1"
+    });
+
+    expect(markup).not.toContain("commandPalette.lineJump.invalid");
+    expect(markup).toContain("commandPaletteItemDisabled");
+  });
+
+  it("does not show a result count in line mode", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      commandContext: { "editor.kind.markdown": true },
+      initialInputValue: ":42"
+    });
+
+    expect(markup).not.toContain("commandPalette.footer.results");
+  });
+
+  it("executes the line-jump command with the normalized 1-based line on click, for an executable result", () => {
+    // No DOM click-simulation library in this repo (see the renderPalette
+    // doc comment), so click wiring is verified the same way the existing
+    // disabled-entry click test above does: by reading the source for the
+    // onClick prop and the callback body it points to.
+    const rowStart = source.indexOf('<li\n                role="option"');
+    const rowEnd = source.indexOf("</ul>", rowStart);
+    const rowBody = source.slice(rowStart, rowEnd);
+
+    expect(rowBody).toContain("onClick={executeLineJumpResult}");
+
+    const functionBody = source.slice(
+      source.indexOf("function executeLineJumpResult("),
+      source.indexOf("function handleKeyDown(")
+    );
+
+    expect(functionBody).toContain('if (lineJumpState.kind === "executable") {');
+    expect(functionBody).toContain(
+      "onExecuteCommand(editorCommandIds.goToLine, lineJumpState.line);"
+    );
+
+    // The render itself must not throw and must show the row this handler
+    // is attached to.
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      commandContext: { "editor.kind.markdown": true },
+      translate: realTranslateEn,
+      initialInputValue: ":42"
+    });
+
+    expect(markup).toContain("Go to line 42");
+  });
+
+  it("blocks (does not execute) a disabled line-jump result on Enter/click, emitting command.blocked semantics via onBlockedCommand", () => {
+    const body = source.slice(
+      source.indexOf("function executeLineJumpResult("),
+      source.indexOf("function handleKeyDown(")
+    );
+
+    expect(body).toContain('if (lineJumpState.kind === "disabled") {');
+    expect(body).toContain("onBlockedCommand(editorCommandIds.goToLine);");
+    expect(body.indexOf('kind === "disabled"')).toBeLessThan(
+      body.indexOf('kind === "executable"')
+    );
+  });
+
+  it("is a no-op for every message state (empty/invalid/unsafe/out-of-range) — no callback is called", () => {
+    const body = source.slice(
+      source.indexOf("function executeLineJumpResult("),
+      source.indexOf("function handleKeyDown(")
+    );
+
+    // Only "disabled" and "executable" branches call a callback; every
+    // other LineJumpPaletteState kind falls through without calling
+    // onExecuteCommand or onBlockedCommand.
+    expect(body.match(/onExecuteCommand\(/g)?.length).toBe(1);
+    expect(body.match(/onBlockedCommand\(/g)?.length).toBe(1);
+  });
+
+  it("routes Enter in line mode to executeLineJumpResult, not the command-mode entry resolver", () => {
+    const startIndex = source.indexOf('case "Enter": {');
+    const endIndex = source.indexOf("default:");
+    const body = source.slice(startIndex, endIndex);
+
+    expect(body).toContain('if (mode === "line") {');
+    expect(body.indexOf('if (mode === "line")')).toBeLessThan(
+      body.indexOf("resolveCommandPaletteEnterSelection(")
+    );
+  });
+
+  it("preserves existing command mode, and file/heading/glossary reserved modes", () => {
+    const commandMarkup = renderPalette({ initialInputValue: ">save" });
+    const fileMarkup = renderPalette({ initialInputValue: "abc" });
+    const headingMarkup = renderPalette({ initialInputValue: "#intro" });
+    const glossaryMarkup = renderPalette({ initialInputValue: "@alice" });
+
+    expect(commandMarkup).toContain("commandPaletteList");
+    expect(fileMarkup).toContain("commandPalette.reserved.file");
+    expect(headingMarkup).toContain("commandPalette.reserved.heading");
+    expect(glossaryMarkup).toContain("commandPalette.reserved.glossary");
+  });
+});
+
+describe("CommandPalette line jump result preview (#140 polish)", () => {
+  it("shows a preview of the target line as the executable result's secondary line", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      commandContext: { "editor.kind.markdown": true },
+      translate: realTranslateEn,
+      initialInputValue: ":42",
+      resolveLineJumpPreviewLine: (line) =>
+        line === 42 ? "const answer = 42;" : null
+    });
+
+    expect(markup).toContain("commandPaletteItemSecondary");
+    expect(markup).toContain("const answer = 42;");
+  });
+
+  it("truncates a long target line and appends the ASCII ellipsis", () => {
+    const longLine = "x".repeat(30);
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      commandContext: { "editor.kind.markdown": true },
+      initialInputValue: ":1",
+      resolveLineJumpPreviewLine: () => longLine
+    });
+
+    expect(markup).toContain(`${"x".repeat(20)}...`);
+    expect(markup).not.toContain("x".repeat(21));
+  });
+
+  it("does not truncate a short target line", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      commandContext: { "editor.kind.markdown": true },
+      initialInputValue: ":1",
+      resolveLineJumpPreviewLine: () => "short"
+    });
+
+    expect(markup).toContain(">short<");
+    expect(markup).not.toContain("...");
+  });
+
+  it("trims leading whitespace from the preview without affecting document content", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      commandContext: { "editor.kind.markdown": true },
+      initialInputValue: ":1",
+      resolveLineJumpPreviewLine: () => "    indented"
+    });
+
+    expect(markup).toContain(">indented<");
+    expect(markup).not.toContain(">    indented<");
+  });
+
+  it("shows Empty line / 空行 for an empty or whitespace-only target line", () => {
+    const englishMarkup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      commandContext: { "editor.kind.markdown": true },
+      translate: realTranslateEn,
+      initialInputValue: ":1",
+      resolveLineJumpPreviewLine: () => "   "
+    });
+    const japaneseMarkup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      commandContext: { "editor.kind.markdown": true },
+      translate: realTranslateJa,
+      initialInputValue: ":1",
+      resolveLineJumpPreviewLine: () => ""
+    });
+
+    expect(englishMarkup).toContain("Empty line");
+    expect(japaneseMarkup).toContain("空行");
+  });
+
+  it("does not show a preview for invalid, out-of-range, or disabled line states", () => {
+    const previewLine = vi.fn(() => "should not be shown");
+
+    const invalidMarkup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      commandContext: { "editor.kind.markdown": true },
+      initialInputValue: ":abc",
+      resolveLineJumpPreviewLine: previewLine
+    });
+    const outOfRangeMarkup = renderPalette({
+      registry: buildLineJumpRegistry(() => false),
+      commandContext: { "editor.kind.markdown": true },
+      initialInputValue: ":99999",
+      resolveLineJumpPreviewLine: previewLine
+    });
+    const disabledMarkup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      commandContext: { "editor.kind.markdown": false },
+      initialInputValue: ":1",
+      resolveLineJumpPreviewLine: previewLine
+    });
+
+    expect(invalidMarkup).not.toContain("commandPaletteItemSecondary");
+    expect(outOfRangeMarkup).not.toContain("commandPaletteItemSecondary");
+    expect(disabledMarkup).not.toContain("commandPaletteItemSecondary");
+    expect(previewLine).not.toHaveBeenCalled();
+  });
+
+  it("omits the secondary line entirely when no preview resolver is supplied (default prop)", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      commandContext: { "editor.kind.markdown": true },
+      translate: realTranslateEn,
+      initialInputValue: ":1"
+    });
+
+    expect(markup).toContain("Go to line 1");
+    expect(markup).not.toContain("commandPaletteItemSecondary");
+  });
+
+  it("does not change line-jump command execution behavior: click/Enter wiring is unaffected by the preview", () => {
+    const source = readFileSync("src/renderer/CommandPalette.tsx", "utf8");
+    const functionBody = source.slice(
+      source.indexOf("function executeLineJumpResult("),
+      source.indexOf("function handleKeyDown(")
+    );
+
+    expect(functionBody).not.toContain("Preview");
+    expect(functionBody).not.toContain("resolveLineJumpPreviewLine");
+    expect(functionBody).toContain(
+      "onExecuteCommand(editorCommandIds.goToLine, lineJumpState.line);"
+    );
+  });
+});
+
+describe("CommandPalette line jump result selected state (#140 polish)", () => {
+  const source = readFileSync("src/renderer/CommandPalette.tsx", "utf8");
+
+  it("marks an executable line-jump result as selected, with enabled styling", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      commandContext: { "editor.kind.markdown": true },
+      translate: realTranslateEn,
+      initialInputValue: ":42"
+    });
+
+    expect(markup).toContain('aria-selected="true"');
+    expect(markup).toContain("commandPaletteItemSelected");
+    expect(markup).not.toContain("commandPaletteItemDisabled");
+    expect(markup).not.toContain("commandPaletteFooterHintUnavailable");
+  });
+
+  it("marks a disabled line-jump result as selected AND disabled, dimming the Enter hint", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      commandContext: { "editor.kind.markdown": false },
+      translate: realTranslateEn,
+      initialInputValue: ":1"
+    });
+
+    expect(markup).toContain('aria-selected="true"');
+    expect(markup).toContain('aria-disabled="true"');
+    expect(markup).toContain("commandPaletteItemSelected");
+    expect(markup).toContain("commandPaletteItemDisabled");
+    expect(markup).toContain("commandPaletteFooterHintUnavailable");
+    expect(markup).toContain("This command is currently unavailable");
+  });
+
+  it("still renders no result row (and no selected state) for parser-invalid or out-of-range message states", () => {
+    const invalidMarkup = renderPalette({
+      registry: buildLineJumpRegistry(() => true),
+      initialInputValue: ":abc"
+    });
+    const outOfRangeMarkup = renderPalette({
+      registry: buildLineJumpRegistry(() => false),
+      commandContext: { "editor.kind.markdown": true },
+      initialInputValue: ":99999"
+    });
+
+    for (const markup of [invalidMarkup, outOfRangeMarkup]) {
+      expect(markup).not.toContain("commandPaletteList");
+      expect(markup).not.toContain("commandPaletteItem");
+      expect(markup).not.toContain("aria-selected");
+    }
+  });
+
+  it("reuses commandPaletteItemClassName(selected, enabled), not a bespoke class string", () => {
+    const rowStart = source.indexOf('<li\n                role="option"');
+    const rowEnd = source.indexOf("</ul>", rowStart);
+    const rowBody = source.slice(rowStart, rowEnd);
+
+    expect(rowBody).toContain("aria-selected={lineJumpResultSelected}");
+    expect(rowBody).toContain(
+      'className={commandPaletteItemClassName(\n                  lineJumpResultSelected,\n                  lineJumpState.kind === "executable"\n                )}'
+    );
+  });
+
+  it("does not change Enter behavior: executable executes, disabled blocks, message states are no-ops", () => {
+    // This is a pure visual/ARIA change to the row's selected state — Enter
+    // routing (executeLineJumpResult) must be untouched. Covered functionally
+    // above (#140 / #140 preview); this pins the source-level invariant that
+    // the new selection variable is display-only.
+    const functionBody = source.slice(
+      source.indexOf("function executeLineJumpResult("),
+      source.indexOf("function handleKeyDown(")
+    );
+
+    expect(functionBody).not.toContain("lineJumpResultSelected");
+    expect(functionBody).toContain('if (lineJumpState.kind === "disabled") {');
+    expect(functionBody).toContain("onBlockedCommand(editorCommandIds.goToLine);");
+    expect(functionBody).toContain('if (lineJumpState.kind === "executable") {');
+    expect(functionBody).toContain(
+      "onExecuteCommand(editorCommandIds.goToLine, lineJumpState.line);"
     );
   });
 });

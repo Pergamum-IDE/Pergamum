@@ -9,6 +9,7 @@ import { registerApplicationCommands } from "../../src/renderer/applicationComma
 import { registerCommandPaletteCommands } from "../../src/renderer/commandPaletteCommands";
 import { registerEditorCommands } from "../../src/renderer/editorCommands";
 import { registerGlossaryCommands } from "../../src/renderer/glossaryCommands";
+import { registerLineJumpCommands } from "../../src/renderer/lineJumpCommands";
 import { registerGlossaryOccurrencesCommands } from "../../src/renderer/glossaryOccurrencesCommands";
 import { registerUtilityWindowCommands } from "../../src/renderer/utilityWindowCommands";
 import { registerWorkspaceCommands } from "../../src/renderer/workspaceCommands";
@@ -62,6 +63,17 @@ function buildCoreCommandRegistry(): CommandRegistry {
       copySelection: "Copy",
       pasteSelection: "Paste",
       selectAllSelection: "Select All"
+    }
+  );
+  registerLineJumpCommands(
+    registry,
+    {
+      canGoToLine: () => true,
+      goToLine: () => undefined
+    },
+    {
+      goToLine: "Go to Line",
+      goToLineDescription: "Move the cursor to a line in the active editor"
     }
   );
   registerWorkspaceCommands(

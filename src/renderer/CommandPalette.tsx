@@ -7,6 +7,7 @@ import {
 } from "react";
 import type { CommandContext } from "../shared/commandEnablement";
 import type { CommandId, CommandRegistry } from "../shared/commandRegistry";
+import { editorCommandIds } from "../shared/commandIds";
 import type {
   Translate,
   TranslationKey,
@@ -24,6 +25,13 @@ import {
   resolveCommandPaletteEnterSelection
 } from "./commandPaletteEntries";
 import {
+  lineJumpMessageKey,
+  resolveLineJumpFooterModel,
+  resolveLineJumpPaletteState,
+  type LineJumpPaletteState
+} from "./lineJumpPaletteState";
+import { formatLineJumpLinePreview } from "./lineJumpPreview";
+import {
   parseQuickAccessInput,
   type QuickAccessMode
 } from "./quickAccessInputParser";
@@ -40,7 +48,10 @@ export interface CommandPaletteProps {
    * stable until the Palette closes, even if the live context changes.
    */
   commandContext: CommandContext;
-  onExecuteCommand: (commandId: CommandId<readonly unknown[], unknown>) => void;
+  onExecuteCommand: (
+    commandId: CommandId<readonly unknown[], unknown>,
+    ...args: readonly unknown[]
+  ) => void;
   /** Debug-only UI-level block diagnostic, distinct from `command.ignored`. */
   onBlockedCommand: (commandId: CommandId<readonly unknown[], unknown>) => void;
   onClose: () => void;
@@ -52,6 +63,14 @@ export interface CommandPaletteProps {
    * keystrokes cannot be simulated against a static render.
    */
   initialInputValue?: string;
+  /**
+   * Returns the raw text of `line` (1-based) in the active editor, for the
+   * line jump result's preview (#140 polish), or null when unavailable.
+   * Optional/defaulted so callers that don't need a preview (and existing
+   * tests) are unaffected; formatting (trim/truncate/empty-line detection)
+   * happens in `formatLineJumpLinePreview`, not here.
+   */
+  resolveLineJumpPreviewLine?: (line: number) => string | null;
 }
 
 const defaultInputValue = ">";
@@ -71,7 +90,9 @@ function reservedPlaceholderKey(mode: QuickAccessMode): TranslationKey | null {
     case "file":
       return "commandPalette.reserved.file";
     case "line":
-      return "commandPalette.reserved.line";
+      // Line mode is implemented (#140); it renders its own body instead of
+      // this reserved-placeholder text.
+      return null;
     case "heading":
       return "commandPalette.reserved.heading";
     case "glossary":
@@ -221,7 +242,8 @@ export function CommandPalette({
   onExecuteCommand,
   onBlockedCommand,
   onClose,
-  initialInputValue = defaultInputValue
+  initialInputValue = defaultInputValue,
+  resolveLineJumpPreviewLine = () => null
 }: CommandPaletteProps): JSX.Element {
   const [snapshot] = useState<CommandContext>(() => commandContext);
   const [inputValue, setInputValue] = useState(initialInputValue);
@@ -255,6 +277,32 @@ export function CommandPalette({
           query
         )
       : [];
+  const lineJumpState: LineJumpPaletteState | null =
+    mode === "line"
+      ? resolveLineJumpPaletteState(
+          query,
+          snapshot["editor.kind.markdown"] === true,
+          (line) =>
+            commandRegistry.isEnabledForContext(
+              editorCommandIds.goToLine,
+              snapshot,
+              line
+            )
+        )
+      : null;
+  const lineJumpPreviewText =
+    lineJumpState?.kind === "executable"
+      ? resolveLineJumpPreviewLine(lineJumpState.line)
+      : null;
+  const lineJumpPreview =
+    lineJumpPreviewText !== null
+      ? formatLineJumpLinePreview(lineJumpPreviewText)
+      : null;
+  // The Palette only ever renders a single line-jump result row (executable
+  // or disabled); treat it as selected so it looks consistent with the
+  // footer's Enter-hint state and the command-mode selected row (#140 polish).
+  const lineJumpResultSelected =
+    lineJumpState?.kind === "executable" || lineJumpState?.kind === "disabled";
 
   useEffect(() => {
     scrollCommandPaletteSelectionIntoView(selectedItemRef.current);
@@ -293,6 +341,21 @@ export function CommandPalette({
     onExecuteCommand(entry.id);
   }
 
+  function executeLineJumpResult(): void {
+    if (!lineJumpState) {
+      return;
+    }
+
+    if (lineJumpState.kind === "disabled") {
+      onBlockedCommand(editorCommandIds.goToLine);
+      return;
+    }
+
+    if (lineJumpState.kind === "executable") {
+      onExecuteCommand(editorCommandIds.goToLine, lineJumpState.line);
+    }
+  }
+
   function handleKeyDown(event: ReactKeyboardEvent<HTMLInputElement>): void {
     switch (event.key) {
       case "Escape": {
@@ -323,6 +386,11 @@ export function CommandPalette({
         }
         event.preventDefault();
 
+        if (mode === "line") {
+          executeLineJumpResult();
+          return;
+        }
+
         const entry = resolveCommandPaletteEnterSelection(
           entries,
           selectedIndex
@@ -346,13 +414,15 @@ export function CommandPalette({
   }
 
   const reservedKey = reservedPlaceholderKey(mode);
-  const footer = resolveCommandPaletteFooterModel({
-    mode,
-    query,
-    inputValue,
-    entries,
-    selectedIndex
-  });
+  const footer = lineJumpState
+    ? resolveLineJumpFooterModel(lineJumpState)
+    : resolveCommandPaletteFooterModel({
+        mode,
+        query,
+        inputValue,
+        entries,
+        selectedIndex
+      });
   const runHintClassName = footer.canRunSelected
     ? "commandPaletteFooterHint"
     : "commandPaletteFooterHint commandPaletteFooterHintUnavailable";
@@ -388,7 +458,41 @@ export function CommandPalette({
             ×
           </button>
         </div>
-        {reservedKey ? (
+        {lineJumpState ? (
+          lineJumpResultSelected ? (
+            <ul className="commandPaletteList" role="listbox">
+              <li
+                role="option"
+                aria-selected={lineJumpResultSelected}
+                aria-disabled={lineJumpState.kind === "disabled"}
+                className={commandPaletteItemClassName(
+                  lineJumpResultSelected,
+                  lineJumpState.kind === "executable"
+                )}
+                onClick={executeLineJumpResult}
+              >
+                <div className="commandPaletteItemPrimary">
+                  {translate("commandPalette.lineJump.goToLine", {
+                    line: lineJumpState.line
+                  })}
+                </div>
+                {lineJumpPreview ? (
+                  <div className="commandPaletteItemSecondary">
+                    {lineJumpPreview.kind === "empty"
+                      ? translate("commandPalette.lineJump.emptyLine")
+                      : lineJumpPreview.text}
+                  </div>
+                ) : null}
+              </li>
+            </ul>
+          ) : (
+            <div className="commandPaletteReservedPlaceholder">
+              {translate(
+                lineJumpMessageKey(lineJumpState) ?? "commandPalette.lineJump.invalid"
+              )}
+            </div>
+          )
+        ) : reservedKey ? (
           <div className="commandPaletteReservedPlaceholder">
             {translate(reservedKey)}
           </div>
