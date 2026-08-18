@@ -1,15 +1,15 @@
 /**
- * Foundation parser for the Quick Access prefix family (#138 / #139).
+ * Foundation parser for the Quick Access prefix family (#138 / #139),
+ * wired into the Command Palette's mode derivation as of #145. It replaced
+ * the older `quickAccessPrefixResolver.ts` (whole-string-trimming, `>` / `#`
+ * / `/` only, `#` mapped to glossary), which was retired once this parser
+ * became the sole interpretation path — see #145 for the resolver/parser
+ * behavior comparison that justified the removal.
  *
- * This is deliberately separate from `quickAccessPrefixResolver.ts`, which
- * remains the resolver actually wired into the live `>` Command Palette
- * today. That resolver whole-string-trims input and only knows about
- * `>` / `#` / `/`, which does not match the frozen #138 model (file / command
- * / line / heading / glossary, with `:` and `@` added and `#` repurposed for
- * heading search rather than glossary). Rewiring the Palette onto this model
- * is explicitly out of scope for #139; later mode issues (#140-#143) are
- * expected to switch the Palette onto `parseQuickAccessInput` as each mode
- * lands, then retire `quickAccessPrefixResolver.ts`.
+ * `file`, `line`, `heading`, and `glossary` are recognized modes but remain
+ * reserved (UI shows a "not available yet" state); only `command` is fully
+ * implemented today. Later mode issues (#140-#143) are expected to build
+ * their behavior directly on this parser's output.
  *
  * `rawInput` is the source of truth: mode is derived from it on every parse
  * rather than tracked as separate state, so deleting/replacing a prefix

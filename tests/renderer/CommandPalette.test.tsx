@@ -16,6 +16,7 @@ import {
 } from "../../src/renderer/CommandPalette";
 import {
   filterCommandPaletteEntries,
+  resolveCommandPaletteEnterSelection,
   type CommandPaletteEntry
 } from "../../src/renderer/commandPaletteEntries";
 
@@ -452,31 +453,142 @@ describe("CommandPalette highlighting and footer model", () => {
       canRunSelected: false
     });
   });
+
+  it("shows a null status and canRunSelected: false for every reserved mode, regardless of entries/selection (#145)", () => {
+    const results = filterCommandPaletteEntries(entries, "");
+
+    for (const mode of ["file", "line", "heading", "glossary"] as const) {
+      expect(
+        resolveCommandPaletteFooterModel({
+          mode,
+          query: "abc",
+          inputValue: "abc",
+          entries: results,
+          selectedIndex: 0
+        })
+      ).toEqual({ statusKey: null, canRunSelected: false });
+    }
+  });
+});
+
+describe("CommandPalette reserved Quick Access modes (#145)", () => {
+  const reservedCases = [
+    { initialInputValue: "abc", mode: "file", key: "commandPalette.reserved.file" },
+    { initialInputValue: " abc", mode: "file", key: "commandPalette.reserved.file" },
+    { initialInputValue: "%abc", mode: "file", key: "commandPalette.reserved.file" },
+    { initialInputValue: ":42", mode: "line", key: "commandPalette.reserved.line" },
+    { initialInputValue: "：42", mode: "line", key: "commandPalette.reserved.line" },
+    { initialInputValue: "#intro", mode: "heading", key: "commandPalette.reserved.heading" },
+    { initialInputValue: "＃intro", mode: "heading", key: "commandPalette.reserved.heading" },
+    { initialInputValue: "@alice", mode: "glossary", key: "commandPalette.reserved.glossary" },
+    { initialInputValue: "＠alice", mode: "glossary", key: "commandPalette.reserved.glossary" }
+  ] as const;
+
+  it.each(reservedCases.map((c) => [c.initialInputValue, c] as const))(
+    "shows the reserved-mode message for %j, not the command results list",
+    (_input, testCase) => {
+      const markup = renderPalette({
+        initialInputValue: testCase.initialInputValue
+      });
+
+      expect(markup).toContain("commandPaletteReservedPlaceholder");
+      expect(markup).toContain(testCase.key);
+      // Reserved-mode precedence: no command list, no empty-result text, no
+      // result count, and no selectable/clickable result item — so Enter
+      // and click can never resolve to a command in a reserved mode.
+      expect(markup).not.toContain("commandPaletteList");
+      expect(markup).not.toContain("commandPaletteEmpty");
+      expect(markup).not.toContain("commandPalette.noResults");
+      expect(markup).not.toContain("commandPaletteItem");
+      expect(markup).not.toContain("commandPalette.footer.results");
+    }
+  );
+
+  it("dims the Enter hint in every reserved mode, same as a disabled selection", () => {
+    for (const testCase of reservedCases) {
+      const markup = renderPalette({
+        initialInputValue: testCase.initialInputValue
+      });
+
+      expect(markup).toContain("commandPaletteFooterHintUnavailable");
+    }
+  });
+
+  it("keeps the select/run/close footer key hints visible in reserved modes", () => {
+    const markup = renderPalette({ initialInputValue: "#intro" });
+
+    expect(markup).toContain("commandPalette.footer.selectHint");
+    expect(markup).toContain("commandPalette.footer.runHint");
+    expect(markup).toContain("commandPalette.footer.closeHint");
+  });
+
+  it("shows no footer status text (no result count, no search hint) in reserved modes", () => {
+    const markup = renderPalette({
+      translate: realTranslateEn,
+      initialInputValue: "#intro"
+    });
+
+    expect(markup).toContain('<div class="commandPaletteFooterStatus"></div>');
+  });
+
+  it("computes empty entries for every reserved mode, so Enter/click can never execute or block a command (#145)", () => {
+    // CommandPalette.tsx has no logging calls at all (see the wiring
+    // describe block below) and only calls onExecuteCommand/onBlockedCommand
+    // from a truthy entries[index] lookup. Reserved modes route through this
+    // same `entries` computation, gated on mode === "command", so no command
+    // lifecycle event (command.invoked / command.ignored / command.blocked)
+    // can be emitted from a reserved mode without a code path existing to
+    // call either callback in the first place.
+    const source = readFileSync("src/renderer/CommandPalette.tsx", "utf8");
+
+    expect(source).toContain(
+      'mode === "command"\n      ? filterCommandPaletteEntries('
+    );
+    expect(source).toContain(": [];");
+  });
+
+  it("resolves no Enter selection when entries is empty, as it always is in a reserved mode", () => {
+    expect(resolveCommandPaletteEnterSelection([], 0)).toBeNull();
+    expect(resolveCommandPaletteEnterSelection([], null)).toBeNull();
+    expect(resolveCommandPaletteEnterSelection([], 5)).toBeNull();
+  });
+
+  it("still recognizes ':', '#', and '@' as file-mode-adjacent reserved prefixes, not as file queries", () => {
+    // Unknown leading characters (e.g. "%") fall back to file mode per
+    // #139, but ':' / '#' / '@' are reserved prefixes with their own
+    // messages, distinct from the plain no-prefix file message.
+    const fileMarkup = renderPalette({ initialInputValue: "%abc" });
+    const lineMarkup = renderPalette({ initialInputValue: ":abc" });
+
+    expect(fileMarkup).toContain("commandPalette.reserved.file");
+    expect(fileMarkup).not.toContain("commandPalette.reserved.line");
+    expect(lineMarkup).toContain("commandPalette.reserved.line");
+    expect(lineMarkup).not.toContain("commandPalette.reserved.file");
+  });
 });
 
 describe("CommandPalette snapshot and UI-level block wiring", () => {
   const source = readFileSync("src/renderer/CommandPalette.tsx", "utf8");
 
-  it("does not introduce new Quick Access prefix behavior (placeholder/hint are empty-state text only, #129)", () => {
-    const resolverSource = readFileSync(
-      "src/renderer/quickAccessPrefixResolver.ts",
-      "utf8"
+  it("derives mode from the #139 parser, not the retired resolver (#145)", () => {
+    expect(source).toContain(
+      'import {\n  parseQuickAccessInput,\n  type QuickAccessMode\n} from "./quickAccessInputParser";'
     );
+    expect(source).toContain("parseQuickAccessInput(inputValue)");
+    expect(source).toContain("parseQuickAccessInput(value)");
+    expect(source).not.toContain("quickAccessPrefixResolver");
+    expect(source).not.toContain("resolveQuickAccessInput");
+  });
 
-    // The prefix resolver itself must be untouched by this issue.
-    expect(resolverSource).toContain('new Set([">", "＞"])');
-    expect(resolverSource).toContain('new Set(["#", "＃"])');
-    expect(resolverSource).toContain('new Set(["/", "／"])');
-    expect(resolverSource).not.toContain('":"');
-    expect(resolverSource).not.toContain('"@"');
-
-    // CommandPalette.tsx must not add its own prefix handling — the
-    // placeholder and search hint are plain empty-state copy, not a new
-    // mode dispatched by resolveQuickAccessInput.
+  it("does not implement reserved-mode actions — only the reserved message and mode dispatch (#145)", () => {
+    // Reserved modes are recognized (for the reserved-message switch and
+    // footer suppression) but must not gain their own execution logic here;
+    // that belongs to the future mode issues (#140-#143).
     expect(source).not.toContain("lineJump");
     expect(source).not.toContain("symbolJump");
-    expect(source).not.toContain('":"');
-    expect(source).not.toContain('case "@"');
+    expect(source).not.toContain("headingSearch");
+    expect(source).not.toContain("glossarySearch");
+    expect(source).not.toContain("fileQuickOpen");
   });
 
   it("captures commandContext once via a lazy useState initializer, not the live prop", () => {

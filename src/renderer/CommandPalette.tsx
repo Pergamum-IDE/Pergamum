@@ -24,9 +24,9 @@ import {
   resolveCommandPaletteEnterSelection
 } from "./commandPaletteEntries";
 import {
-  resolveQuickAccessInput,
+  parseQuickAccessInput,
   type QuickAccessMode
-} from "./quickAccessPrefixResolver";
+} from "./quickAccessInputParser";
 
 export interface CommandPaletteProps {
   commandRegistry: CommandRegistry;
@@ -68,12 +68,14 @@ export interface CommandPaletteScrollTarget {
 
 function reservedPlaceholderKey(mode: QuickAccessMode): TranslationKey | null {
   switch (mode) {
-    case "reservedGlossary":
+    case "file":
+      return "commandPalette.reserved.file";
+    case "line":
+      return "commandPalette.reserved.line";
+    case "heading":
+      return "commandPalette.reserved.heading";
+    case "glossary":
       return "commandPalette.reserved.glossary";
-    case "reservedSearch":
-      return "commandPalette.reserved.search";
-    case "reservedNoPrefix":
-      return "commandPalette.reserved.noPrefix";
     case "command":
       return null;
   }
@@ -118,10 +120,11 @@ function selectedCommandPaletteEntry(
  *     placeholder instead, per #129)
  *  4. empty status
  *
- * `inputValue` is taken separately from `query` because
- * `resolveQuickAccessInput("")` and `resolveQuickAccessInput(">")` both
- * resolve to `{ mode: "command", query: "" }` — only the raw input value
- * can distinguish "nothing typed yet" from "typed the command prefix".
+ * `inputValue` is taken separately from `query` so this function can react
+ * to the raw input rather than just the parsed query; `mode !== "command"`
+ * already covers the fully-empty case today (empty input parses to file
+ * mode, per #139/#145), but the check is kept so command-mode empty-query
+ * display does not depend on that no-longer-obvious invariant.
  */
 export function resolveCommandPaletteFooterModel(input: {
   readonly mode: QuickAccessMode;
@@ -244,7 +247,7 @@ export function CommandPalette({
     input.setSelectionRange(input.value.length, input.value.length);
   }, []);
 
-  const { mode, query } = resolveQuickAccessInput(inputValue);
+  const { mode, query } = parseQuickAccessInput(inputValue);
   const entries =
     mode === "command"
       ? filterCommandPaletteEntries(
@@ -260,7 +263,7 @@ export function CommandPalette({
   function updateInput(value: string): void {
     setInputValue(value);
 
-    const resolved = resolveQuickAccessInput(value);
+    const resolved = parseQuickAccessInput(value);
 
     if (resolved.mode !== "command") {
       setSelectedIndex(null);
