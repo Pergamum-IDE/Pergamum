@@ -34,6 +34,13 @@ export interface DocumentTab {
   id: EditorId;
   title: string;
   isDirty: boolean;
+  /**
+   * True for a Markdown document opened from outside the active project
+   * (`CurrentDocument.kind === "file"`) — never for a project document or a
+   * glossary entry. Derived from editor/document identity, not from
+   * comparing raw paths against the project root (#152 dogfood follow-up).
+   */
+  isExternalMarkdownFile: boolean;
 }
 
 export interface ReplaceOpenDocumentResult {
@@ -172,11 +179,16 @@ export function isOnlyInitialUntitledDocument(
   );
 }
 
+function isExternalMarkdownFileEditor(editor: CurrentEditor): boolean {
+  return markdownDocumentForEditor(editor)?.kind === "file";
+}
+
 export function documentTabs(state: OpenDocumentsState): DocumentTab[] {
   return state.documents.map((openDocument) => ({
     id: openDocument.id,
     title: currentEditorTitle(openDocument.editor),
-    isDirty: isCurrentEditorDirty(openDocument.editor)
+    isDirty: isCurrentEditorDirty(openDocument.editor),
+    isExternalMarkdownFile: isExternalMarkdownFileEditor(openDocument.editor)
   }));
 }
 

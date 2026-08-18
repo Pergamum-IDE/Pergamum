@@ -44,7 +44,8 @@ function contextMenuCommandSelectionFromUnknown(
 
 const pergamumApi: PergamumApi = {
   files: {
-    openMarkdown: () => ipcRenderer.invoke(FILE_CHANNELS.openMarkdown),
+    openMarkdown: (documentOpenId) =>
+      ipcRenderer.invoke(FILE_CHANNELS.openMarkdown, { documentOpenId }),
     saveMarkdown: (filePath, content) =>
       ipcRenderer.invoke(FILE_CHANNELS.saveMarkdown, {
         path: filePath,

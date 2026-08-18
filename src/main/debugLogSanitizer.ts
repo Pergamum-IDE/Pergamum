@@ -1,7 +1,9 @@
 import path from "node:path";
 import {
   debugLogArchitectures,
+  debugLogDocumentKinds,
   debugLogEditorIdKinds,
+  debugLogEditorKinds,
   debugLogEncodingAssumptions,
   debugLogExtensions,
   debugLogApplicationMenuTriggers,
@@ -25,7 +27,9 @@ import {
   type DebugLogDbEntityKind,
   type DebugLogDbOperation,
   type DebugLogDetails,
+  type DebugLogDocumentKind,
   type DebugLogEditorIdKind,
+  type DebugLogEditorKind,
   type DebugLogEncodingAssumption,
   type DebugLogErrorCategory,
   type DebugLogExtension,
@@ -289,6 +293,15 @@ export function sanitizeDebugLogDetails(
           }
         }
         break;
+      case "documentOpenId":
+        {
+          const documentOpenId = sanitizeSafeCode(value);
+
+          if (documentOpenId) {
+            sanitized.documentOpenId = documentOpenId;
+          }
+        }
+        break;
       case "requestedSurface":
         sanitized.requestedSurface = isDebugLogContextMenuSurface(value)
           ? value
@@ -488,6 +501,26 @@ export function sanitizeDebugLogDetails(
         }
         break;
       }
+      case "fileSizeBytes": {
+        const fileSizeBytes = sanitizeNonNegativeInteger(value);
+
+        if (fileSizeBytes !== undefined) {
+          sanitized.fileSizeBytes = fileSizeBytes;
+        }
+        break;
+      }
+      case "documentKind":
+        sanitized.documentKind = enumOrUnknown<DebugLogDocumentKind>(
+          debugLogDocumentKinds,
+          value
+        );
+        break;
+      case "editorKind":
+        sanitized.editorKind = enumOrUnknown<DebugLogEditorKind>(
+          debugLogEditorKinds,
+          value
+        );
+        break;
       case "lineEndingKind":
         sanitized.lineEndingKind = enumOrUnknown<DebugLogLineEndingKind>(
           debugLogLineEndingKinds,

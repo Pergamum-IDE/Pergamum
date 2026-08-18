@@ -5,7 +5,10 @@ import {
   createUntitledDocument,
   updateCurrentDocumentContent
 } from "../../src/renderer/currentDocument";
-import { createGlossaryEntryCurrentEditor } from "../../src/renderer/currentEditor";
+import {
+  createGlossaryEntryCurrentEditor,
+  createMarkdownCurrentEditor
+} from "../../src/renderer/currentEditor";
 import {
   currentDocumentForOpenedFile,
   findProjectDocumentByEditorId
@@ -350,14 +353,92 @@ describe("OpenDocumentsState", () => {
       {
         id: createProjectDocumentEditorId("chapter-01.md", projectContext),
         title: "chapter-01.md",
-        isDirty: false
+        isDirty: false,
+        isExternalMarkdownFile: false
       },
       {
         id: createGlossaryEntryEditorId(glossaryEntry.id, projectContext),
         title: "王都",
-        isDirty: false
+        isDirty: false,
+        isExternalMarkdownFile: false
       }
     ]);
+  });
+
+  it("marks only an external (file-kind) Markdown document's tab as isExternalMarkdownFile (#152 dogfood follow-up)", () => {
+    const projectDocument = createProjectDocument(
+      firstProjectDocument,
+      "project content"
+    );
+    let state = createOpenDocumentsStateWithDocument(
+      projectDocument,
+      projectContext
+    );
+
+    state = openOrActivateDocument(
+      state,
+      createFileDocument({
+        path: "C:\\Outside\\notes.md",
+        content: "external content"
+      }),
+      projectContext
+    );
+    state = openOrActivateEditor(
+      state,
+      createGlossaryEntryCurrentEditor(glossaryEntry),
+      projectContext
+    );
+
+    const flags = documentTabs(state).map((tab) => tab.isExternalMarkdownFile);
+
+    expect(flags).toEqual([false, true, false]);
+  });
+
+  it("opening an external Markdown file mutates no project state", () => {
+    const documentsBeforeOpen = project.documents;
+    let state = createOpenDocumentsStateWithDocument(
+      createProjectDocument(firstProjectDocument, "project content"),
+      projectContext
+    );
+
+    state = openOrActivateDocument(
+      state,
+      createFileDocument({
+        path: "C:\\Outside\\notes.md",
+        content: "external content"
+      }),
+      projectContext
+    );
+
+    // `openOrActivateDocument` / `documentTabs` only ever operate on
+    // OpenDocumentsState — neither takes a PergamumProject argument, so the
+    // project's own document list is structurally unreachable from this
+    // flow and stays exactly the reference it started as.
+    expect(project.documents).toBe(documentsBeforeOpen);
+    expect(documentTabs(state).some((tab) => tab.isExternalMarkdownFile)).toBe(
+      true
+    );
+  });
+
+  it("does not derive isExternalMarkdownFile from a raw path string comparison against the project root", () => {
+    // Built directly (bypassing createEditorIdForPath's own path-based
+    // routing, a separate concern) with a path string that is textually
+    // "inside" the project root, to prove documentTabs reads
+    // CurrentDocument.kind rather than comparing paths itself.
+    const fileDocument = createFileDocument({
+      path: `${projectContext.rootPath}\\chapter-01.md`,
+      content: "content"
+    });
+    const editorId = createUntitledEditorId(1);
+    const state = {
+      documents: [
+        { id: editorId, editor: createMarkdownCurrentEditor(fileDocument) }
+      ],
+      activeDocumentId: editorId,
+      nextUntitledId: 2
+    };
+
+    expect(documentTabs(state)[0].isExternalMarkdownFile).toBe(true);
   });
 
   it("does not duplicate the same glossary entry when reopened", () => {

@@ -5,6 +5,7 @@ import {
   type EditorId
 } from "../shared/editorId";
 import type { DocumentTab } from "./openDocuments";
+import alertTriangleIcon from "../../assets/icons/global/alert-triangle.svg?raw";
 
 interface DocumentTabBarProps {
   tabs: DocumentTab[];
@@ -34,6 +35,15 @@ export function DocumentTabBar({
       >
         {tabs.map((tab) => {
           const isActive = editorIdEquals(tab.id, activeDocumentId);
+          const externalWarning = tab.isExternalMarkdownFile
+            ? translate("tabs.externalMarkdownFile")
+            : null;
+          // Nested-element tooltip behavior varies by browser, so the
+          // external warning is exposed both on the icon itself and on the
+          // tab button's own title/accessible name — not only on the icon.
+          const tabTitle = externalWarning
+            ? `${tab.title} — ${externalWarning}`
+            : tab.title;
 
           return (
             <button
@@ -42,9 +52,18 @@ export function DocumentTabBar({
               className={isActive ? "documentTab isActive" : "documentTab"}
               role="tab"
               aria-selected={isActive}
-              title={tab.title}
+              title={tabTitle}
               onClick={() => onSelectDocument(tab.id)}
             >
+              {externalWarning ? (
+                <span
+                  className="documentTabExternalIcon"
+                  role="img"
+                  aria-label={externalWarning}
+                  title={externalWarning}
+                  dangerouslySetInnerHTML={{ __html: alertTriangleIcon }}
+                />
+              ) : null}
               <span className="documentTabTitle">{tab.title}</span>
               {tab.isDirty ? (
                 <span

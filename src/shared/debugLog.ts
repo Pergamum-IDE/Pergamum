@@ -28,6 +28,12 @@ export const debugLogEventNames = [
   "command.ignored",
   "command.blocked",
   "command.failed",
+  "document.open.started",
+  "document.open.fileRead.completed",
+  "document.open.editorDocument.applied",
+  "document.open.previewRender.completed",
+  "document.open.usable",
+  "document.open.completed",
   "document.open.failed",
   "document.save.failed",
   "ime.composition.started",
@@ -140,6 +146,25 @@ export const debugLogEditorIdKinds = [
 ] as const;
 
 export type DebugLogEditorIdKind = (typeof debugLogEditorIdKinds)[number];
+
+/** `CurrentDocument.kind`, for document-open timing events (#152). */
+export const debugLogDocumentKinds = [
+  "file",
+  "project",
+  "untitled",
+  "unknown"
+] as const;
+
+export type DebugLogDocumentKind = (typeof debugLogDocumentKinds)[number];
+
+/** `CurrentEditor.kind`, for document-open timing events (#152). */
+export const debugLogEditorKinds = [
+  "markdown",
+  "glossaryEntry",
+  "unknown"
+] as const;
+
+export type DebugLogEditorKind = (typeof debugLogEditorKinds)[number];
 
 export const debugLogReasons = [
   "validation_failed",
@@ -317,6 +342,12 @@ export interface DebugLogDetails {
   lineCount?: number;
   lineEndingKind?: DebugLogLineEndingKind;
   encodingAssumption?: DebugLogEncodingAssumption;
+
+  /** Per-open correlation id for document-open timing events (#152). Not a persistent id. */
+  documentOpenId?: string;
+  fileSizeBytes?: number;
+  documentKind?: DebugLogDocumentKind;
+  editorKind?: DebugLogEditorKind;
 
   durationMs?: number;
   count?: number;

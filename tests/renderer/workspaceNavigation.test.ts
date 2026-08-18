@@ -452,8 +452,10 @@ describe("workspace navigation", () => {
     expect(source).toContain(
       "async function activateProjectDocument(relativePath: string)"
     );
+    // Routed through the shared #152 instrumented-open wrapper rather than
+    // awaited directly, but it still calls openEditorFromExplicitActivation.
     expect(source).toContain(
-      "const didOpen = await openEditorFromExplicitActivation(documentId);"
+      "() => openEditorFromExplicitActivation(documentId)"
     );
     expect(source).toContain("onActivateProjectDocument={(relativePath) => {");
   });

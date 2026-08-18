@@ -276,6 +276,76 @@ describe("debug log details sanitizer", () => {
     });
   });
 
+  it("accepts document-open timing details and drops manuscript-shaped extras (#152)", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        documentOpenId: "documentOpen.1",
+        durationMs: 1234.5,
+        fileSizeBytes: 1_048_576,
+        documentKind: "file",
+        editorKind: "markdown",
+        lineCount: 9001,
+        sizeBucket: "large",
+        manuscriptText: "吾輩は猫である。名前はまだ無い。",
+        previewText: "<p>吾輩は猫である</p>",
+        glossarySurface: "吾輩",
+        absolutePath: "C:\\Users\\name\\catfood.md"
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      documentOpenId: "documentOpen.1",
+      durationMs: 1234.5,
+      fileSizeBytes: 1_048_576,
+      documentKind: "file",
+      editorKind: "markdown",
+      lineCount: 9001,
+      sizeBucket: "large",
+      droppedKeyCount: 4
+    });
+    expect(JSON.stringify(details)).not.toContain("吾輩");
+    expect(JSON.stringify(details)).not.toContain("catfood.md");
+    expect(JSON.stringify(details)).not.toContain("previewText");
+  });
+
+  it("normalizes unknown documentKind/editorKind instead of passing them through", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        documentKind: "spreadsheet",
+        editorKind: "terminal"
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      documentKind: "unknown",
+      editorKind: "unknown"
+    });
+  });
+
+  it("drops a malformed documentOpenId (not a safe code string)", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        documentOpenId: "documentOpen with spaces and 吾輩は猫である"
+      },
+      context()
+    );
+
+    expect(details).toBeUndefined();
+  });
+
+  it("drops a negative or non-integer fileSizeBytes", () => {
+    const negative = sanitizeDebugLogDetails({ fileSizeBytes: -1 }, context());
+    const fractional = sanitizeDebugLogDetails(
+      { fileSizeBytes: 1.5 },
+      context()
+    );
+
+    expect(negative).toBeUndefined();
+    expect(fractional).toBeUndefined();
+  });
+
   it("sanitizes errors without message or stack summaries", () => {
     const error = new Error("C:\\Users\\name\\secret.md could not be opened");
     Object.assign(error, {

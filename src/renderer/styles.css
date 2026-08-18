@@ -423,6 +423,22 @@ button:active {
   color: #17212b;
 }
 
+.documentTabExternalIcon {
+  display: flex;
+  width: 14px;
+  height: 14px;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  color: #b8860b;
+}
+
+.documentTabExternalIcon svg {
+  width: 14px;
+  height: 14px;
+  display: block;
+}
+
 .documentTabTitle {
   min-width: 0;
   overflow: hidden;

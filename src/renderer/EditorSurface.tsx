@@ -83,6 +83,13 @@ interface EditorSurfaceProps {
   onNavigateToNextGlossaryOccurrence: () => void;
   pendingMarkdownSelection: GlossaryOccurrenceRange | null;
   onPendingMarkdownSelectionApplied: () => void;
+  /** In-flight document-open correlation id (#152), or null when idle. */
+  documentOpenId: string | null;
+  /** Fired once after this document's preview has rendered, with its duration. */
+  onDocumentOpenPreviewRendered: (
+    documentOpenId: string,
+    previewRenderDurationMs: number
+  ) => void;
 }
 
 export function EditorSurface({
@@ -108,7 +115,9 @@ export function EditorSurface({
   onNavigateToPreviousGlossaryOccurrence,
   onNavigateToNextGlossaryOccurrence,
   pendingMarkdownSelection,
-  onPendingMarkdownSelectionApplied
+  onPendingMarkdownSelectionApplied,
+  documentOpenId,
+  onDocumentOpenPreviewRendered
 }: EditorSurfaceProps): JSX.Element {
   switch (editor.kind) {
     case "markdown":
@@ -123,6 +132,8 @@ export function EditorSurface({
           onPendingSelectionApplied={onPendingMarkdownSelectionApplied}
           ratio={markdownEditorPreviewRatio}
           onChangeRatio={onChangeMarkdownEditorPreviewRatio}
+          documentOpenId={documentOpenId}
+          onDocumentOpenPreviewRendered={onDocumentOpenPreviewRendered}
         />
       );
     case "glossaryEntry":
@@ -171,6 +182,11 @@ interface MarkdownEditorSurfaceProps {
   onPendingSelectionApplied: () => void;
   ratio: number;
   onChangeRatio: (ratio: number) => void;
+  documentOpenId: string | null;
+  onDocumentOpenPreviewRendered: (
+    documentOpenId: string,
+    previewRenderDurationMs: number
+  ) => void;
 }
 
 function MarkdownEditorSurface({
@@ -182,14 +198,38 @@ function MarkdownEditorSurface({
   pendingSelection,
   onPendingSelectionApplied,
   ratio,
-  onChangeRatio
+  onChangeRatio,
+  documentOpenId,
+  onDocumentOpenPreviewRendered
 }: MarkdownEditorSurfaceProps): JSX.Element {
   const content = currentDocumentContent(document);
+  const previewRenderStartedAt = performance.now();
   const previewHtml = markdownPreviewRenderer.render(content);
+  const previewRenderDurationMs = performance.now() - previewRenderStartedAt;
   const { entries, surfaceIndex } = useGlossaryEntriesForMatching(
     projectRootPath,
     glossaryRefreshToken
   );
+  const reportedDocumentOpenIdRef = useRef<string | null>(null);
+
+  // One-shot measurement (#152): fires only when documentOpenId changes
+  // (i.e. a new open just applied its editor state and this component has
+  // now re-rendered with that document's content), never on ordinary
+  // content edits. App.tsx clears documentOpenId after handling this.
+  //
+  // Guarded by reportedDocumentOpenIdRef against React StrictMode's dev-only
+  // double effect invocation (this app renders under <React.StrictMode> —
+  // see main.tsx), which would otherwise report the same open twice and
+  // duplicate previewRender.completed/usable/completed in dev/dogfood logs.
+  useEffect(() => {
+    if (documentOpenId && reportedDocumentOpenIdRef.current !== documentOpenId) {
+      reportedDocumentOpenIdRef.current = documentOpenId;
+      onDocumentOpenPreviewRendered(documentOpenId, previewRenderDurationMs);
+    }
+    // Deliberately keyed on documentOpenId alone: previewRenderDurationMs
+    // is read from this same render's closure, but must not itself be a
+    // dependency, or every content edit (not just an open) would re-fire.
+  }, [documentOpenId]);
   const isNarrow = useIsNarrowMarkdownWorkspace();
   const workspaceRef = useRef<HTMLElement | null>(null);
   const ratioAtDragStartRef = useRef(ratio);

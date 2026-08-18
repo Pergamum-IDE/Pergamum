@@ -36,6 +36,16 @@ function parentWindow(event: IpcMainInvokeEvent): BrowserWindow | undefined {
   return BrowserWindow.fromWebContents(event.sender) ?? undefined;
 }
 
+function documentOpenIdFromRequest(value: unknown): string | undefined {
+  if (typeof value !== "object" || value === null) {
+    return undefined;
+  }
+
+  const candidate = (value as Record<string, unknown>).documentOpenId;
+
+  return typeof candidate === "string" ? candidate : undefined;
+}
+
 function durationSince(startedAt: number): number {
   return Date.now() - startedAt;
 }
@@ -91,16 +101,24 @@ function assertStandaloneSaveTargetAllowed(
 export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
   ipcMain.handle(
     FILE_CHANNELS.openMarkdown,
-    async (event): Promise<MarkdownFile | null> => {
+    async (event, rawRequest: unknown): Promise<MarkdownFile | null> => {
       const startedAt = Date.now();
+      const documentOpenId = documentOpenIdFromRequest(rawRequest);
       let filePath: string | null = null;
 
       try {
         const owner = parentWindow(event);
+        const projectRootPath = currentProjectRootPath();
         const options: OpenDialogOptions = {
           title: "Open Markdown File",
           properties: ["openFile"],
-          filters: markdownFilters
+          filters: markdownFilters,
+          // Starts the chooser in the active project (when one is open)
+          // instead of wherever it last was, so explicit Markdown open
+          // doesn't force the user to navigate away from their project.
+          // Falls back to Electron's own default (last-used directory) when
+          // no project is open, matching prior behavior.
+          ...(projectRootPath ? { defaultPath: projectRootPath } : {})
         };
         const result = owner
           ? await dialog.showOpenDialog(owner, options)
@@ -111,7 +129,30 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
         }
 
         filePath = result.filePaths[0];
+
+        const readStartedAt = Date.now();
         const content = await fs.readFile(filePath, "utf8");
+        const readDurationMs = durationSince(readStartedAt);
+
+        // Isolates pure file-read + UTF-8 decode cost (#152), excluding the
+        // open-dialog interaction time that `startedAt` above still covers.
+        logger.log({
+          level: "debug",
+          event: "document.open.fileRead.completed",
+          details: {
+            ...(documentOpenId ? { documentOpenId } : {}),
+            documentRef: logger.documentRefForKey(filePath),
+            extension: debugLogExtensionForPath(filePath),
+            pathDepth: debugLogPathDepth(filePath),
+            lineCount: debugLogLineCount(content),
+            sizeBucket: debugLogSizeBucket(Buffer.byteLength(content, "utf8")),
+            fileSizeBytes: Buffer.byteLength(content, "utf8"),
+            encodingAssumption: "utf8",
+            operation: "open",
+            result: "succeeded",
+            durationMs: readDurationMs
+          }
+        });
 
         return {
           path: filePath,
@@ -126,6 +167,7 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
           level: "error",
           event: "document.open.failed",
           details: {
+            ...(documentOpenId ? { documentOpenId } : {}),
             ...(documentRef ? { documentRef } : {}),
             editorIdKind: "file",
             pathKind: "unknown",

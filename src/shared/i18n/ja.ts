@@ -189,6 +189,7 @@ export const jaTranslations = {
   "status.settingsSaveFailed": "設定を保存できませんでした: {message}",
   "status.settingsSaved": "設定を保存しました",
   "status.withDetail": "{status}（{detail}）",
+  "tabs.externalMarkdownFile": "注意：プロジェクト外のファイルです",
   "tabs.openDocuments": "開いている文書",
   "tabs.unsaved": "未保存",
   "toolbar.openProject": "プロジェクトを開く",
