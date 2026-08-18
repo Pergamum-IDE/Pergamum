@@ -20,6 +20,7 @@ import {
   type CommandPaletteEntry
 } from "../../src/renderer/commandPaletteEntries";
 import { registerLineJumpCommands } from "../../src/renderer/lineJumpCommands";
+import type { LineJumpEditorSnapshot } from "../../src/renderer/lineJumpQuery";
 
 const translate: Translate = (key) => key;
 const realTranslateEn: Translate = (key, values) => t("en", key, values);
@@ -73,7 +74,7 @@ function renderPalette(overrides: {
   initialInputValue?: string;
   onExecuteCommand?: (commandId: unknown, ...args: readonly unknown[]) => void;
   onBlockedCommand?: (commandId: unknown) => void;
-  resolveLineJumpPreviewLine?: (line: number) => string | null;
+  lineJumpEditorSnapshot?: LineJumpEditorSnapshot | null;
 } = {}): string {
   return renderToStaticMarkup(
     React.createElement(CommandPalette, {
@@ -85,17 +86,26 @@ function renderPalette(overrides: {
       onExecuteCommand: overrides.onExecuteCommand ?? noop,
       onBlockedCommand: overrides.onBlockedCommand ?? noop,
       onClose: noop,
-      resolveLineJumpPreviewLine: overrides.resolveLineJumpPreviewLine
+      lineJumpEditorSnapshot: overrides.lineJumpEditorSnapshot
     })
   );
 }
 
-function buildLineJumpRegistry(canGoToLine: (line: number) => boolean): CommandRegistry {
+function buildLineJumpEditorSnapshot(
+  lineCount: number,
+  getLineText: (line: number) => string = () => ""
+): LineJumpEditorSnapshot {
+  return { lineCount, getLineText };
+}
+
+function buildLineJumpRegistry(
+  goToLine: (line: number) => void = () => undefined
+): CommandRegistry {
   const registry = new CommandRegistry();
 
   registerLineJumpCommands(
     registry,
-    { canGoToLine, goToLine: () => undefined },
+    { goToLine },
     {
       goToLine: "Go to Line",
       goToLineDescription: "Move the cursor to a line in the active editor"
@@ -664,12 +674,14 @@ describe("CommandPalette snapshot and UI-level block wiring", () => {
   });
 });
 
-describe("CommandPalette line jump mode (#140)", () => {
+describe("CommandPalette line jump mode (#140 / #148)", () => {
   const source = readFileSync("src/renderer/CommandPalette.tsx", "utf8");
 
   it("does not show command search results in line mode", () => {
     const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(50),
+      commandContext: { "editor.kind.markdown": true },
       initialInputValue: ":42"
     });
 
@@ -679,7 +691,8 @@ describe("CommandPalette line jump mode (#140)", () => {
 
   it("shows an executable 'Go to line N' result for a valid, in-range query", () => {
     const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(50),
       commandContext: { "editor.kind.markdown": true },
       translate: realTranslateEn,
       initialInputValue: ":42"
@@ -692,13 +705,15 @@ describe("CommandPalette line jump mode (#140)", () => {
     expect(markup).not.toContain("commandPaletteFooterHintUnavailable");
   });
 
-  it("normalizes the displayed line number for :007 and :1,000", () => {
-    const registry = buildLineJumpRegistry(() => true);
+  it("normalizes the displayed line number for :007 and :1,000 (the exact-match candidate)", () => {
+    const registry = buildLineJumpRegistry();
+    const snapshot = buildLineJumpEditorSnapshot(2000);
     const context = { "editor.kind.markdown": true };
 
     expect(
       renderPalette({
         registry,
+        lineJumpEditorSnapshot: snapshot,
         commandContext: context,
         translate: realTranslateEn,
         initialInputValue: ":007"
@@ -707,6 +722,7 @@ describe("CommandPalette line jump mode (#140)", () => {
     expect(
       renderPalette({
         registry,
+        lineJumpEditorSnapshot: snapshot,
         commandContext: context,
         translate: realTranslateEn,
         initialInputValue: ":1,000"
@@ -716,7 +732,7 @@ describe("CommandPalette line jump mode (#140)", () => {
 
   it("shows Enter a line number for an empty query", () => {
     const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
+      registry: buildLineJumpRegistry(),
       translate: realTranslateEn,
       initialInputValue: ":"
     });
@@ -726,7 +742,7 @@ describe("CommandPalette line jump mode (#140)", () => {
 
   it("shows Use half-width digits for full-width digit queries", () => {
     const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
+      registry: buildLineJumpRegistry(),
       translate: realTranslateEn,
       initialInputValue: ":１２"
     });
@@ -736,7 +752,7 @@ describe("CommandPalette line jump mode (#140)", () => {
 
   it("shows Enter a whole line number for decimal queries", () => {
     const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
+      registry: buildLineJumpRegistry(),
       translate: realTranslateEn,
       initialInputValue: ":1.5"
     });
@@ -746,12 +762,12 @@ describe("CommandPalette line jump mode (#140)", () => {
 
   it("shows Enter a valid line number for invalid and unsafe-integer queries", () => {
     const invalidMarkup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
+      registry: buildLineJumpRegistry(),
       translate: realTranslateEn,
       initialInputValue: ":abc"
     });
     const unsafeMarkup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
+      registry: buildLineJumpRegistry(),
       translate: realTranslateEn,
       initialInputValue: ":9,007,199,254,740,992"
     });
@@ -760,21 +776,25 @@ describe("CommandPalette line jump mode (#140)", () => {
     expect(unsafeMarkup).toContain("Enter a valid line number");
   });
 
-  it("shows Line number is out of range when the query is valid but exceeds the active editor", () => {
+  it("shows Line number is out of range (no new 'No matching lines' message) when a valid query has zero candidates", () => {
     const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => false),
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(100),
       commandContext: { "editor.kind.markdown": true },
       translate: realTranslateEn,
       initialInputValue: ":99999"
     });
 
     expect(markup).toContain("Line number is out of range");
+    expect(markup).not.toContain("No matching lines");
+    expect(markup).not.toContain("一致する行がありません");
     expect(markup).not.toContain("commandPaletteItem\"");
   });
 
   it("treats Number.MAX_SAFE_INTEGER as parser-valid but normally out of range", () => {
     const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => false),
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(100),
       commandContext: { "editor.kind.markdown": true },
       translate: realTranslateEn,
       initialInputValue: ":9,007,199,254,740,991"
@@ -785,7 +805,7 @@ describe("CommandPalette line jump mode (#140)", () => {
 
   it("renders a disabled line-jump result (not a parser message) when the active tab is not an editor", () => {
     const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
+      registry: buildLineJumpRegistry(),
       commandContext: { "editor.kind.markdown": false },
       translate: realTranslateEn,
       initialInputValue: ":1"
@@ -802,7 +822,7 @@ describe("CommandPalette line jump mode (#140)", () => {
 
   it("renders a disabled result, not the generic message, for a Glossary Editor active tab", () => {
     const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
+      registry: buildLineJumpRegistry(),
       commandContext: { "editor.kind.markdown": false, "editor.kind.glossary": true },
       translate: realTranslateEn,
       initialInputValue: ":1"
@@ -814,45 +834,13 @@ describe("CommandPalette line jump mode (#140)", () => {
 
   it("does not show a result count in line mode", () => {
     const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(50),
       commandContext: { "editor.kind.markdown": true },
       initialInputValue: ":42"
     });
 
     expect(markup).not.toContain("commandPalette.footer.results");
-  });
-
-  it("executes the line-jump command with the normalized 1-based line on click, for an executable result", () => {
-    // No DOM click-simulation library in this repo (see the renderPalette
-    // doc comment), so click wiring is verified the same way the existing
-    // disabled-entry click test above does: by reading the source for the
-    // onClick prop and the callback body it points to.
-    const rowStart = source.indexOf('<li\n                role="option"');
-    const rowEnd = source.indexOf("</ul>", rowStart);
-    const rowBody = source.slice(rowStart, rowEnd);
-
-    expect(rowBody).toContain("onClick={executeLineJumpResult}");
-
-    const functionBody = source.slice(
-      source.indexOf("function executeLineJumpResult("),
-      source.indexOf("function handleKeyDown(")
-    );
-
-    expect(functionBody).toContain('if (lineJumpState.kind === "executable") {');
-    expect(functionBody).toContain(
-      "onExecuteCommand(editorCommandIds.goToLine, lineJumpState.line);"
-    );
-
-    // The render itself must not throw and must show the row this handler
-    // is attached to.
-    const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
-      commandContext: { "editor.kind.markdown": true },
-      translate: realTranslateEn,
-      initialInputValue: ":42"
-    });
-
-    expect(markup).toContain("Go to line 42");
   });
 
   it("blocks (does not execute) a disabled line-jump result on Enter/click, emitting command.blocked semantics via onBlockedCommand", () => {
@@ -863,12 +851,9 @@ describe("CommandPalette line jump mode (#140)", () => {
 
     expect(body).toContain('if (lineJumpState.kind === "disabled") {');
     expect(body).toContain("onBlockedCommand(editorCommandIds.goToLine);");
-    expect(body.indexOf('kind === "disabled"')).toBeLessThan(
-      body.indexOf('kind === "executable"')
-    );
   });
 
-  it("is a no-op for every message state (empty/invalid/unsafe/out-of-range) — no callback is called", () => {
+  it("is a no-op for every message state (empty/invalid/unsafe/out-of-range) — Enter calls no callback", () => {
     const body = source.slice(
       source.indexOf("function executeLineJumpResult("),
       source.indexOf("function handleKeyDown(")
@@ -877,7 +862,8 @@ describe("CommandPalette line jump mode (#140)", () => {
     // Only "disabled" and "executable" branches call a callback; every
     // other LineJumpPaletteState kind falls through without calling
     // onExecuteCommand or onBlockedCommand.
-    expect(body.match(/onExecuteCommand\(/g)?.length).toBe(1);
+    expect(body).not.toContain("onExecuteCommand(");
+    expect(body).toContain("executeLineJumpCandidateAt(selectedIndex ?? 0);");
     expect(body.match(/onBlockedCommand\(/g)?.length).toBe(1);
   });
 
@@ -905,211 +891,372 @@ describe("CommandPalette line jump mode (#140)", () => {
   });
 });
 
-describe("CommandPalette line jump result preview (#140 polish)", () => {
-  it("shows a preview of the target line as the executable result's secondary line", () => {
+describe("CommandPalette line jump prefix candidates (#148)", () => {
+  const source = readFileSync("src/renderer/CommandPalette.tsx", "utf8");
+  const editorContext = { "editor.kind.markdown": true };
+
+  it("':1' returns prefix candidates 1, 10-19, 100...", () => {
     const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
-      commandContext: { "editor.kind.markdown": true },
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(105),
+      commandContext: editorContext,
       translate: realTranslateEn,
-      initialInputValue: ":42",
-      resolveLineJumpPreviewLine: (line) =>
-        line === 42 ? "const answer = 42;" : null
+      initialInputValue: ":1"
+    });
+
+    for (const line of [1, 10, 11, 19, 100]) {
+      expect(markup).toContain(`Go to line ${line}`);
+    }
+  });
+
+  it("':12' returns 12, 120, 121, ...", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(130),
+      commandContext: editorContext,
+      translate: realTranslateEn,
+      initialInputValue: ":12"
+    });
+
+    expect(markup).toContain("Go to line 12");
+    expect(markup).toContain("Go to line 120");
+    expect(markup).toContain("Go to line 121");
+  });
+
+  it("does not use contains matching: ':1' never includes 21 or 31", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(50),
+      commandContext: editorContext,
+      translate: realTranslateEn,
+      initialInputValue: ":1"
+    });
+
+    expect(markup).not.toContain("Go to line 21");
+    expect(markup).not.toContain("Go to line 31");
+  });
+
+  it("puts the exact match first, and it is the initially selected candidate", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(130),
+      commandContext: editorContext,
+      translate: realTranslateEn,
+      initialInputValue: ":12"
+    });
+    const exactIndex = markup.indexOf("Go to line 12<");
+    const nextIndex = markup.indexOf("Go to line 120");
+
+    expect(exactIndex).toBeGreaterThan(-1);
+    expect(nextIndex).toBeGreaterThan(exactIndex);
+    // The exact match's <li> is the first one, and it is selected.
+    const firstLiStart = markup.indexOf("<li ");
+    const firstLiEnd = markup.indexOf("</li>", firstLiStart);
+    const firstLi = markup.slice(firstLiStart, firstLiEnd);
+
+    expect(firstLi).toContain("Go to line 12<");
+    expect(firstLi).toContain('aria-selected="true"');
+  });
+
+  it("does not duplicate the exact match among the additional candidates", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(130),
+      commandContext: editorContext,
+      translate: realTranslateEn,
+      initialInputValue: ":12"
+    });
+    const occurrences = markup.split("Go to line 12<").length - 1;
+
+    expect(occurrences).toBe(1);
+  });
+
+  it("resets selection to the first candidate for a freshly rendered query (never preserves a prior index)", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(200),
+      commandContext: editorContext,
+      translate: realTranslateEn,
+      initialInputValue: ":1"
+    });
+    const firstLiStart = markup.indexOf("<li ");
+    const firstLiEnd = markup.indexOf("</li>", firstLiStart);
+    const firstLi = markup.slice(firstLiStart, firstLiEnd);
+
+    expect(firstLi).toContain("Go to line 1<");
+    expect(firstLi).toContain('aria-selected="true"');
+    expect((markup.match(/aria-selected="true"/g) ?? []).length).toBe(1);
+  });
+
+  it("stops candidate generation at the hard-coded maximum of 20", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(1000000),
+      commandContext: editorContext,
+      initialInputValue: ":1"
+    });
+    const rowCount = (markup.match(/commandPaletteItemPrimary/g) ?? []).length;
+
+    expect(rowCount).toBe(20);
+  });
+
+  it("shows the remaining-candidate count in the footer when total matches exceed the display limit of 20", () => {
+    // Lines 1..200 starting with "1": "1" (1), "10".."19" (10), "100".."199"
+    // (100) -> 111 total matches, 20 displayed, 91 remaining.
+    const englishMarkup = renderPalette({
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(200),
+      commandContext: editorContext,
+      translate: realTranslateEn,
+      initialInputValue: ":1"
+    });
+    const japaneseMarkup = renderPalette({
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(200),
+      commandContext: editorContext,
+      translate: realTranslateJa,
+      initialInputValue: ":1"
+    });
+
+    expect(englishMarkup).toContain("91 more candidates");
+    expect(japaneseMarkup).toContain("ほかに91件の候補があります");
+  });
+
+  it("uses remaining count (total - displayed), not the total count", () => {
+    // 105 lines starting with "1": 1, 10-19, 100-105 -> 1 + 10 + 6 = 17
+    // total matches, all of which fit within the 20-candidate display limit,
+    // so there is nothing left over.
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(105),
+      commandContext: editorContext,
+      translate: realTranslateEn,
+      initialInputValue: ":1"
+    });
+
+    expect(markup).not.toContain("more candidates");
+  });
+
+  it("shows no remaining-count footer status for exactly 20 total candidates", () => {
+    // Lines 1..108 starting with "1": "1" (1), "10".."19" (10), "100".."108"
+    // (9) -> exactly 20 total matches, all displayed, none remaining.
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(108),
+      commandContext: editorContext,
+      translate: realTranslateEn,
+      initialInputValue: ":1"
+    });
+    const rowCount = (markup.match(/commandPaletteItemPrimary/g) ?? []).length;
+
+    expect(rowCount).toBe(20);
+    expect(markup).not.toContain("more candidates");
+  });
+
+  it("does not fetch preview text (getLineText) for candidates beyond the display limit", () => {
+    const getLineText = vi.fn(() => "text");
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(200, getLineText),
+      commandContext: editorContext,
+      translate: realTranslateEn,
+      initialInputValue: ":1"
+    });
+
+    expect(markup).toContain("91 more candidates");
+    // Called twice per render (initial selectedIndex computation + render
+    // body, see the earlier #148 performance note) — 20 displayed
+    // candidates each time, never once for the 91 undisplayed matches.
+    expect(getLineText.mock.calls.length).toBe(40);
+  });
+
+  it("shows no remaining-count footer status for message states (invalid/out-of-range) or the disabled row", () => {
+    const invalidMarkup = renderPalette({
+      registry: buildLineJumpRegistry(),
+      translate: realTranslateEn,
+      initialInputValue: ":abc"
+    });
+    const outOfRangeMarkup = renderPalette({
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(10),
+      commandContext: editorContext,
+      translate: realTranslateEn,
+      initialInputValue: ":99999"
+    });
+    const disabledMarkup = renderPalette({
+      registry: buildLineJumpRegistry(),
+      commandContext: { "editor.kind.markdown": false },
+      translate: realTranslateEn,
+      initialInputValue: ":1"
+    });
+
+    for (const markup of [invalidMarkup, outOfRangeMarkup, disabledMarkup]) {
+      expect(markup).not.toContain("more candidates");
+    }
+  });
+
+  it("keeps the display limit at 20 and only displays the first 20 candidates", () => {
+    const source2 = readFileSync("src/renderer/lineJumpCandidates.ts", "utf8");
+
+    expect(source2).toContain("DEFAULT_MAX_LINE_JUMP_CANDIDATES = 20");
+  });
+
+  it("does not change command lifecycle behavior: executeLineJumpResult/executeLineJumpCandidateAt are unaffected by the remaining-count footer", () => {
+    const functionBody = source.slice(
+      source.indexOf("function executeLineJumpCandidateAt("),
+      source.indexOf("function handleKeyDown(")
+    );
+
+    expect(functionBody).not.toContain("remainingCount");
+    expect(functionBody).not.toContain("moreCandidates");
+  });
+
+  it("shows a preview for each candidate, reusing the existing line preview formatting", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(20, (line) =>
+        line === 1 ? "   const answer = 42;" : `text ${line}`
+      ),
+      commandContext: editorContext,
+      translate: realTranslateEn,
+      initialInputValue: ":1"
     });
 
     expect(markup).toContain("commandPaletteItemSecondary");
     expect(markup).toContain("const answer = 42;");
+    expect(markup).not.toContain(">   const answer = 42;<");
   });
 
-  it("truncates a long target line and appends the ASCII ellipsis", () => {
-    const longLine = "x".repeat(30);
-    const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
-      commandContext: { "editor.kind.markdown": true },
-      initialInputValue: ":1",
-      resolveLineJumpPreviewLine: () => longLine
-    });
-
-    expect(markup).toContain(`${"x".repeat(20)}...`);
-    expect(markup).not.toContain("x".repeat(21));
-  });
-
-  it("does not truncate a short target line", () => {
-    const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
-      commandContext: { "editor.kind.markdown": true },
-      initialInputValue: ":1",
-      resolveLineJumpPreviewLine: () => "short"
-    });
-
-    expect(markup).toContain(">short<");
-    expect(markup).not.toContain("...");
-  });
-
-  it("trims leading whitespace from the preview without affecting document content", () => {
-    const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
-      commandContext: { "editor.kind.markdown": true },
-      initialInputValue: ":1",
-      resolveLineJumpPreviewLine: () => "    indented"
-    });
-
-    expect(markup).toContain(">indented<");
-    expect(markup).not.toContain(">    indented<");
-  });
-
-  it("shows Empty line / 空行 for an empty or whitespace-only target line", () => {
+  it("shows Empty line / 空行 for a candidate whose target line is blank", () => {
     const englishMarkup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
-      commandContext: { "editor.kind.markdown": true },
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(3, () => "   "),
+      commandContext: editorContext,
       translate: realTranslateEn,
-      initialInputValue: ":1",
-      resolveLineJumpPreviewLine: () => "   "
+      initialInputValue: ":1"
     });
     const japaneseMarkup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
-      commandContext: { "editor.kind.markdown": true },
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(3, () => ""),
+      commandContext: editorContext,
       translate: realTranslateJa,
-      initialInputValue: ":1",
-      resolveLineJumpPreviewLine: () => ""
+      initialInputValue: ":1"
     });
 
     expect(englishMarkup).toContain("Empty line");
     expect(japaneseMarkup).toContain("空行");
   });
 
-  it("does not show a preview for invalid, out-of-range, or disabled line states", () => {
-    const previewLine = vi.fn(() => "should not be shown");
+  it("renders acceptably when multiple candidates are empty lines", () => {
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(19, (line) =>
+        line % 2 === 0 ? "" : `text ${line}`
+      ),
+      commandContext: editorContext,
+      translate: realTranslateEn,
+      initialInputValue: ":1"
+    });
+    const rowCount = (markup.match(/commandPaletteItemPrimary/g) ?? []).length;
+    const emptyCount = (markup.match(/\(Empty line\)/g) ?? []).length;
 
-    const invalidMarkup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
-      commandContext: { "editor.kind.markdown": true },
-      initialInputValue: ":abc",
-      resolveLineJumpPreviewLine: previewLine
-    });
-    const outOfRangeMarkup = renderPalette({
-      registry: buildLineJumpRegistry(() => false),
-      commandContext: { "editor.kind.markdown": true },
-      initialInputValue: ":99999",
-      resolveLineJumpPreviewLine: previewLine
-    });
-    const disabledMarkup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
-      commandContext: { "editor.kind.markdown": false },
-      initialInputValue: ":1",
-      resolveLineJumpPreviewLine: previewLine
-    });
-
-    expect(invalidMarkup).not.toContain("commandPaletteItemSecondary");
-    expect(outOfRangeMarkup).not.toContain("commandPaletteItemSecondary");
-    expect(disabledMarkup).not.toContain("commandPaletteItemSecondary");
-    expect(previewLine).not.toHaveBeenCalled();
+    expect(rowCount).toBe(11); // 1, 10-19
+    expect(emptyCount).toBe(5); // 10, 12, 14, 16, 18
   });
 
-  it("omits the secondary line entirely when no preview resolver is supplied (default prop)", () => {
+  it("does not show a preview for the disabled row (non-editor context)", () => {
     const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
-      commandContext: { "editor.kind.markdown": true },
+      registry: buildLineJumpRegistry(),
+      commandContext: { "editor.kind.markdown": false },
+      translate: realTranslateEn,
+      initialInputValue: ":1"
+    });
+
+    expect(markup).not.toContain("commandPaletteItemSecondary");
+  });
+
+  it("only calls getLineText for lines that actually become candidates (#148 performance), not once per rejected line", () => {
+    const getLineText = vi.fn(() => "text");
+    const markup = renderPalette({
+      registry: buildLineJumpRegistry(),
+      lineJumpEditorSnapshot: buildLineJumpEditorSnapshot(1000000, getLineText),
+      commandContext: editorContext,
       translate: realTranslateEn,
       initialInputValue: ":1"
     });
 
     expect(markup).toContain("Go to line 1");
-    expect(markup).not.toContain("commandPaletteItemSecondary");
+    // Candidate generation runs twice on initial mount (the lazy
+    // `selectedIndex` useState initializer, then the render body's own
+    // `lineJumpState`) — same pre-existing pattern as command-mode entries
+    // being computed in both `updateInput` and the render body. Each
+    // getLineText call is O(1) once cached (see createLineJumpEditorSnapshot
+    // / lineJumpQuery.test.ts), so this bounded 2x is not a meaningful cost.
+    expect(getLineText.mock.calls.length).toBe(40);
   });
 
-  it("does not change line-jump command execution behavior: click/Enter wiring is unaffected by the preview", () => {
-    const source = readFileSync("src/renderer/CommandPalette.tsx", "utf8");
+  it("ArrowUp/ArrowDown operate on the candidate list length in line mode, not the (empty) command entries array", () => {
+    const startIndex = source.indexOf('case "ArrowDown": {');
+    const endIndex = source.indexOf('case "Enter": {');
+    const body = source.slice(startIndex, endIndex);
+
+    expect(body).toContain("moveCommandPaletteSelection(selectionLength, current, 1)");
+    expect(body).toContain("moveCommandPaletteSelection(selectionLength, current, -1)");
+
+    const selectionLengthDecl = source.slice(
+      source.indexOf("const selectionLength ="),
+      source.indexOf("useEffect(() => {\n    scrollCommandPaletteSelectionIntoView")
+    );
+
+    expect(selectionLengthDecl).toContain("lineJumpCandidates?.length");
+  });
+
+  it("attaches selectedItemRef to the selected candidate row, so scroll-into-view targets it", () => {
+    const executableBlockStart = source.indexOf(
+      'lineJumpState.kind === "executable" ? ('
+    );
+    const executableBlockEnd = source.indexOf(
+      ") : lineJumpState.kind"
+    );
+    const body = source.slice(executableBlockStart, executableBlockEnd);
+
+    expect(body).toContain(
+      "ref={index === selectedIndex ? selectedItemRef : null}"
+    );
+
+    const effectStart = source.indexOf(
+      "useEffect(() => {\n    scrollCommandPaletteSelectionIntoView"
+    );
+    const effectBody = source.slice(effectStart, effectStart + 200);
+
+    expect(effectBody).toContain("[selectionLength, mode, query, selectedIndex]");
+  });
+
+  it("executes the clicked candidate through onClick={() => executeLineJumpCandidateAt(index)}", () => {
+    const executableBlockStart = source.indexOf(
+      'lineJumpState.kind === "executable" ? ('
+    );
+    const executableBlockEnd = source.indexOf(
+      ") : lineJumpState.kind"
+    );
+    const body = source.slice(executableBlockStart, executableBlockEnd);
+
+    expect(body).toContain("onClick={() => executeLineJumpCandidateAt(index)}");
+  });
+
+  it("executes the selected candidate's line through the command registry on Enter, via executeLineJumpCandidateAt", () => {
     const functionBody = source.slice(
-      source.indexOf("function executeLineJumpResult("),
-      source.indexOf("function handleKeyDown(")
+      source.indexOf("function executeLineJumpCandidateAt("),
+      source.indexOf("/** Handles Enter for line mode")
     );
 
-    expect(functionBody).not.toContain("Preview");
-    expect(functionBody).not.toContain("resolveLineJumpPreviewLine");
     expect(functionBody).toContain(
-      "onExecuteCommand(editorCommandIds.goToLine, lineJumpState.line);"
-    );
-  });
-});
-
-describe("CommandPalette line jump result selected state (#140 polish)", () => {
-  const source = readFileSync("src/renderer/CommandPalette.tsx", "utf8");
-
-  it("marks an executable line-jump result as selected, with enabled styling", () => {
-    const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
-      commandContext: { "editor.kind.markdown": true },
-      translate: realTranslateEn,
-      initialInputValue: ":42"
-    });
-
-    expect(markup).toContain('aria-selected="true"');
-    expect(markup).toContain("commandPaletteItemSelected");
-    expect(markup).not.toContain("commandPaletteItemDisabled");
-    expect(markup).not.toContain("commandPaletteFooterHintUnavailable");
-  });
-
-  it("marks a disabled line-jump result as selected AND disabled, dimming the Enter hint", () => {
-    const markup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
-      commandContext: { "editor.kind.markdown": false },
-      translate: realTranslateEn,
-      initialInputValue: ":1"
-    });
-
-    expect(markup).toContain('aria-selected="true"');
-    expect(markup).toContain('aria-disabled="true"');
-    expect(markup).toContain("commandPaletteItemSelected");
-    expect(markup).toContain("commandPaletteItemDisabled");
-    expect(markup).toContain("commandPaletteFooterHintUnavailable");
-    expect(markup).toContain("This command is currently unavailable");
-  });
-
-  it("still renders no result row (and no selected state) for parser-invalid or out-of-range message states", () => {
-    const invalidMarkup = renderPalette({
-      registry: buildLineJumpRegistry(() => true),
-      initialInputValue: ":abc"
-    });
-    const outOfRangeMarkup = renderPalette({
-      registry: buildLineJumpRegistry(() => false),
-      commandContext: { "editor.kind.markdown": true },
-      initialInputValue: ":99999"
-    });
-
-    for (const markup of [invalidMarkup, outOfRangeMarkup]) {
-      expect(markup).not.toContain("commandPaletteList");
-      expect(markup).not.toContain("commandPaletteItem");
-      expect(markup).not.toContain("aria-selected");
-    }
-  });
-
-  it("reuses commandPaletteItemClassName(selected, enabled), not a bespoke class string", () => {
-    const rowStart = source.indexOf('<li\n                role="option"');
-    const rowEnd = source.indexOf("</ul>", rowStart);
-    const rowBody = source.slice(rowStart, rowEnd);
-
-    expect(rowBody).toContain("aria-selected={lineJumpResultSelected}");
-    expect(rowBody).toContain(
-      'className={commandPaletteItemClassName(\n                  lineJumpResultSelected,\n                  lineJumpState.kind === "executable"\n                )}'
+      "onExecuteCommand(editorCommandIds.goToLine, candidate.line);"
     );
   });
 
-  it("does not change Enter behavior: executable executes, disabled blocks, message states are no-ops", () => {
-    // This is a pure visual/ARIA change to the row's selected state — Enter
-    // routing (executeLineJumpResult) must be untouched. Covered functionally
-    // above (#140 / #140 preview); this pins the source-level invariant that
-    // the new selection variable is display-only.
-    const functionBody = source.slice(
-      source.indexOf("function executeLineJumpResult("),
-      source.indexOf("function handleKeyDown(")
-    );
-
-    expect(functionBody).not.toContain("lineJumpResultSelected");
-    expect(functionBody).toContain('if (lineJumpState.kind === "disabled") {');
-    expect(functionBody).toContain("onBlockedCommand(editorCommandIds.goToLine);");
-    expect(functionBody).toContain('if (lineJumpState.kind === "executable") {');
-    expect(functionBody).toContain(
-      "onExecuteCommand(editorCommandIds.goToLine, lineJumpState.line);"
-    );
+  it("does not put candidate generation directly in CommandPalette.tsx: it calls the pure resolveLineJumpPaletteState/resolveLineJumpCandidates helpers", () => {
+    expect(source).not.toContain("startsWith(");
+    expect(source).toContain("resolveLineJumpPaletteState(");
   });
 });

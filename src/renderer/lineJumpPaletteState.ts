@@ -1,13 +1,21 @@
 import type { TranslationKey } from "../shared/i18n";
 import type { CommandPaletteFooterModel } from "./CommandPalette";
-import { validateLineJumpQuery } from "./lineJumpQuery";
+import {
+  resolveLineJumpCandidates,
+  type LineJumpCandidate
+} from "./lineJumpCandidates";
+import {
+  validateLineJumpQuery,
+  type LineJumpEditorSnapshot
+} from "./lineJumpQuery";
 
 /**
- * Combines query validation with editor-context/range information into the
- * single state the Command Palette renders for `:` mode. Kept separate from
- * `lineJumpQuery.ts` (pure text parsing) since this layer knows about the
- * Palette's three-way distinction between a parser message, an out-of-range
- * message, and a disabled-by-context result row (#140).
+ * Combines query validation with editor-context/candidate information into
+ * the single state the Command Palette renders for `:` mode. Kept separate
+ * from `lineJumpQuery.ts` (pure text parsing) since this layer knows about
+ * the Palette's distinction between a parser message, an out-of-range
+ * message, a disabled-by-context result row, and an executable candidate
+ * list (#140, expanded to prefix candidates in #148).
  */
 export type LineJumpPaletteState =
   | { readonly kind: "empty" }
@@ -16,20 +24,31 @@ export type LineJumpPaletteState =
   | { readonly kind: "invalid" }
   | { readonly kind: "unsafeInteger" }
   | { readonly kind: "outOfRange" }
-  | { readonly kind: "executable"; readonly line: number }
+  | {
+      readonly kind: "executable";
+      readonly candidates: readonly LineJumpCandidate[];
+      /** Matching candidates beyond the displayed list (#148 follow-up). */
+      readonly remainingCount: number;
+    }
   | { readonly kind: "disabled"; readonly line: number };
 
 /**
- * `isInRange` is injected rather than computed here so this function stays
- * pure and testable: the real caller (CommandPalette.tsx) sources it from
- * `commandRegistry.isEnabledForContext`, per #128/#140 — the palette reads
- * range validity through the same command enablement path used everywhere
- * else, instead of inspecting editor/document internals itself.
+ * `editorSnapshot` is injected (null when there is no active
+ * line-addressable editor) rather than read here so this function stays
+ * pure and testable: the real caller (CommandPalette.tsx) sources it from a
+ * prop supplied by App.tsx, per #128/#140/#148 — the palette never inspects
+ * editor/document internals itself.
+ *
+ * A valid query with zero candidates is, by construction, out of range: the
+ * exact match is always the numerically smallest possible candidate (see
+ * `resolveLineJumpCandidates`), so if it doesn't fit within the document's
+ * line count, nothing else can either. This is why #148 does not need a
+ * separate "no matching lines" message — out-of-range already covers it.
  */
 export function resolveLineJumpPaletteState(
   query: string,
-  isEditorContext: boolean,
-  isInRange: (line: number) => boolean
+  editorSnapshot: LineJumpEditorSnapshot | null,
+  maxCandidates?: number
 ): LineJumpPaletteState {
   const validation = validateLineJumpQuery(query);
 
@@ -37,27 +56,48 @@ export function resolveLineJumpPaletteState(
     return { kind: validation.kind };
   }
 
-  if (!isEditorContext) {
+  if (!editorSnapshot) {
     return { kind: "disabled", line: validation.line };
   }
 
-  if (!isInRange(validation.line)) {
+  const { candidates, totalMatchCount } = resolveLineJumpCandidates({
+    prefixQuery: String(validation.line),
+    lineCount: editorSnapshot.lineCount,
+    maxCandidates,
+    getLineText: editorSnapshot.getLineText
+  });
+
+  if (candidates.length === 0) {
     return { kind: "outOfRange" };
   }
 
-  return { kind: "executable", line: validation.line };
+  return {
+    kind: "executable",
+    candidates,
+    remainingCount: totalMatchCount - candidates.length
+  };
 }
 
 /**
  * Mirrors `resolveCommandPaletteFooterModel`'s shape for command mode:
- * disabled reuses the exact same generic message (#128/#129/#134), every
- * other state shows no status text, and only "executable" enables Enter.
+ * disabled reuses the exact same generic message (#128/#129/#134), an
+ * executable list with more matches than displayed shows the remaining
+ * count (#148 follow-up), every other state shows no status text, and only
+ * "executable" enables Enter.
  */
 export function resolveLineJumpFooterModel(
   state: LineJumpPaletteState
 ): CommandPaletteFooterModel {
   if (state.kind === "disabled") {
     return { statusKey: "commandPalette.footer.disabled", canRunSelected: false };
+  }
+
+  if (state.kind === "executable" && state.remainingCount > 0) {
+    return {
+      statusKey: "commandPalette.lineJump.moreCandidates",
+      statusValues: { count: state.remainingCount },
+      canRunSelected: true
+    };
   }
 
   return { statusKey: null, canRunSelected: state.kind === "executable" };

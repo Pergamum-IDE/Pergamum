@@ -68,7 +68,6 @@ function buildCoreCommandRegistry(): CommandRegistry {
   registerLineJumpCommands(
     registry,
     {
-      canGoToLine: () => true,
       goToLine: () => undefined
     },
     {

@@ -106,7 +106,10 @@ import {
   createLineJumpCommandTitles,
   registerLineJumpCommands
 } from "./lineJumpCommands";
-import { documentLineStartOffset, documentLineText } from "./lineJumpQuery";
+import {
+  createLineJumpEditorSnapshot,
+  documentLineStartOffset
+} from "./lineJumpQuery";
 import { UtilityWindow } from "./UtilityWindow";
 import { GlossaryOccurrencesPanel } from "./GlossaryOccurrencesPanel";
 import {
@@ -317,13 +320,7 @@ export function App(): JSX.Element {
     useRef<NativeEditCommandContext | null>(null);
   const toggleRecentProjectsCommandRef = useRef<() => void>(() => undefined);
   const canSaveCurrentDocumentCommandRef = useRef<() => boolean>(() => false);
-  const canGoToLineCommandRef = useRef<(line: number) => boolean>(
-    () => false
-  );
   const goToLineCommandRef = useRef<(line: number) => void>(() => undefined);
-  const previewLineTextCommandRef = useRef<(line: number) => string | null>(
-    () => null
-  );
   /**
    * Holds the current live command context. Read lazily by the
    * CommandRegistry's injected context provider so `when` re-evaluation at
@@ -554,7 +551,6 @@ export function App(): JSX.Element {
     registerLineJumpCommands(
       registry,
       {
-        canGoToLine: (line) => canGoToLineCommandRef.current(line),
         goToLine: (line) => goToLineCommandRef.current(line)
       },
       createLineJumpCommandTitles(translate)
@@ -2027,18 +2023,6 @@ export function App(): JSX.Element {
     setIsRecentProjectsOpen((isOpen) => !isOpen);
   };
   canSaveCurrentDocumentCommandRef.current = () => canSave;
-  canGoToLineCommandRef.current = (line) => {
-    if (currentEditor.kind !== "markdown") {
-      return false;
-    }
-
-    return (
-      documentLineStartOffset(
-        currentDocumentContent(currentEditor.document),
-        line
-      ) !== null
-    );
-  };
   goToLineCommandRef.current = (line) => {
     if (currentEditor.kind !== "markdown") {
       return;
@@ -2050,21 +2034,23 @@ export function App(): JSX.Element {
     );
 
     if (offset === null) {
+      // Out of range: command-body validation (#148), not registry
+      // enablement — command.invoked has already fired by the time
+      // execute() reaches here; this just silently does not navigate.
       return;
     }
 
     setPendingMarkdownSelection({ start: offset, end: offset });
   };
-  previewLineTextCommandRef.current = (line) => {
-    if (currentEditor.kind !== "markdown") {
-      return null;
-    }
-
-    return documentLineText(
-      currentDocumentContent(currentEditor.document),
-      line
-    );
-  };
+  // Palette-display-only data for line jump candidate generation (#148):
+  // lazily split (see createLineJumpEditorSnapshot), so it costs nothing on
+  // renders where the Palette isn't open in line mode.
+  const lineJumpEditorSnapshot =
+    currentEditor.kind === "markdown"
+      ? createLineJumpEditorSnapshot(
+          currentDocumentContent(currentEditor.document)
+        )
+      : null;
 
   async function activateProjectDocument(relativePath: string): Promise<void> {
     const document = project?.documents.find(
@@ -2454,9 +2440,7 @@ export function App(): JSX.Element {
             });
           }}
           onClose={() => setIsCommandPaletteOpen(false)}
-          resolveLineJumpPreviewLine={(line) =>
-            previewLineTextCommandRef.current(line)
-          }
+          lineJumpEditorSnapshot={lineJumpEditorSnapshot}
         />
       ) : null}
     </main>

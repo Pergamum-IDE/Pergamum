@@ -51,6 +51,7 @@ export const enTranslations = {
   "commandPalette.lineJump.fullWidthDigits": "Use half-width digits",
   "commandPalette.lineJump.goToLine": "Go to line {line}",
   "commandPalette.lineJump.invalid": "Enter a valid line number",
+  "commandPalette.lineJump.moreCandidates": "{count} more candidates",
   "commandPalette.lineJump.outOfRange": "Line number is out of range",
   "commandPalette.noResults": "No matching commands",
   "commandPalette.reserved.file": "File quick open is not available yet",

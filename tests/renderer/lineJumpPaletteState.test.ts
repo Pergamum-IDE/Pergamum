@@ -5,65 +5,114 @@ import {
   resolveLineJumpPaletteState,
   type LineJumpPaletteState
 } from "../../src/renderer/lineJumpPaletteState";
+import type { LineJumpEditorSnapshot } from "../../src/renderer/lineJumpQuery";
+
+function buildSnapshot(
+  lineCount: number,
+  getLineText: (line: number) => string = () => ""
+): LineJumpEditorSnapshot {
+  return { lineCount, getLineText };
+}
 
 describe("resolveLineJumpPaletteState", () => {
-  it("passes parser-invalid/empty/unsafe kinds through unchanged, without consulting range", () => {
-    const isInRange = vi.fn(() => true);
+  it("passes parser-invalid/empty/unsafe kinds through unchanged, without consulting the editor snapshot", () => {
+    const getLineText = vi.fn(() => "");
+    const snapshot = buildSnapshot(1000, getLineText);
 
     for (const query of ["", "abc", "0", "1.5", "１２", "9,007,199,254,740,992"]) {
-      resolveLineJumpPaletteState(query, true, isInRange);
+      resolveLineJumpPaletteState(query, snapshot);
     }
 
-    expect(isInRange).not.toHaveBeenCalled();
+    expect(getLineText).not.toHaveBeenCalled();
   });
 
   it("maps each non-valid query kind to the matching palette state kind", () => {
-    expect(resolveLineJumpPaletteState("", true, () => true)).toEqual({
-      kind: "empty"
-    });
-    expect(resolveLineJumpPaletteState("１２", true, () => true)).toEqual({
+    const snapshot = buildSnapshot(1000);
+
+    expect(resolveLineJumpPaletteState("", snapshot)).toEqual({ kind: "empty" });
+    expect(resolveLineJumpPaletteState("１２", snapshot)).toEqual({
       kind: "fullWidthDigits"
     });
-    expect(resolveLineJumpPaletteState("1.5", true, () => true)).toEqual({
+    expect(resolveLineJumpPaletteState("1.5", snapshot)).toEqual({
       kind: "decimal"
     });
-    expect(resolveLineJumpPaletteState("abc", true, () => true)).toEqual({
+    expect(resolveLineJumpPaletteState("abc", snapshot)).toEqual({
       kind: "invalid"
     });
     expect(
-      resolveLineJumpPaletteState("9,007,199,254,740,992", true, () => true)
+      resolveLineJumpPaletteState("9,007,199,254,740,992", snapshot)
     ).toEqual({ kind: "unsafeInteger" });
   });
 
-  it("returns disabled (not out-of-range) when the active editor is not line-addressable, regardless of range", () => {
-    expect(resolveLineJumpPaletteState("42", false, () => true)).toEqual({
-      kind: "disabled",
-      line: 42
-    });
-    expect(resolveLineJumpPaletteState("42", false, () => false)).toEqual({
+  it("returns disabled (not out-of-range) when there is no active line-addressable editor", () => {
+    expect(resolveLineJumpPaletteState("42", null)).toEqual({
       kind: "disabled",
       line: 42
     });
   });
 
-  it("checks range only once editor context is confirmed line-addressable", () => {
-    const isInRange = vi.fn(() => false);
+  it("returns outOfRange when a valid query produces zero candidates", () => {
+    const snapshot = buildSnapshot(10);
 
-    expect(resolveLineJumpPaletteState("99999", true, isInRange)).toEqual({
+    expect(resolveLineJumpPaletteState("99999", snapshot)).toEqual({
       kind: "outOfRange"
     });
-    expect(isInRange).toHaveBeenCalledWith(99999);
   });
 
-  it("returns executable with the normalized line number when in range", () => {
-    expect(resolveLineJumpPaletteState("007", true, () => true)).toEqual({
-      kind: "executable",
-      line: 7
-    });
-    expect(resolveLineJumpPaletteState("1,000", true, () => true)).toEqual({
-      kind: "executable",
-      line: 1000
-    });
+  it("returns executable with the exact-match-first candidate list when in range", () => {
+    const snapshot = buildSnapshot(20, (line) => `text ${line}`);
+    const result = resolveLineJumpPaletteState("1", snapshot, 3);
+
+    expect(result.kind).toBe("executable");
+    if (result.kind === "executable") {
+      expect(result.candidates.map((c) => c.line)).toEqual([1, 10, 11]);
+    }
+  });
+
+  it("uses the normalized line number as the exact-match candidate for leading-zero/comma queries", () => {
+    const snapshot = buildSnapshot(2000, () => "");
+    const zeroPadded = resolveLineJumpPaletteState("007", snapshot);
+    const commaGrouped = resolveLineJumpPaletteState("1,000", snapshot);
+
+    expect(zeroPadded.kind).toBe("executable");
+    if (zeroPadded.kind === "executable") {
+      expect(zeroPadded.candidates[0]?.line).toBe(7);
+    }
+    expect(commaGrouped.kind).toBe("executable");
+    if (commaGrouped.kind === "executable") {
+      expect(commaGrouped.candidates[0]?.line).toBe(1000);
+    }
+  });
+
+  it("forwards maxCandidates through to candidate generation", () => {
+    const snapshot = buildSnapshot(100000, () => "");
+    const result = resolveLineJumpPaletteState("1", snapshot, 5);
+
+    expect(result.kind).toBe("executable");
+    if (result.kind === "executable") {
+      expect(result.candidates).toHaveLength(5);
+    }
+  });
+
+  it("reports remainingCount as 0 when every match fits within the display limit", () => {
+    const snapshot = buildSnapshot(130, () => "");
+    const result = resolveLineJumpPaletteState("12", snapshot, 20);
+
+    expect(result.kind).toBe("executable");
+    if (result.kind === "executable") {
+      expect(result.remainingCount).toBe(0);
+    }
+  });
+
+  it("reports remainingCount as totalMatchCount - displayed candidates when there are more matches (#148 follow-up)", () => {
+    const snapshot = buildSnapshot(100000, () => "");
+    const result = resolveLineJumpPaletteState("1", snapshot, 20);
+
+    expect(result.kind).toBe("executable");
+    if (result.kind === "executable") {
+      expect(result.candidates).toHaveLength(20);
+      expect(result.remainingCount).toBeGreaterThan(0);
+    }
   });
 });
 
@@ -74,10 +123,38 @@ describe("resolveLineJumpFooterModel", () => {
     ).toEqual({ statusKey: "commandPalette.footer.disabled", canRunSelected: false });
   });
 
-  it("enables Enter with no status text for an executable result", () => {
+  it("enables Enter with no status text for an executable result with no remaining candidates", () => {
     expect(
-      resolveLineJumpFooterModel({ kind: "executable", line: 42 })
+      resolveLineJumpFooterModel({
+        kind: "executable",
+        candidates: [{ line: 42, preview: { kind: "empty" } }],
+        remainingCount: 0
+      })
     ).toEqual({ statusKey: null, canRunSelected: true });
+  });
+
+  it("shows the remaining-candidate count when more candidates exist than are displayed (#148 follow-up)", () => {
+    expect(
+      resolveLineJumpFooterModel({
+        kind: "executable",
+        candidates: [{ line: 1, preview: { kind: "empty" } }],
+        remainingCount: 133
+      })
+    ).toEqual({
+      statusKey: "commandPalette.lineJump.moreCandidates",
+      statusValues: { count: 133 },
+      canRunSelected: true
+    });
+  });
+
+  it("still enables Enter while showing the remaining-candidate count", () => {
+    const footer = resolveLineJumpFooterModel({
+      kind: "executable",
+      candidates: [{ line: 1, preview: { kind: "empty" } }],
+      remainingCount: 5
+    });
+
+    expect(footer.canRunSelected).toBe(true);
   });
 
   it("shows no status text and dims Enter for every message state", () => {
@@ -101,7 +178,9 @@ describe("resolveLineJumpFooterModel", () => {
 
 describe("lineJumpMessageKey", () => {
   it("returns null for executable and disabled (they render a result row, not a message)", () => {
-    expect(lineJumpMessageKey({ kind: "executable", line: 1 })).toBeNull();
+    expect(
+      lineJumpMessageKey({ kind: "executable", candidates: [], remainingCount: 0 })
+    ).toBeNull();
     expect(lineJumpMessageKey({ kind: "disabled", line: 1 })).toBeNull();
   });
 
