@@ -102,6 +102,11 @@ import {
   editorCommandIds,
   registerEditorCommands
 } from "./editorCommands";
+import {
+  createLineJumpCommandTitles,
+  registerLineJumpCommands
+} from "./lineJumpCommands";
+import { documentLineStartOffset, documentLineText } from "./lineJumpQuery";
 import { UtilityWindow } from "./UtilityWindow";
 import { GlossaryOccurrencesPanel } from "./GlossaryOccurrencesPanel";
 import {
@@ -312,6 +317,13 @@ export function App(): JSX.Element {
     useRef<NativeEditCommandContext | null>(null);
   const toggleRecentProjectsCommandRef = useRef<() => void>(() => undefined);
   const canSaveCurrentDocumentCommandRef = useRef<() => boolean>(() => false);
+  const canGoToLineCommandRef = useRef<(line: number) => boolean>(
+    () => false
+  );
+  const goToLineCommandRef = useRef<(line: number) => void>(() => undefined);
+  const previewLineTextCommandRef = useRef<(line: number) => string | null>(
+    () => null
+  );
   /**
    * Holds the current live command context. Read lazily by the
    * CommandRegistry's injected context provider so `when` re-evaluation at
@@ -538,6 +550,14 @@ export function App(): JSX.Element {
         canDelegateNativeEditCommand: () => true
       },
       createEditorCommandTitles(translate)
+    );
+    registerLineJumpCommands(
+      registry,
+      {
+        canGoToLine: (line) => canGoToLineCommandRef.current(line),
+        goToLine: (line) => goToLineCommandRef.current(line)
+      },
+      createLineJumpCommandTitles(translate)
     );
     registerWorkspaceCommands(
       registry,
@@ -2007,6 +2027,44 @@ export function App(): JSX.Element {
     setIsRecentProjectsOpen((isOpen) => !isOpen);
   };
   canSaveCurrentDocumentCommandRef.current = () => canSave;
+  canGoToLineCommandRef.current = (line) => {
+    if (currentEditor.kind !== "markdown") {
+      return false;
+    }
+
+    return (
+      documentLineStartOffset(
+        currentDocumentContent(currentEditor.document),
+        line
+      ) !== null
+    );
+  };
+  goToLineCommandRef.current = (line) => {
+    if (currentEditor.kind !== "markdown") {
+      return;
+    }
+
+    const offset = documentLineStartOffset(
+      currentDocumentContent(currentEditor.document),
+      line
+    );
+
+    if (offset === null) {
+      return;
+    }
+
+    setPendingMarkdownSelection({ start: offset, end: offset });
+  };
+  previewLineTextCommandRef.current = (line) => {
+    if (currentEditor.kind !== "markdown") {
+      return null;
+    }
+
+    return documentLineText(
+      currentDocumentContent(currentEditor.document),
+      line
+    );
+  };
 
   async function activateProjectDocument(relativePath: string): Promise<void> {
     const document = project?.documents.find(
@@ -2380,8 +2438,8 @@ export function App(): JSX.Element {
           translate={translate}
           isComposing={imeCompositionSaveGuard.isComposing}
           commandContext={commandContext}
-          onExecuteCommand={(commandId) => {
-            executeUiCommand(commandId, { source: "commandPalette" });
+          onExecuteCommand={(commandId, ...args) => {
+            executeUiCommand(commandId, { source: "commandPalette" }, ...args);
             setIsCommandPaletteOpen(false);
           }}
           onBlockedCommand={(commandId) => {
@@ -2396,6 +2454,9 @@ export function App(): JSX.Element {
             });
           }}
           onClose={() => setIsCommandPaletteOpen(false)}
+          resolveLineJumpPreviewLine={(line) =>
+            previewLineTextCommandRef.current(line)
+          }
         />
       ) : null}
     </main>
