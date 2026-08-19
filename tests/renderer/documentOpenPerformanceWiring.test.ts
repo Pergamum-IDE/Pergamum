@@ -612,4 +612,163 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
       }
     });
   });
+
+  describe("remaining document-open gap decomposition (#154 follow-up)", () => {
+    it("MarkdownEditorSurface's one-shot effect reports previewRender.started before previewRender.completed, guarded by the same reportedDocumentOpenIdRef", () => {
+      const effectStart = editorSurfaceSource.indexOf(
+        "useEffect(() => {\n    if (documentOpenId"
+      );
+      const effectEnd = editorSurfaceSource.indexOf("}, [documentOpenId]);");
+
+      expect(effectStart).toBeGreaterThan(-1);
+      expect(effectEnd).toBeGreaterThan(effectStart);
+
+      const effectBody = editorSurfaceSource.slice(effectStart, effectEnd);
+      const startedIndex = effectBody.indexOf(
+        "onDocumentOpenPreviewRenderStarted(documentOpenId, previewRenderStartedAt);"
+      );
+      const renderedIndex = effectBody.indexOf(
+        "onDocumentOpenPreviewRendered(documentOpenId, previewRenderDurationMs);"
+      );
+
+      expect(startedIndex).toBeGreaterThan(-1);
+      expect(renderedIndex).toBeGreaterThan(startedIndex);
+      // Both calls sit inside the same `reportedDocumentOpenIdRef.current !==
+      // documentOpenId` branch — only one ref, so StrictMode's guard covers
+      // both calls together (no separate duplicate-report risk for started).
+      expect(effectBody).toContain(
+        "reportedDocumentOpenIdRef.current !== documentOpenId"
+      );
+    });
+
+    it("App.tsx computes previewRender.started's durationMs from documentOpenMeasurement.startedAt (openStartedAt), not applyStartedAt or previewRenderDurationMs", () => {
+      const body = functionBody(
+        appSource,
+        "function handleDocumentOpenPreviewRenderStarted("
+      );
+
+      expect(body).toContain('event: "document.open.previewRender.started"');
+      expect(body).toContain(
+        "previewRenderStartedAt - documentOpenMeasurement.startedAt"
+      );
+      expect(body).toContain(
+        "documentOpenMeasurement.documentOpenId !== documentOpenId"
+      );
+    });
+
+    it("App.tsx's handleDocumentOpenPreviewFrameObserved ignores a documentOpenId that does not match the in-flight measurement", () => {
+      const body = functionBody(
+        appSource,
+        "function handleDocumentOpenPreviewFrameObserved("
+      );
+
+      expect(body).toContain('event: "document.open.previewFrame.observed"');
+      expect(body).toContain(
+        "documentOpenMeasurement.documentOpenId !== documentOpenId"
+      );
+      expect(body).toContain("details: { documentOpenId, durationMs }");
+    });
+
+    it("threads onDocumentOpenPreviewRenderStarted and onDocumentOpenPreviewFrameObserved from App.tsx through EditorSurface", () => {
+      const componentIndex = appSource.indexOf("<EditorSurface");
+      const closeIndex = appSource.indexOf("/>", componentIndex);
+      const propsBlock = appSource.slice(componentIndex, closeIndex);
+
+      expect(propsBlock).toContain(
+        "onDocumentOpenPreviewRenderStarted={\n                      handleDocumentOpenPreviewRenderStarted\n                    }"
+      );
+      expect(propsBlock).toContain(
+        "onDocumentOpenPreviewFrameObserved={\n                      handleDocumentOpenPreviewFrameObserved\n                    }"
+      );
+
+      const markdownCaseStart = editorSurfaceSource.indexOf('case "markdown":');
+      const markdownCaseEnd = editorSurfaceSource.indexOf(
+        'case "glossaryEntry":'
+      );
+      const markdownCase = editorSurfaceSource.slice(
+        markdownCaseStart,
+        markdownCaseEnd
+      );
+
+      expect(markdownCase).toContain("onDocumentOpenPreviewRenderStarted");
+      expect(markdownCase).toContain("onDocumentOpenPreviewFrameObserved");
+    });
+
+    it("MarkdownEditorSurface passes onPreviewFrameObserved down to GlossaryPreviewDecorator", () => {
+      const componentIndex = editorSurfaceSource.indexOf(
+        "<GlossaryPreviewDecorator"
+      );
+      const closeIndex = editorSurfaceSource.indexOf("/>", componentIndex);
+      const propsBlock = editorSurfaceSource.slice(componentIndex, closeIndex);
+
+      expect(propsBlock).toContain(
+        "onPreviewFrameObserved={onDocumentOpenPreviewFrameObserved}"
+      );
+    });
+
+    it("only schedules a requestAnimationFrame when documentOpenId is set (no per-keystroke overhead on ordinary edits)", () => {
+      const effectStart = glossaryPreviewDecoratorSource.indexOf(
+        "useLayoutEffect(() => {"
+      );
+      const effectEnd = glossaryPreviewDecoratorSource.indexOf(
+        "}, [previewHtml, surfaceIndex]);"
+      );
+      const effectBody = glossaryPreviewDecoratorSource.slice(
+        effectStart,
+        effectEnd
+      );
+
+      expect(effectBody).toContain("if (documentOpenId) {");
+      expect(effectBody).toContain("requestAnimationFrame(() => {");
+    });
+
+    it("gates the previewFrame.observed report inside the requestAnimationFrame callback, not at schedule time — required so StrictMode's mount/cleanup/mount double-invocation still reports exactly once", () => {
+      const effectStart = glossaryPreviewDecoratorSource.indexOf(
+        "useLayoutEffect(() => {"
+      );
+      const effectEnd = glossaryPreviewDecoratorSource.indexOf(
+        "}, [previewHtml, surfaceIndex]);"
+      );
+      const effectBody = glossaryPreviewDecoratorSource.slice(
+        effectStart,
+        effectEnd
+      );
+      const rafIndex = effectBody.indexOf("requestAnimationFrame(() => {");
+      const guardIndex = effectBody.indexOf(
+        "reportedPreviewFrameDocumentOpenIdRef.current !== frameDocumentOpenId"
+      );
+
+      expect(rafIndex).toBeGreaterThan(-1);
+      expect(guardIndex).toBeGreaterThan(rafIndex);
+    });
+
+    it("cancels a pending frame request in the effect's cleanup, so a superseded open's previewFrame.observed never fires", () => {
+      expect(glossaryPreviewDecoratorSource).toContain(
+        "let frameRequestId: number | null = null;"
+      );
+      expect(glossaryPreviewDecoratorSource).toContain(
+        "return () => {\n      if (frameRequestId !== null) {\n        cancelAnimationFrame(frameRequestId);\n      }\n    };"
+      );
+    });
+
+    it("captures documentOpenId into a local const before scheduling the frame, so the deferred report can't read a since-changed prop value", () => {
+      expect(glossaryPreviewDecoratorSource).toContain(
+        "const frameDocumentOpenId = documentOpenId;"
+      );
+      expect(glossaryPreviewDecoratorSource).toContain(
+        "onPreviewFrameObserved(\n            frameDocumentOpenId,"
+      );
+    });
+
+    it("does not add a CodeMirror-mount measurement event — MarkdownEditor's editor-view effect has an empty dependency array and does not re-fire per document open", () => {
+      const markdownEditorSource = readFileSync(
+        "src/renderer/MarkdownEditor.tsx",
+        "utf8"
+      );
+
+      expect(markdownEditorSource).not.toContain("documentOpenId");
+      expect(markdownEditorSource).not.toContain("logRendererDebugEvent");
+      expect(appSource).not.toContain("document.open.codemirror.ready");
+    });
+  });
 });

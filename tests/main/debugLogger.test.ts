@@ -925,6 +925,56 @@ describe("debug logger", () => {
       expect(logger.getSnapshot().events).toEqual([]);
     });
   });
+
+  describe("remaining document-open gap decomposition (#154 follow-up)", () => {
+    it("logs previewRender.started and previewFrame.observed at debug level, keeping documentOpenId/durationMs only", () => {
+      const logger = createTestLogger(enabledOptions([new Date(2026, 7, 14)]));
+
+      logger.log({
+        level: "debug",
+        event: "document.open.previewRender.started",
+        details: { documentOpenId: "documentOpen.1", durationMs: 30 }
+      });
+      logger.log({
+        level: "debug",
+        event: "document.open.previewFrame.observed",
+        details: { documentOpenId: "documentOpen.1", durationMs: 9 }
+      });
+
+      const events = logger.getSnapshot().events;
+
+      expect(events.map((event) => event.event)).toEqual([
+        "document.open.previewRender.started",
+        "document.open.previewFrame.observed"
+      ]);
+      expect(events.map((event) => event.level)).toEqual(["debug", "debug"]);
+      expect(events[0]?.details).toEqual({
+        documentOpenId: "documentOpen.1",
+        durationMs: 30
+      });
+      expect(events[1]?.details).toEqual({
+        documentOpenId: "documentOpen.1",
+        durationMs: 9
+      });
+    });
+
+    it("emits nothing for previewRender.started / previewFrame.observed when debug mode is disabled", () => {
+      const logger = createTestLogger({ enabled: false, runtime });
+
+      logger.log({
+        level: "debug",
+        event: "document.open.previewRender.started",
+        details: { documentOpenId: "documentOpen.1", durationMs: 30 }
+      });
+      logger.log({
+        level: "debug",
+        event: "document.open.previewFrame.observed",
+        details: { documentOpenId: "documentOpen.1", durationMs: 9 }
+      });
+
+      expect(logger.getSnapshot().events).toEqual([]);
+    });
+  });
 });
 
 function createTestLogger(
