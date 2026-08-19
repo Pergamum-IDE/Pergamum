@@ -1392,6 +1392,13 @@ export function App(): JSX.Element {
    * view by the time this component's own effect runs (child effects fire
    * before parent effects). Ignored if it does not match the in-flight
    * measurement (e.g. a stale call after a newer open already started).
+   *
+   * `usableDurationMs` (also used for `document.open.completed`) is, by
+   * construction, the cumulative time from `openStartedAt` to the moment
+   * this parent passive effect fires (#154 follow-up) — i.e. it already
+   * *is* the "MarkdownEditorSurface / parent passive effect" boundary. No
+   * separate `document.open.markdownEditor.effect.completed` event is
+   * needed: reading `usable`'s own `durationMs` answers that question.
    */
   function handleDocumentOpenMeasured(
     documentOpenId: string,
@@ -1432,6 +1439,149 @@ export function App(): JSX.Element {
     });
 
     setDocumentOpenMeasurement(null);
+  }
+
+  /**
+   * Fired once by GlossaryPreviewDecorator (#154) immediately after it has
+   * synchronously written the just-rendered preview HTML into the live DOM,
+   * inside its own `useLayoutEffect` — the closest observable point to
+   * "React committed this subtree and reflected it in the DOM" reachable
+   * without instrumenting React internals. `durationMs` is measured from
+   * `previewRenderStartedAt` (the same start boundary
+   * `previewRender.completed` uses), so it also captures React's
+   * reconciliation/commit/effect-scheduling gap, not just the DOM write
+   * itself. Layout effects run before the browser paints, so this does NOT
+   * guarantee paint has completed. Ignored if it does not match the
+   * in-flight measurement (stale open, or a later open already superseded
+   * it) — mirrors handleDocumentOpenMeasured's guard.
+   */
+  function handleDocumentOpenPreviewDomCommitted(
+    documentOpenId: string,
+    durationMs: number,
+    previewNodeCount: number
+  ): void {
+    if (
+      !documentOpenMeasurement ||
+      documentOpenMeasurement.documentOpenId !== documentOpenId
+    ) {
+      return;
+    }
+
+    logRendererDebugEvent({
+      level: "debug",
+      event: "document.open.previewDom.committed",
+      details: { documentOpenId, durationMs, previewNodeCount }
+    });
+  }
+
+  /**
+   * Fired once by GlossaryPreviewDecorator (#154) right after
+   * `decoratePreviewContainer` (TreeWalker traversal + glossary mark
+   * insertion) finishes for the just-opened document's preview.
+   * `durationMs` is the decoration pass's own elapsed time — not cumulative
+   * from document-open start — so it isolates glossary decoration cost from
+   * the DOM-commit cost reported separately above. Ignored if it does not
+   * match the in-flight measurement.
+   */
+  function handleDocumentOpenPreviewDecorationCompleted(
+    documentOpenId: string,
+    durationMs: number,
+    visitedTextNodeCount: number,
+    decoratedNodeCount: number,
+    matchCount: number
+  ): void {
+    if (
+      !documentOpenMeasurement ||
+      documentOpenMeasurement.documentOpenId !== documentOpenId
+    ) {
+      return;
+    }
+
+    logRendererDebugEvent({
+      level: "debug",
+      event: "document.open.previewDecoration.completed",
+      details: {
+        documentOpenId,
+        durationMs,
+        visitedTextNodeCount,
+        decoratedNodeCount,
+        matchCount
+      }
+    });
+  }
+
+  /**
+   * Fired once by MarkdownEditorSurface (#154 follow-up), from the same
+   * closure as `previewRenderStartedAt` used for `previewRender.completed`
+   * and `previewDom.committed`, right before `onDocumentOpenPreviewRendered`
+   * in the same one-shot effect. `durationMs` is the cumulative time from
+   * `openStartedAt` (this open's true start, not `applyStartedAt`) to that
+   * render-start mark — i.e. it isolates the
+   * "openStartedAt → previewRenderStartedAt" segment (file read / IPC /
+   * editorDocument.applied / React's own scheduling delay to re-render with
+   * the new content), which none of the other document-open events cover.
+   * Ignored if it does not match the in-flight measurement.
+   */
+  function handleDocumentOpenPreviewRenderStarted(
+    documentOpenId: string,
+    previewRenderStartedAt: number
+  ): void {
+    if (
+      !documentOpenMeasurement ||
+      documentOpenMeasurement.documentOpenId !== documentOpenId
+    ) {
+      return;
+    }
+
+    logRendererDebugEvent({
+      level: "debug",
+      event: "document.open.previewRender.started",
+      details: {
+        documentOpenId,
+        durationMs: Math.round(
+          previewRenderStartedAt - documentOpenMeasurement.startedAt
+        )
+      }
+    });
+  }
+
+  /**
+   * Fired once by GlossaryPreviewDecorator (#154 follow-up), inside a
+   * `requestAnimationFrame` callback scheduled right after glossary
+   * decoration finishes — a proxy for "the browser reached its next
+   * paint-adjacent frame boundary after this preview was decorated". Like
+   * `previewDom.committed`, this does NOT guarantee the browser has actually
+   * painted; `requestAnimationFrame` callbacks run just before a paint that
+   * may occur, not after one is confirmed to have happened. `durationMs` is
+   * this segment's own elapsed time (from right after decoration finished
+   * to the callback firing), not cumulative from document-open start.
+   *
+   * Because the callback fires asynchronously, this event can legitimately
+   * be logged after `usable`/`completed` for the same `documentOpenId` (the
+   * passive effect that reports those often runs before the next animation
+   * frame) — that relative ordering is itself part of what this event is
+   * for (#154 follow-up question: is time lost before or after the frame
+   * boundary?), so it is not treated as staleness. Genuine staleness — a
+   * newer open superseding this one — is instead prevented at the source:
+   * GlossaryPreviewDecorator cancels any pending frame request in its
+   * effect cleanup whenever the preview content changes.
+   */
+  function handleDocumentOpenPreviewFrameObserved(
+    documentOpenId: string,
+    durationMs: number
+  ): void {
+    if (
+      !documentOpenMeasurement ||
+      documentOpenMeasurement.documentOpenId !== documentOpenId
+    ) {
+      return;
+    }
+
+    logRendererDebugEvent({
+      level: "debug",
+      event: "document.open.previewFrame.observed",
+      details: { documentOpenId, durationMs }
+    });
   }
 
   function replaceSavedDocument(
@@ -2554,7 +2704,19 @@ export function App(): JSX.Element {
                       setPendingMarkdownSelection(null);
                     }}
                     documentOpenId={documentOpenMeasurement?.documentOpenId ?? null}
+                    onDocumentOpenPreviewRenderStarted={
+                      handleDocumentOpenPreviewRenderStarted
+                    }
                     onDocumentOpenPreviewRendered={handleDocumentOpenMeasured}
+                    onDocumentOpenPreviewDomCommitted={
+                      handleDocumentOpenPreviewDomCommitted
+                    }
+                    onDocumentOpenPreviewDecorationCompleted={
+                      handleDocumentOpenPreviewDecorationCompleted
+                    }
+                    onDocumentOpenPreviewFrameObserved={
+                      handleDocumentOpenPreviewFrameObserved
+                    }
                   />
 
                   {layout.utilityWindow.open ? (

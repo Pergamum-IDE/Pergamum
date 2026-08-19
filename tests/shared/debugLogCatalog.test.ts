@@ -185,6 +185,101 @@ describe("debug log catalog", () => {
     ]);
   });
 
+  it("includes the preview DOM commit / decoration timing events (#154), between previewRender.completed and usable", () => {
+    expect(debugLogEventNames).toEqual(
+      expect.arrayContaining([
+        "document.open.previewRender.completed",
+        "document.open.previewDom.committed",
+        "document.open.previewDecoration.completed",
+        "document.open.usable"
+      ])
+    );
+
+    const previewRenderIndex = debugLogEventNames.indexOf(
+      "document.open.previewRender.completed"
+    );
+    const previewDomIndex = debugLogEventNames.indexOf(
+      "document.open.previewDom.committed"
+    );
+    const previewDecorationIndex = debugLogEventNames.indexOf(
+      "document.open.previewDecoration.completed"
+    );
+    const usableIndex = debugLogEventNames.indexOf("document.open.usable");
+
+    expect(previewDomIndex).toBeGreaterThan(previewRenderIndex);
+    expect(previewDecorationIndex).toBeGreaterThan(previewDomIndex);
+    expect(usableIndex).toBeGreaterThan(previewDecorationIndex);
+  });
+
+  it("includes previewNodeCount, visitedTextNodeCount, decoratedNodeCount, and matchCount as allowlisted detail keys (#154), each with a specific, non-generic name", () => {
+    type HasPreviewNodeCount = "previewNodeCount" extends keyof DebugLogDetails
+      ? true
+      : false;
+    type HasVisitedTextNodeCount =
+      "visitedTextNodeCount" extends keyof DebugLogDetails ? true : false;
+    type HasDecoratedNodeCount =
+      "decoratedNodeCount" extends keyof DebugLogDetails ? true : false;
+    type HasMatchCount = "matchCount" extends keyof DebugLogDetails
+      ? true
+      : false;
+    const hasPreviewNodeCount: HasPreviewNodeCount = true;
+    const hasVisitedTextNodeCount: HasVisitedTextNodeCount = true;
+    const hasDecoratedNodeCount: HasDecoratedNodeCount = true;
+    const hasMatchCount: HasMatchCount = true;
+
+    expect(hasPreviewNodeCount).toBe(true);
+    expect(hasVisitedTextNodeCount).toBe(true);
+    expect(hasDecoratedNodeCount).toBe(true);
+    expect(hasMatchCount).toBe(true);
+  });
+
+  it("includes previewRender.started and previewFrame.observed (#154 follow-up), positioned around the events they bracket", () => {
+    expect(debugLogEventNames).toEqual(
+      expect.arrayContaining([
+        "document.open.editorDocument.applied",
+        "document.open.previewRender.started",
+        "document.open.previewRender.completed",
+        "document.open.previewDom.committed",
+        "document.open.previewDecoration.completed",
+        "document.open.previewFrame.observed",
+        "document.open.usable"
+      ])
+    );
+
+    const appliedIndex = debugLogEventNames.indexOf(
+      "document.open.editorDocument.applied"
+    );
+    const previewRenderStartedIndex = debugLogEventNames.indexOf(
+      "document.open.previewRender.started"
+    );
+    const previewRenderCompletedIndex = debugLogEventNames.indexOf(
+      "document.open.previewRender.completed"
+    );
+    const previewDecorationIndex = debugLogEventNames.indexOf(
+      "document.open.previewDecoration.completed"
+    );
+    const previewFrameIndex = debugLogEventNames.indexOf(
+      "document.open.previewFrame.observed"
+    );
+    const usableIndex = debugLogEventNames.indexOf("document.open.usable");
+
+    expect(previewRenderStartedIndex).toBeGreaterThan(appliedIndex);
+    expect(previewRenderCompletedIndex).toBeGreaterThan(
+      previewRenderStartedIndex
+    );
+    expect(previewFrameIndex).toBeGreaterThan(previewDecorationIndex);
+    expect(usableIndex).toBeGreaterThan(previewFrameIndex);
+
+    // #154 follow-up deliberately does not add codemirror.ready or a
+    // separate markdownEditor.effect.completed event — see App.tsx's
+    // handleDocumentOpenMeasured comment for why document.open.usable's
+    // own durationMs already answers that question.
+    expect(debugLogEventNames).not.toContain("document.open.codemirror.ready");
+    expect(debugLogEventNames).not.toContain(
+      "document.open.markdownEditor.effect.completed"
+    );
+  });
+
   it("includes the DB skipped reason catalog values", () => {
     expect(debugLogReasons).toEqual(
       expect.arrayContaining([

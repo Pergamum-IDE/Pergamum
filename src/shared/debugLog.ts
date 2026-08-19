@@ -31,7 +31,11 @@ export const debugLogEventNames = [
   "document.open.started",
   "document.open.fileRead.completed",
   "document.open.editorDocument.applied",
+  "document.open.previewRender.started",
   "document.open.previewRender.completed",
+  "document.open.previewDom.committed",
+  "document.open.previewDecoration.completed",
+  "document.open.previewFrame.observed",
   "document.open.usable",
   "document.open.completed",
   "document.open.failed",
@@ -351,6 +355,15 @@ export interface DebugLogDetails {
 
   durationMs?: number;
   count?: number;
+
+  /** Direct children of the preview container right after DOM commit (#154). */
+  previewNodeCount?: number;
+  /** Text nodes GlossaryPreviewDecorator's TreeWalker visited (#154). */
+  visitedTextNodeCount?: number;
+  /** Visited text nodes that had at least one glossary match inserted (#154). */
+  decoratedNodeCount?: number;
+  /** Total glossary surface matches inserted across all decorated nodes (#154). */
+  matchCount?: number;
 
   preSinkQueuedEventCount?: number;
   droppedEventCount?: number;

@@ -85,10 +85,46 @@ interface EditorSurfaceProps {
   onPendingMarkdownSelectionApplied: () => void;
   /** In-flight document-open correlation id (#152), or null when idle. */
   documentOpenId: string | null;
+  /**
+   * Fired once, right before onDocumentOpenPreviewRendered, with the
+   * `performance.now()` mark this document's preview render started at
+   * (#154 follow-up).
+   */
+  onDocumentOpenPreviewRenderStarted: (
+    documentOpenId: string,
+    previewRenderStartedAt: number
+  ) => void;
   /** Fired once after this document's preview has rendered, with its duration. */
   onDocumentOpenPreviewRendered: (
     documentOpenId: string,
     previewRenderDurationMs: number
+  ) => void;
+  /**
+   * Fired once after the just-rendered preview HTML has been committed to
+   * the DOM (#154). See GlossaryPreviewDecorator for what "committed" means
+   * here and its caveats.
+   */
+  onDocumentOpenPreviewDomCommitted: (
+    documentOpenId: string,
+    durationMs: number,
+    previewNodeCount: number
+  ) => void;
+  /** Fired once after glossary preview decoration has finished (#154). */
+  onDocumentOpenPreviewDecorationCompleted: (
+    documentOpenId: string,
+    durationMs: number,
+    visitedTextNodeCount: number,
+    decoratedNodeCount: number,
+    matchCount: number
+  ) => void;
+  /**
+   * Fired once from a requestAnimationFrame callback scheduled right after
+   * decoration finishes (#154 follow-up). See GlossaryPreviewDecorator for
+   * what this proxy does and does not guarantee.
+   */
+  onDocumentOpenPreviewFrameObserved: (
+    documentOpenId: string,
+    durationMs: number
   ) => void;
 }
 
@@ -117,7 +153,11 @@ export function EditorSurface({
   pendingMarkdownSelection,
   onPendingMarkdownSelectionApplied,
   documentOpenId,
-  onDocumentOpenPreviewRendered
+  onDocumentOpenPreviewRenderStarted,
+  onDocumentOpenPreviewRendered,
+  onDocumentOpenPreviewDomCommitted,
+  onDocumentOpenPreviewDecorationCompleted,
+  onDocumentOpenPreviewFrameObserved
 }: EditorSurfaceProps): JSX.Element {
   switch (editor.kind) {
     case "markdown":
@@ -133,7 +173,17 @@ export function EditorSurface({
           ratio={markdownEditorPreviewRatio}
           onChangeRatio={onChangeMarkdownEditorPreviewRatio}
           documentOpenId={documentOpenId}
+          onDocumentOpenPreviewRenderStarted={
+            onDocumentOpenPreviewRenderStarted
+          }
           onDocumentOpenPreviewRendered={onDocumentOpenPreviewRendered}
+          onDocumentOpenPreviewDomCommitted={onDocumentOpenPreviewDomCommitted}
+          onDocumentOpenPreviewDecorationCompleted={
+            onDocumentOpenPreviewDecorationCompleted
+          }
+          onDocumentOpenPreviewFrameObserved={
+            onDocumentOpenPreviewFrameObserved
+          }
         />
       );
     case "glossaryEntry":
@@ -183,9 +233,29 @@ interface MarkdownEditorSurfaceProps {
   ratio: number;
   onChangeRatio: (ratio: number) => void;
   documentOpenId: string | null;
+  onDocumentOpenPreviewRenderStarted: (
+    documentOpenId: string,
+    previewRenderStartedAt: number
+  ) => void;
   onDocumentOpenPreviewRendered: (
     documentOpenId: string,
     previewRenderDurationMs: number
+  ) => void;
+  onDocumentOpenPreviewDomCommitted: (
+    documentOpenId: string,
+    durationMs: number,
+    previewNodeCount: number
+  ) => void;
+  onDocumentOpenPreviewDecorationCompleted: (
+    documentOpenId: string,
+    durationMs: number,
+    visitedTextNodeCount: number,
+    decoratedNodeCount: number,
+    matchCount: number
+  ) => void;
+  onDocumentOpenPreviewFrameObserved: (
+    documentOpenId: string,
+    durationMs: number
   ) => void;
 }
 
@@ -200,7 +270,11 @@ function MarkdownEditorSurface({
   ratio,
   onChangeRatio,
   documentOpenId,
-  onDocumentOpenPreviewRendered
+  onDocumentOpenPreviewRenderStarted,
+  onDocumentOpenPreviewRendered,
+  onDocumentOpenPreviewDomCommitted,
+  onDocumentOpenPreviewDecorationCompleted,
+  onDocumentOpenPreviewFrameObserved
 }: MarkdownEditorSurfaceProps): JSX.Element {
   const content = currentDocumentContent(document);
   const previewRenderStartedAt = performance.now();
@@ -212,23 +286,27 @@ function MarkdownEditorSurface({
   );
   const reportedDocumentOpenIdRef = useRef<string | null>(null);
 
-  // One-shot measurement (#152): fires only when documentOpenId changes
-  // (i.e. a new open just applied its editor state and this component has
-  // now re-rendered with that document's content), never on ordinary
-  // content edits. App.tsx clears documentOpenId after handling this.
+  // One-shot measurement (#152, extended #154): fires only when
+  // documentOpenId changes (i.e. a new open just applied its editor state
+  // and this component has now re-rendered with that document's content),
+  // never on ordinary content edits. App.tsx clears documentOpenId after
+  // handling this.
   //
   // Guarded by reportedDocumentOpenIdRef against React StrictMode's dev-only
   // double effect invocation (this app renders under <React.StrictMode> —
   // see main.tsx), which would otherwise report the same open twice and
-  // duplicate previewRender.completed/usable/completed in dev/dogfood logs.
+  // duplicate previewRender.started/previewRender.completed/usable/completed
+  // in dev/dogfood logs.
   useEffect(() => {
     if (documentOpenId && reportedDocumentOpenIdRef.current !== documentOpenId) {
       reportedDocumentOpenIdRef.current = documentOpenId;
+      onDocumentOpenPreviewRenderStarted(documentOpenId, previewRenderStartedAt);
       onDocumentOpenPreviewRendered(documentOpenId, previewRenderDurationMs);
     }
-    // Deliberately keyed on documentOpenId alone: previewRenderDurationMs
-    // is read from this same render's closure, but must not itself be a
-    // dependency, or every content edit (not just an open) would re-fire.
+    // Deliberately keyed on documentOpenId alone: previewRenderStartedAt /
+    // previewRenderDurationMs are read from this same render's closure, but
+    // must not themselves be dependencies, or every content edit (not just
+    // an open) would re-fire.
   }, [documentOpenId]);
   const isNarrow = useIsNarrowMarkdownWorkspace();
   const workspaceRef = useRef<HTMLElement | null>(null);
@@ -328,6 +406,11 @@ function MarkdownEditorSurface({
           previewHtml={previewHtml}
           entries={entries}
           surfaceIndex={surfaceIndex}
+          documentOpenId={documentOpenId}
+          previewRenderStartedAt={previewRenderStartedAt}
+          onPreviewDomCommitted={onDocumentOpenPreviewDomCommitted}
+          onPreviewDecorationCompleted={onDocumentOpenPreviewDecorationCompleted}
+          onPreviewFrameObserved={onDocumentOpenPreviewFrameObserved}
         />
       </section>
     </section>
