@@ -851,6 +851,80 @@ describe("debug logger", () => {
       expect(serialized).not.toContain("rawPath");
     });
   });
+
+  describe("preview DOM commit / decoration timing (#154)", () => {
+    it("logs previewDom.committed and previewDecoration.completed at debug level, and drops HTML/surface-text-shaped extras", () => {
+      const logger = createTestLogger(enabledOptions([new Date(2026, 7, 14)]));
+
+      logger.log({
+        level: "debug",
+        event: "document.open.previewDom.committed",
+        details: {
+          documentOpenId: "documentOpen.1",
+          durationMs: 1400,
+          previewNodeCount: 120,
+          previewHtml: "<p>吾輩は猫である</p>"
+        }
+      });
+      logger.log({
+        level: "debug",
+        event: "document.open.previewDecoration.completed",
+        details: {
+          documentOpenId: "documentOpen.1",
+          durationMs: 85,
+          visitedTextNodeCount: 84,
+          decoratedNodeCount: 6,
+          matchCount: 9,
+          glossarySurfaceText: "吾輩"
+        }
+      });
+
+      const events = logger.getSnapshot().events;
+
+      expect(events.map((event) => event.event)).toEqual([
+        "document.open.previewDom.committed",
+        "document.open.previewDecoration.completed"
+      ]);
+      expect(events.map((event) => event.level)).toEqual(["debug", "debug"]);
+
+      const serialized = JSON.stringify(logger.getSnapshot());
+
+      expect(serialized).not.toContain("吾輩");
+      expect(serialized).not.toContain("previewHtml");
+      expect(serialized).not.toContain("glossarySurfaceText");
+      expect(events[0]?.details).toEqual({
+        documentOpenId: "documentOpen.1",
+        durationMs: 1400,
+        previewNodeCount: 120,
+        droppedKeyCount: 1
+      });
+      expect(events[1]?.details).toEqual({
+        documentOpenId: "documentOpen.1",
+        durationMs: 85,
+        visitedTextNodeCount: 84,
+        decoratedNodeCount: 6,
+        matchCount: 9,
+        droppedKeyCount: 1
+      });
+    });
+
+    it("emits nothing when debug mode is disabled", () => {
+      const logger = createTestLogger({ enabled: false, runtime });
+
+      logger.log({
+        level: "debug",
+        event: "document.open.previewDom.committed",
+        details: { documentOpenId: "documentOpen.1", durationMs: 1400 }
+      });
+      logger.log({
+        level: "debug",
+        event: "document.open.previewDecoration.completed",
+        details: { documentOpenId: "documentOpen.1", durationMs: 85 }
+      });
+
+      expect(logger.getSnapshot().events).toEqual([]);
+    });
+  });
 });
 
 function createTestLogger(

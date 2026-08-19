@@ -83,6 +83,8 @@ const eventLevelCatalog: Record<DebugLogEventName, DebugLogLevel> = {
   "document.open.fileRead.completed": "debug",
   "document.open.editorDocument.applied": "debug",
   "document.open.previewRender.completed": "debug",
+  "document.open.previewDom.committed": "debug",
+  "document.open.previewDecoration.completed": "debug",
   "document.open.usable": "debug",
   "document.open.completed": "debug",
   "document.open.failed": "error",

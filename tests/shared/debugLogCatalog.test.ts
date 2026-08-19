@@ -185,6 +185,54 @@ describe("debug log catalog", () => {
     ]);
   });
 
+  it("includes the preview DOM commit / decoration timing events (#154), between previewRender.completed and usable", () => {
+    expect(debugLogEventNames).toEqual(
+      expect.arrayContaining([
+        "document.open.previewRender.completed",
+        "document.open.previewDom.committed",
+        "document.open.previewDecoration.completed",
+        "document.open.usable"
+      ])
+    );
+
+    const previewRenderIndex = debugLogEventNames.indexOf(
+      "document.open.previewRender.completed"
+    );
+    const previewDomIndex = debugLogEventNames.indexOf(
+      "document.open.previewDom.committed"
+    );
+    const previewDecorationIndex = debugLogEventNames.indexOf(
+      "document.open.previewDecoration.completed"
+    );
+    const usableIndex = debugLogEventNames.indexOf("document.open.usable");
+
+    expect(previewDomIndex).toBeGreaterThan(previewRenderIndex);
+    expect(previewDecorationIndex).toBeGreaterThan(previewDomIndex);
+    expect(usableIndex).toBeGreaterThan(previewDecorationIndex);
+  });
+
+  it("includes previewNodeCount, visitedTextNodeCount, decoratedNodeCount, and matchCount as allowlisted detail keys (#154), each with a specific, non-generic name", () => {
+    type HasPreviewNodeCount = "previewNodeCount" extends keyof DebugLogDetails
+      ? true
+      : false;
+    type HasVisitedTextNodeCount =
+      "visitedTextNodeCount" extends keyof DebugLogDetails ? true : false;
+    type HasDecoratedNodeCount =
+      "decoratedNodeCount" extends keyof DebugLogDetails ? true : false;
+    type HasMatchCount = "matchCount" extends keyof DebugLogDetails
+      ? true
+      : false;
+    const hasPreviewNodeCount: HasPreviewNodeCount = true;
+    const hasVisitedTextNodeCount: HasVisitedTextNodeCount = true;
+    const hasDecoratedNodeCount: HasDecoratedNodeCount = true;
+    const hasMatchCount: HasMatchCount = true;
+
+    expect(hasPreviewNodeCount).toBe(true);
+    expect(hasVisitedTextNodeCount).toBe(true);
+    expect(hasDecoratedNodeCount).toBe(true);
+    expect(hasMatchCount).toBe(true);
+  });
+
   it("includes the DB skipped reason catalog values", () => {
     expect(debugLogReasons).toEqual(
       expect.arrayContaining([

@@ -90,6 +90,24 @@ interface EditorSurfaceProps {
     documentOpenId: string,
     previewRenderDurationMs: number
   ) => void;
+  /**
+   * Fired once after the just-rendered preview HTML has been committed to
+   * the DOM (#154). See GlossaryPreviewDecorator for what "committed" means
+   * here and its caveats.
+   */
+  onDocumentOpenPreviewDomCommitted: (
+    documentOpenId: string,
+    durationMs: number,
+    previewNodeCount: number
+  ) => void;
+  /** Fired once after glossary preview decoration has finished (#154). */
+  onDocumentOpenPreviewDecorationCompleted: (
+    documentOpenId: string,
+    durationMs: number,
+    visitedTextNodeCount: number,
+    decoratedNodeCount: number,
+    matchCount: number
+  ) => void;
 }
 
 export function EditorSurface({
@@ -117,7 +135,9 @@ export function EditorSurface({
   pendingMarkdownSelection,
   onPendingMarkdownSelectionApplied,
   documentOpenId,
-  onDocumentOpenPreviewRendered
+  onDocumentOpenPreviewRendered,
+  onDocumentOpenPreviewDomCommitted,
+  onDocumentOpenPreviewDecorationCompleted
 }: EditorSurfaceProps): JSX.Element {
   switch (editor.kind) {
     case "markdown":
@@ -134,6 +154,10 @@ export function EditorSurface({
           onChangeRatio={onChangeMarkdownEditorPreviewRatio}
           documentOpenId={documentOpenId}
           onDocumentOpenPreviewRendered={onDocumentOpenPreviewRendered}
+          onDocumentOpenPreviewDomCommitted={onDocumentOpenPreviewDomCommitted}
+          onDocumentOpenPreviewDecorationCompleted={
+            onDocumentOpenPreviewDecorationCompleted
+          }
         />
       );
     case "glossaryEntry":
@@ -187,6 +211,18 @@ interface MarkdownEditorSurfaceProps {
     documentOpenId: string,
     previewRenderDurationMs: number
   ) => void;
+  onDocumentOpenPreviewDomCommitted: (
+    documentOpenId: string,
+    durationMs: number,
+    previewNodeCount: number
+  ) => void;
+  onDocumentOpenPreviewDecorationCompleted: (
+    documentOpenId: string,
+    durationMs: number,
+    visitedTextNodeCount: number,
+    decoratedNodeCount: number,
+    matchCount: number
+  ) => void;
 }
 
 function MarkdownEditorSurface({
@@ -200,7 +236,9 @@ function MarkdownEditorSurface({
   ratio,
   onChangeRatio,
   documentOpenId,
-  onDocumentOpenPreviewRendered
+  onDocumentOpenPreviewRendered,
+  onDocumentOpenPreviewDomCommitted,
+  onDocumentOpenPreviewDecorationCompleted
 }: MarkdownEditorSurfaceProps): JSX.Element {
   const content = currentDocumentContent(document);
   const previewRenderStartedAt = performance.now();
@@ -328,6 +366,10 @@ function MarkdownEditorSurface({
           previewHtml={previewHtml}
           entries={entries}
           surfaceIndex={surfaceIndex}
+          documentOpenId={documentOpenId}
+          previewRenderStartedAt={previewRenderStartedAt}
+          onPreviewDomCommitted={onDocumentOpenPreviewDomCommitted}
+          onPreviewDecorationCompleted={onDocumentOpenPreviewDecorationCompleted}
         />
       </section>
     </section>

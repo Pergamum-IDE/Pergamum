@@ -335,6 +335,48 @@ describe("debug log details sanitizer", () => {
     expect(details).toBeUndefined();
   });
 
+  it("accepts preview DOM commit / decoration timing details and drops manuscript-shaped extras (#154)", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        documentOpenId: "documentOpen.1",
+        durationMs: 42,
+        previewNodeCount: 120,
+        visitedTextNodeCount: 84,
+        decoratedNodeCount: 6,
+        matchCount: 9,
+        previewHtml: "<p>吾輩は猫である</p>",
+        glossarySurfaceText: "吾輩"
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      documentOpenId: "documentOpen.1",
+      durationMs: 42,
+      previewNodeCount: 120,
+      visitedTextNodeCount: 84,
+      decoratedNodeCount: 6,
+      matchCount: 9,
+      droppedKeyCount: 2
+    });
+    expect(JSON.stringify(details)).not.toContain("吾輩");
+  });
+
+  it("drops negative or non-integer previewNodeCount / visitedTextNodeCount / decoratedNodeCount / matchCount", () => {
+    expect(
+      sanitizeDebugLogDetails({ previewNodeCount: -1 }, context())
+    ).toBeUndefined();
+    expect(
+      sanitizeDebugLogDetails({ visitedTextNodeCount: 1.5 }, context())
+    ).toBeUndefined();
+    expect(
+      sanitizeDebugLogDetails({ decoratedNodeCount: -1 }, context())
+    ).toBeUndefined();
+    expect(
+      sanitizeDebugLogDetails({ matchCount: 1.5 }, context())
+    ).toBeUndefined();
+  });
+
   it("drops a negative or non-integer fileSizeBytes", () => {
     const negative = sanitizeDebugLogDetails({ fileSizeBytes: -1 }, context());
     const fractional = sanitizeDebugLogDetails(

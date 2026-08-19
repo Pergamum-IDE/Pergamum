@@ -550,6 +550,38 @@ export function sanitizeDebugLogDetails(
         }
         break;
       }
+      case "previewNodeCount": {
+        const previewNodeCount = sanitizeNonNegativeInteger(value);
+
+        if (previewNodeCount !== undefined) {
+          sanitized.previewNodeCount = previewNodeCount;
+        }
+        break;
+      }
+      case "visitedTextNodeCount": {
+        const visitedTextNodeCount = sanitizeNonNegativeInteger(value);
+
+        if (visitedTextNodeCount !== undefined) {
+          sanitized.visitedTextNodeCount = visitedTextNodeCount;
+        }
+        break;
+      }
+      case "decoratedNodeCount": {
+        const decoratedNodeCount = sanitizeNonNegativeInteger(value);
+
+        if (decoratedNodeCount !== undefined) {
+          sanitized.decoratedNodeCount = decoratedNodeCount;
+        }
+        break;
+      }
+      case "matchCount": {
+        const matchCount = sanitizeNonNegativeInteger(value);
+
+        if (matchCount !== undefined) {
+          sanitized.matchCount = matchCount;
+        }
+        break;
+      }
       case "preSinkQueuedEventCount": {
         const preSinkQueuedEventCount = sanitizeNonNegativeInteger(value);
 

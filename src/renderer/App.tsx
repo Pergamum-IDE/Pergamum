@@ -1434,6 +1434,75 @@ export function App(): JSX.Element {
     setDocumentOpenMeasurement(null);
   }
 
+  /**
+   * Fired once by GlossaryPreviewDecorator (#154) immediately after it has
+   * synchronously written the just-rendered preview HTML into the live DOM,
+   * inside its own `useLayoutEffect` — the closest observable point to
+   * "React committed this subtree and reflected it in the DOM" reachable
+   * without instrumenting React internals. `durationMs` is measured from
+   * `previewRenderStartedAt` (the same start boundary
+   * `previewRender.completed` uses), so it also captures React's
+   * reconciliation/commit/effect-scheduling gap, not just the DOM write
+   * itself. Layout effects run before the browser paints, so this does NOT
+   * guarantee paint has completed. Ignored if it does not match the
+   * in-flight measurement (stale open, or a later open already superseded
+   * it) — mirrors handleDocumentOpenMeasured's guard.
+   */
+  function handleDocumentOpenPreviewDomCommitted(
+    documentOpenId: string,
+    durationMs: number,
+    previewNodeCount: number
+  ): void {
+    if (
+      !documentOpenMeasurement ||
+      documentOpenMeasurement.documentOpenId !== documentOpenId
+    ) {
+      return;
+    }
+
+    logRendererDebugEvent({
+      level: "debug",
+      event: "document.open.previewDom.committed",
+      details: { documentOpenId, durationMs, previewNodeCount }
+    });
+  }
+
+  /**
+   * Fired once by GlossaryPreviewDecorator (#154) right after
+   * `decoratePreviewContainer` (TreeWalker traversal + glossary mark
+   * insertion) finishes for the just-opened document's preview.
+   * `durationMs` is the decoration pass's own elapsed time — not cumulative
+   * from document-open start — so it isolates glossary decoration cost from
+   * the DOM-commit cost reported separately above. Ignored if it does not
+   * match the in-flight measurement.
+   */
+  function handleDocumentOpenPreviewDecorationCompleted(
+    documentOpenId: string,
+    durationMs: number,
+    visitedTextNodeCount: number,
+    decoratedNodeCount: number,
+    matchCount: number
+  ): void {
+    if (
+      !documentOpenMeasurement ||
+      documentOpenMeasurement.documentOpenId !== documentOpenId
+    ) {
+      return;
+    }
+
+    logRendererDebugEvent({
+      level: "debug",
+      event: "document.open.previewDecoration.completed",
+      details: {
+        documentOpenId,
+        durationMs,
+        visitedTextNodeCount,
+        decoratedNodeCount,
+        matchCount
+      }
+    });
+  }
+
   function replaceSavedDocument(
     documentId: EditorId,
     document: CurrentDocument
@@ -2555,6 +2624,12 @@ export function App(): JSX.Element {
                     }}
                     documentOpenId={documentOpenMeasurement?.documentOpenId ?? null}
                     onDocumentOpenPreviewRendered={handleDocumentOpenMeasured}
+                    onDocumentOpenPreviewDomCommitted={
+                      handleDocumentOpenPreviewDomCommitted
+                    }
+                    onDocumentOpenPreviewDecorationCompleted={
+                      handleDocumentOpenPreviewDecorationCompleted
+                    }
                   />
 
                   {layout.utilityWindow.open ? (

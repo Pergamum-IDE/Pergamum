@@ -11,6 +11,7 @@ import {
   type GlossarySurfaceTextMatch
 } from "../shared/glossarySurfaceMatching";
 import type { GlossaryEntry } from "../shared/glossary";
+import { durationSincePerformanceMark } from "./debugLog";
 import { GlossaryHoverCard } from "./GlossaryHoverCard";
 import { buildGlossaryHoverCardContent } from "./glossaryHoverCardContent";
 import {
@@ -22,6 +23,34 @@ interface GlossaryPreviewDecoratorProps {
   previewHtml: string;
   entries: readonly GlossaryEntry[];
   surfaceIndex: GlossarySurfaceIndex;
+  /** In-flight document-open correlation id (#152), or null when idle. */
+  documentOpenId: string | null;
+  /**
+   * `performance.now()` mark from the start of this document's preview
+   * render (#154) — the same boundary `previewRender.completed` uses, so
+   * `previewDom.committed`'s duration stays comparable to it.
+   */
+  previewRenderStartedAt: number;
+  /** Fired once after the preview HTML has been written into the live DOM. */
+  onPreviewDomCommitted: (
+    documentOpenId: string,
+    durationMs: number,
+    previewNodeCount: number
+  ) => void;
+  /** Fired once after decoratePreviewContainer finishes. */
+  onPreviewDecorationCompleted: (
+    documentOpenId: string,
+    durationMs: number,
+    visitedTextNodeCount: number,
+    decoratedNodeCount: number,
+    matchCount: number
+  ) => void;
+}
+
+interface PreviewDecorationStats {
+  visitedTextNodeCount: number;
+  decoratedNodeCount: number;
+  matchCount: number;
 }
 
 type GlossaryHoverCardState = {
@@ -61,11 +90,14 @@ function replaceTextNodeWithDecorationSegments(
   segments: ReturnType<typeof buildGlossarySurfaceDecorationSegments>,
   onHoverMatch: (match: GlossarySurfaceTextMatch, anchorRect: DOMRect) => void,
   onLeaveMatch: () => void
-): void {
+): number {
   const parentNode = textNode.parentNode;
+  const matchSegmentCount = segments.filter(
+    (segment) => segment.kind === "match"
+  ).length;
 
-  if (!parentNode || !segments.some((segment) => segment.kind === "match")) {
-    return;
+  if (!parentNode || matchSegmentCount === 0) {
+    return 0;
   }
 
   const fragment = textNode.ownerDocument.createDocumentFragment();
@@ -92,6 +124,8 @@ function replaceTextNodeWithDecorationSegments(
   }
 
   parentNode.replaceChild(fragment, textNode);
+
+  return matchSegmentCount;
 }
 
 function decoratePreviewContainer(
@@ -99,9 +133,9 @@ function decoratePreviewContainer(
   surfaceIndex: GlossarySurfaceIndex,
   onHoverMatch: (match: GlossarySurfaceTextMatch, anchorRect: DOMRect) => void,
   onLeaveMatch: () => void
-): void {
+): PreviewDecorationStats {
   if (surfaceIndex.entries.length === 0) {
-    return;
+    return { visitedTextNodeCount: 0, decoratedNodeCount: 0, matchCount: 0 };
   }
 
   const textNodes: Text[] = [];
@@ -124,8 +158,11 @@ function decoratePreviewContainer(
     currentNode = treeWalker.nextNode();
   }
 
+  let decoratedNodeCount = 0;
+  let matchCount = 0;
+
   for (const textNode of textNodes) {
-    replaceTextNodeWithDecorationSegments(
+    const matchSegmentCount = replaceTextNodeWithDecorationSegments(
       textNode,
       buildGlossarySurfaceDecorationSegments(
         textNode.textContent ?? "",
@@ -134,17 +171,40 @@ function decoratePreviewContainer(
       onHoverMatch,
       onLeaveMatch
     );
+
+    if (matchSegmentCount > 0) {
+      decoratedNodeCount += 1;
+      matchCount += matchSegmentCount;
+    }
   }
+
+  return { visitedTextNodeCount: textNodes.length, decoratedNodeCount, matchCount };
 }
 
 export function GlossaryPreviewDecorator({
   previewHtml,
   entries,
-  surfaceIndex
+  surfaceIndex,
+  documentOpenId,
+  previewRenderStartedAt,
+  onPreviewDomCommitted,
+  onPreviewDecorationCompleted
 }: GlossaryPreviewDecoratorProps): JSX.Element {
   const previewRef = useRef<HTMLElement | null>(null);
   const [hoverCardState, setHoverCardState] =
     useState<GlossaryHoverCardState>(null);
+  // Guards against React StrictMode's dev-only double layout-effect
+  // invocation, and against re-firing for the same open on a later,
+  // unrelated re-run of this effect — mirrors the reportedDocumentOpenIdRef
+  // pattern in EditorSurface.tsx (#152). Each ref is keyed on its own event
+  // so a slow decoration pass reporting late can't suppress the (already
+  // reported) DOM-commit event or vice versa.
+  const reportedPreviewDomCommitDocumentOpenIdRef = useRef<string | null>(
+    null
+  );
+  const reportedPreviewDecorationDocumentOpenIdRef = useRef<string | null>(
+    null
+  );
   const hoverCardContent = useMemo(
     () =>
       hoverCardState
@@ -169,12 +229,57 @@ export function GlossaryPreviewDecorator({
 
     setHoverCardState(null);
     previewElement.innerHTML = previewHtml;
-    decoratePreviewContainer(
+
+    // Proxy measurement (#154): React's own commit timing isn't directly
+    // observable, so this layout effect firing — which runs synchronously
+    // right after React commits this subtree's DOM, before the browser
+    // paints — stands in for "commit observed". durationMs is cumulative
+    // from previewRenderStartedAt (this render's start), so it covers
+    // React's reconciliation/commit/effect-scheduling gap plus the innerHTML
+    // write above. It does NOT guarantee the browser has finished layout or
+    // painted. documentOpenId/previewRenderStartedAt are read from this
+    // render's closure rather than listed as effect deps, so an ordinary
+    // content edit (which changes previewHtml but not the open) can't
+    // resurrect a since-cleared documentOpenId and misreport itself as part
+    // of the open.
+    if (
+      documentOpenId &&
+      reportedPreviewDomCommitDocumentOpenIdRef.current !== documentOpenId
+    ) {
+      reportedPreviewDomCommitDocumentOpenIdRef.current = documentOpenId;
+      onPreviewDomCommitted(
+        documentOpenId,
+        durationSincePerformanceMark(previewRenderStartedAt),
+        previewElement.childElementCount
+      );
+    }
+
+    const decorationStartedAt = performance.now();
+    const decorationStats = decoratePreviewContainer(
       previewElement,
       surfaceIndex,
       (match, anchorRect) => setHoverCardState({ match, anchorRect }),
       () => setHoverCardState(null)
     );
+
+    if (
+      documentOpenId &&
+      reportedPreviewDecorationDocumentOpenIdRef.current !== documentOpenId
+    ) {
+      reportedPreviewDecorationDocumentOpenIdRef.current = documentOpenId;
+      onPreviewDecorationCompleted(
+        documentOpenId,
+        durationSincePerformanceMark(decorationStartedAt),
+        decorationStats.visitedTextNodeCount,
+        decorationStats.decoratedNodeCount,
+        decorationStats.matchCount
+      );
+    }
+    // documentOpenId/previewRenderStartedAt/onPreviewDomCommitted/
+    // onPreviewDecorationCompleted are deliberately excluded: this effect
+    // must only re-run when the preview content itself changes (open or
+    // edit), never merely because App.tsx cleared documentOpenId after
+    // handleDocumentOpenMeasured — see comment above.
   }, [previewHtml, surfaceIndex]);
 
   return (

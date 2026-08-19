@@ -7,6 +7,10 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
     "src/renderer/EditorSurface.tsx",
     "utf8"
   );
+  const glossaryPreviewDecoratorSource = readFileSync(
+    "src/renderer/GlossaryPreviewDecorator.tsx",
+    "utf8"
+  );
 
   function functionBody(source: string, startMarker: string): string {
     const start = source.indexOf(startMarker);
@@ -402,6 +406,210 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
       ).length;
 
       expect(occurrences).toBe(2);
+    });
+  });
+
+  describe("preview DOM commit / decoration timing wiring (#154)", () => {
+    it("threads onDocumentOpenPreviewDomCommitted / onDocumentOpenPreviewDecorationCompleted from App.tsx through EditorSurface to MarkdownEditorSurface", () => {
+      const componentIndex = appSource.indexOf("<EditorSurface");
+      const closeIndex = appSource.indexOf("/>", componentIndex);
+      const propsBlock = appSource.slice(componentIndex, closeIndex);
+
+      expect(propsBlock).toContain(
+        "onDocumentOpenPreviewDomCommitted={\n                      handleDocumentOpenPreviewDomCommitted\n                    }"
+      );
+      expect(propsBlock).toContain(
+        "onDocumentOpenPreviewDecorationCompleted={\n                      handleDocumentOpenPreviewDecorationCompleted\n                    }"
+      );
+
+      const markdownCaseStart = editorSurfaceSource.indexOf('case "markdown":');
+      const markdownCaseEnd = editorSurfaceSource.indexOf(
+        'case "glossaryEntry":'
+      );
+      const markdownCase = editorSurfaceSource.slice(
+        markdownCaseStart,
+        markdownCaseEnd
+      );
+
+      expect(markdownCase).toContain(
+        "onDocumentOpenPreviewDomCommitted={onDocumentOpenPreviewDomCommitted}"
+      );
+      expect(markdownCase).toContain(
+        "onDocumentOpenPreviewDecorationCompleted"
+      );
+    });
+
+    it("MarkdownEditorSurface passes documentOpenId and previewRenderStartedAt down to GlossaryPreviewDecorator, alongside both new callbacks", () => {
+      const componentIndex = editorSurfaceSource.indexOf(
+        "<GlossaryPreviewDecorator"
+      );
+      const closeIndex = editorSurfaceSource.indexOf("/>", componentIndex);
+      const propsBlock = editorSurfaceSource.slice(componentIndex, closeIndex);
+
+      expect(propsBlock).toContain("documentOpenId={documentOpenId}");
+      expect(propsBlock).toContain(
+        "previewRenderStartedAt={previewRenderStartedAt}"
+      );
+      expect(propsBlock).toContain(
+        "onPreviewDomCommitted={onDocumentOpenPreviewDomCommitted}"
+      );
+      expect(propsBlock).toContain(
+        "onPreviewDecorationCompleted={onDocumentOpenPreviewDecorationCompleted}"
+      );
+    });
+
+    it("App.tsx's handlers ignore a documentOpenId that does not match the in-flight measurement, mirroring handleDocumentOpenMeasured's guard", () => {
+      const domCommittedStart = appSource.indexOf(
+        "function handleDocumentOpenPreviewDomCommitted("
+      );
+      const domCommittedEnd = appSource.indexOf(
+        "function handleDocumentOpenPreviewDecorationCompleted("
+      );
+      const domCommittedBody = appSource.slice(
+        domCommittedStart,
+        domCommittedEnd
+      );
+      const decorationCompletedStart = domCommittedEnd;
+      const decorationCompletedEnd = appSource.indexOf(
+        "function replaceSavedDocument(",
+        decorationCompletedStart
+      );
+      const decorationCompletedBody = appSource.slice(
+        decorationCompletedStart,
+        decorationCompletedEnd
+      );
+
+      expect(domCommittedStart).toBeGreaterThan(-1);
+      for (const body of [domCommittedBody, decorationCompletedBody]) {
+        expect(body).toContain(
+          "documentOpenMeasurement.documentOpenId !== documentOpenId"
+        );
+      }
+
+      expect(domCommittedBody).toContain(
+        'event: "document.open.previewDom.committed"'
+      );
+      expect(decorationCompletedBody).toContain(
+        'event: "document.open.previewDecoration.completed"'
+      );
+    });
+
+    it("GlossaryPreviewDecorator reads documentOpenId and previewRenderStartedAt from render closure rather than the layout effect's dependency array, so an ordinary content edit cannot resurrect a since-cleared documentOpenId", () => {
+      const effectStart = glossaryPreviewDecoratorSource.indexOf(
+        "useLayoutEffect(() => {"
+      );
+      const effectEnd = glossaryPreviewDecoratorSource.indexOf(
+        "}, [previewHtml, surfaceIndex]);"
+      );
+
+      expect(effectStart).toBeGreaterThan(-1);
+      expect(effectEnd).toBeGreaterThan(effectStart);
+    });
+
+    it("guards both new measurements against React StrictMode's double layout-effect invocation with separate refs, one per event", () => {
+      expect(glossaryPreviewDecoratorSource).toContain(
+        "const reportedPreviewDomCommitDocumentOpenIdRef = useRef<string | null>("
+      );
+      expect(glossaryPreviewDecoratorSource).toContain(
+        "const reportedPreviewDecorationDocumentOpenIdRef = useRef<string | null>("
+      );
+
+      const effectStart = glossaryPreviewDecoratorSource.indexOf(
+        "useLayoutEffect(() => {"
+      );
+      const effectEnd = glossaryPreviewDecoratorSource.indexOf(
+        "}, [previewHtml, surfaceIndex]);"
+      );
+      const effectBody = glossaryPreviewDecoratorSource.slice(
+        effectStart,
+        effectEnd
+      );
+
+      expect(effectBody).toContain(
+        "reportedPreviewDomCommitDocumentOpenIdRef.current !== documentOpenId"
+      );
+      expect(effectBody).toContain(
+        "reportedPreviewDomCommitDocumentOpenIdRef.current = documentOpenId;"
+      );
+      expect(effectBody).toContain(
+        "reportedPreviewDecorationDocumentOpenIdRef.current !== documentOpenId"
+      );
+      expect(effectBody).toContain(
+        "reportedPreviewDecorationDocumentOpenIdRef.current = documentOpenId;"
+      );
+    });
+
+    it("does not fire either callback when documentOpenId is null (ordinary content edits, not a document open)", () => {
+      const effectStart = glossaryPreviewDecoratorSource.indexOf(
+        "useLayoutEffect(() => {"
+      );
+      const effectEnd = glossaryPreviewDecoratorSource.indexOf(
+        "}, [previewHtml, surfaceIndex]);"
+      );
+      const effectBody = glossaryPreviewDecoratorSource.slice(
+        effectStart,
+        effectEnd
+      );
+
+      expect(effectBody).toContain(
+        "if (\n      documentOpenId &&\n      reportedPreviewDomCommitDocumentOpenIdRef.current !== documentOpenId\n    )"
+      );
+      expect(effectBody).toContain(
+        "if (\n      documentOpenId &&\n      reportedPreviewDecorationDocumentOpenIdRef.current !== documentOpenId\n    )"
+      );
+    });
+
+    it("measures previewDom.committed duration from previewRenderStartedAt (comparable to previewRender.completed) and previewDecoration.completed duration from its own local start mark, not cumulative", () => {
+      expect(glossaryPreviewDecoratorSource).toContain(
+        "durationSincePerformanceMark(previewRenderStartedAt)"
+      );
+      expect(glossaryPreviewDecoratorSource).toContain(
+        "const decorationStartedAt = performance.now();"
+      );
+      expect(glossaryPreviewDecoratorSource).toContain(
+        "durationSincePerformanceMark(decorationStartedAt)"
+      );
+    });
+
+    it("computes decoration node/match counts from values already produced while walking and replacing text nodes, without a second traversal", () => {
+      const decorateStart = glossaryPreviewDecoratorSource.indexOf(
+        "function decoratePreviewContainer("
+      );
+      const decorateEnd = glossaryPreviewDecoratorSource.indexOf(
+        "export function GlossaryPreviewDecorator("
+      );
+      const decorateBody = glossaryPreviewDecoratorSource.slice(
+        decorateStart,
+        decorateEnd
+      );
+
+      // Only one TreeWalker traversal (the pre-existing one) — no additional
+      // document.createTreeWalker call added for measurement purposes.
+      const treeWalkerCount = (
+        decorateBody.match(/document\.createTreeWalker/g) ?? []
+      ).length;
+
+      expect(treeWalkerCount).toBe(1);
+      expect(decorateBody).toContain("visitedTextNodeCount: textNodes.length");
+    });
+
+    it("does not call logRendererDebugEvent directly in GlossaryPreviewDecorator or EditorSurface — logging stays centralized in App.tsx", () => {
+      expect(glossaryPreviewDecoratorSource).not.toContain(
+        "logRendererDebugEvent"
+      );
+      expect(editorSurfaceSource).not.toContain("logRendererDebugEvent");
+    });
+
+    it("does not include preview HTML, manuscript text, or glossary surface text in any detail payload in these files", () => {
+      for (const source of [
+        appSource,
+        editorSurfaceSource,
+        glossaryPreviewDecoratorSource
+      ]) {
+        expect(source).not.toMatch(/details:\s*{[^}]*previewHtml/);
+        expect(source).not.toMatch(/details:\s*{[^}]*manuscriptText/);
+        expect(source).not.toMatch(/details:\s*{[^}]*glossarySurface/);
+      }
     });
   });
 });
