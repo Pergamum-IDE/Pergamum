@@ -1119,6 +1119,12 @@ button:active {
   padding: 24px;
   color: #17212b;
   line-height: 1.65;
+  /* #160: isolate the preview subtree's layout/paint from the rest of the
+     workbench (editor pane, sidebars) so a huge preview reflow can't force
+     layout outside this container either. Does not affect how the flex
+     parent sizes this element (containment only scopes the element's own
+     internal layout). */
+  contain: layout paint;
 }
 
 .preview > :first-child {
@@ -1169,6 +1175,42 @@ button:active {
   border-left: 3px solid #9bb5d1;
   color: #52616f;
   padding-left: 12px;
+}
+
+/* #160: long-document preview layout mitigation.
+   Each top-level block gets its own content-visibility containment box, so
+   a block that is scrolled out of the preview's viewport is skipped for
+   layout/paint until it scrolls into view. This is expected to help
+   documents that render as many sibling blocks (e.g. cat_food_para.md's
+   split paragraphs) by shrinking the synchronous layout to roughly what's
+   on-screen, but is expected to help little on a document that renders as
+   one giant single block (e.g. cat_food.md's unsplit paragraph) — a single
+   containment box is still laid out as one atomic unit when any part of it
+   is on-screen. contain-intrinsic-size reserves placeholder space before an
+   element has been measured, using the `auto` form so the browser remembers
+   each block's real size after its first layout and only falls back to the
+   estimate before that — this keeps `.preview`'s scrollbar/scroll position
+   from jumping as blocks below the fold get skipped. The estimates below
+   are deliberately rough (real content will usually differ); if manual
+   verification shows visible scrollbar/scroll-position instability, the
+   estimates should be tuned rather than the mitigation reverted. */
+.preview h1,
+.preview h2,
+.preview h3,
+.preview h4,
+.preview h5,
+.preview h6 {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 32px;
+}
+
+.preview p,
+.preview ul,
+.preview ol,
+.preview blockquote,
+.preview pre {
+  content-visibility: auto;
+  contain-intrinsic-size: auto 120px;
 }
 
 .glossarySurfaceDecoration {
