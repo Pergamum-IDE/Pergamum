@@ -1,4 +1,8 @@
 import { defaultLanguage, type Language } from "./i18n";
+import {
+  getCatalogDefaultValue,
+  validateCatalogValue
+} from "./settingsCatalog";
 
 export type SettingScope =
   | "application"
@@ -83,7 +87,10 @@ export interface EffectiveSettings {
   preview: EffectivePreviewSettings;
 }
 
-export const defaultPreviewRenderer: PreviewRendererId = "markdown";
+// The settings catalog is the only source of truth for this default —
+// derived from it rather than duplicating the literal "markdown" here.
+export const defaultPreviewRenderer: PreviewRendererId =
+  getCatalogDefaultValue("preview.renderer");
 
 export const builtInDefaultSettings: EffectiveSettings = {
   showStatusBar: true,
@@ -242,10 +249,12 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
   };
 }
 
+// Delegates to the settings catalog's own enum validation instead of a
+// hand-rolled `value === defaultPreviewRenderer` check.
 export function isPreviewRendererId(
   value: unknown
 ): value is PreviewRendererId {
-  return value === defaultPreviewRenderer;
+  return validateCatalogValue("preview.renderer", value).ok;
 }
 
 export function resolveEffectiveSettings(
