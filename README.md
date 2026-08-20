@@ -30,9 +30,9 @@ Pergamum は、**本文を書く場所と、作品世界について作者が知
 
 一方で、
 
-> この人物にはどんな別名があるのか
-> この表記は単なる揺れなのか、それとも意図した別称なのか
-> この出来事は何年何月に起きたのか
+> この人物にはどんな別名があるのか  
+> この表記は単なる揺れなのか、それとも意図した別称なのか  
+> この出来事は何年何月に起きたのか  
 > この人物はこの場面の時点で、その事実を知っていたのか
 
 といった情報は、文章だけでは扱いにくいものです。
@@ -142,7 +142,7 @@ Pergamum では、作品内の人物・地名・組織・用語・概念など�
 
 として、文脈によって扱いが異なります。
 
-`吉法師` や `お館さま` は同じ人物を指すことがあります。
+`吉法師` や `お館さま` は同じ人物を指すことがあります。  
 一方、`茶筅髷` は人物ではなく髪型を表す語であり、同じ実体ではありません。
 
 Pergamum では、単に似た文脈に現れるからといって、文字列を勝手に同じ実体へまとめません。
@@ -177,19 +177,28 @@ Boundary policy:
 
 ## 現在できること
 
-Pergamum は現在も開発初期ですが、以下の基盤が実装されています。
+Pergamum は現在も開発初期ですが、Markdown 原稿と Glossary を結びつけるための基盤は動き始めています。
 
-```text
-Markdown プロジェクトを開く
-Markdown 本文を編集する
-Markdown Preview を表示する
-Glossary entry を作成・編集する
-Glossary form を管理する
-Glossary match を Preview 上に装飾する
-Glossary match の Hover Card を表示する
-Glossary entry から本文中の使用箇所へ移動する
-SQLite に構造化プロジェクトデータを保存する
-```
+現在は、主に以下のことができます。
+
+| 分類 | できること |
+| -- | -- |
+| Project | Markdown プロジェクトを開く |
+| Editor | Markdown 本文を編集する |
+| Preview | Markdown Preview を表示する |
+| Glossary | Glossary entry を作成・編集・削除する |
+| Glossary | Glossary form を管理する |
+| Glossary | Glossary match を Preview 上に装飾する |
+| Glossary | Glossary match の Hover Card を表示する |
+| Glossary | Glossary entry から本文中の使用箇所へ移動する |
+| Glossary | Glossary navigator で entry を探す |
+| Glossary | Glossary occurrences tab で使用箇所を確認する |
+| Workbench | Navigator / Editor / Preview のペインを扱う |
+| Workbench | Sidebar を折りたたむ |
+| Utility Window | 支援ウィンドウを開く |
+| Debug | Debug mode JSONL log を出力する |
+| Debug | Debug Log tab でログを確認する |
+| Persistence | SQLite に構造化プロジェクトデータを保存する |
 
 Glossary については、以下のような経路で Renderer から Project Database へアクセスします。
 
@@ -252,38 +261,81 @@ none
 
 ---
 
+## 現在の制限
+
+Pergamum は現在も開発初期です。
+
+日常的に dogfood しながら開発していますが、まだ一般利用向けの安定版ではありません。
+
+現時点では、主に以下の制限があります。
+
+| 分類 | 現在の制限 |
+| -- | -- |
+| File format | 開ける原稿ファイルは `*.md` のみです |
+| File format | `*.txt` やその他のテキストファイルは未対応です |
+| Encoding | UTF-8 のみ対応しています |
+| Encoding | Shift_JIS / EUC-JP / UTF-16 など、UTF-8 以外の文字コードは未対応です |
+| Editor tabs | 複数の文書をタブで開くことはできます |
+| Editor tabs | ただし、開いたタブを UI から閉じる操作はまだ未実装です |
+| Glossary database | Glossary / project database の schema は開発中です |
+| Glossary database | 今後の変更で破壊的変更が入る可能性があります |
+| Compatibility | 現時点では、永続的な DB 互換性を保証しません |
+
+特に `pergamum.db` は、現在の Pergamum における構造化データの正本です。
+
+その一方で、Glossary model や project data model はまだ安定版ではありません。
+
+そのため、開発初期の段階では、古い `pergamum.db` が将来のバージョンでそのまま使えなくなる可能性があります。
+
+重要な原稿や Glossary を扱う場合は、作業ディレクトリ全体を Git や通常のバックアップで管理してください。
+
+本文 Markdown は、人間が読める通常の UTF-8 Markdown ファイルとして保存します。
+
+一方、Glossary や project metadata については、v0.90.0 までは互換性よりもデータモデルの正しさを優先して変更する場合があります。
+
+---
+
 ## 現在開発中のこと
 
-現在は Phase 3「つながりすぎないようにする」の後半に入っています。
+現在は Phase 4「迷わず触れるようにする」の後半です。
 
-Phase 3 前半では、Glossary matching の boundary resolver と、form ごとの matching boundary UI を整備しました。
+Phase 3 では、本文を書く場と周辺作業の場を分離し、Glossary / Navigation / Utility Window / Debug logging / Runtime baseline の基礎を整えました。
 
-Phase 3 後半では、本文を書く場と、周辺作業の場を分離していきます。
+Phase 4 では、後続機能を無理なく積み上げるために、操作入口を整理しています。
+
+```text
+Command:
+  操作の意味
+
+Menu:
+  見つけられる入口
+
+Shortcut:
+  速く呼ぶ入口
+
+Context menu:
+  対象に応じた入口
+
+Command Palette / Command UI:
+  操作を探して実行する入口
+```
 
 直近の主な開発テーマは以下です。
 
-```text
-Workbench layout:
-  Navigator / Editor / Preview のペインを扱いやすくする
+| 分類 | 開発テーマ |
+| -- | -- |
+| Command infrastructure | アプリ内の操作を Command Registry に寄せる |
+| Command Palette | 操作を検索して実行できる入口を整える |
+| Application menu | 日常操作をメニューから辿れるようにする |
+| Shortcut | 基本操作をキーボードから呼べるようにする |
+| Context menu | 選択中の対象に応じた操作入口を整える |
+| Debug logging | dogfood や不具合解析のため、実ユーザー経路の観測を強化する |
 
-Sidebar collapse:
-  左 Navigator を折りたたんで本文領域を広く使えるようにする
+Phase 4 の目的は、単にメニューやショートカットを増やすことではありません。
 
-Utility Window / 支援ウィンドウ:
-  使用箇所、検索、診断、出力、ログなどを受け止める下部ペイン
+Pergamum の操作を command として整理し、menu / shortcut / context menu / Command Palette から同じ意味の操作を呼べるようにすることです。
 
-Occurrences tab:
-  Glossary entry の使用箇所を連続して辿るための UI
-
-Debug mode JSONL logging:
-  dogfood や不具合解析のためのデバッグログ基盤
-```
-
-特に、Glossary occurrence navigation は技術経路としては実装済みですが、現在は Glossary Editor から使用箇所へ移動すると Markdown Editor へ画面が切り替わります。
-
-そのため、連続して使用箇所を辿る UX にはまだ改善余地があります。
-
-この問題に対して、将来的には支援ウィンドウ上の Occurrences tab で操作を継続できるようにする予定です。
+これにより、今後の Glossary 操作、Editor 補助表示、検索、設定、出力などを、ばらばらの UI 実装ではなく、一貫した操作体系の上に載せられるようにします。
 
 ---
 
@@ -354,10 +406,10 @@ Pergamum では、大きな設計判断を ADR（Architecture Decision Record）
 
 コードだけを見ると、
 
-> なぜ UUIDv7 なのか
-> なぜ Glossary の表記を別テーブルにしたのか
-> なぜ SQLite が正本なのか
-> なぜ snapshot を正本にしないのか
+> なぜ UUIDv7 なのか  
+> なぜ Glossary の表記を別テーブルにしたのか  
+> なぜ SQLite が正本なのか  
+> なぜ snapshot を正本にしないのか  
 > なぜ Command / Navigation / Editor identity を分けるのか
 
 といった理由は時間とともに失われます。
@@ -385,7 +437,34 @@ Pergamum の開発ロードマップは以下に整理しています。
 - [Pergamum ロードマップ](./docs/roadmap.md)
 
 実装スコープの正本は GitHub Issue です。
+
 ロードマップは、方向性・優先順位・保留事項を見失わないための地図として扱います。
+
+現在は Phase 4「迷わず触れるようにする」の後半です。
+
+大きな流れは以下です。
+
+```text
+Phase 4:
+  迷わず触れるようにする
+
+Phase 5:
+  触りすぎないようにする
+
+Phase 6:
+  閉じても戻れるようにする
+
+Phase 7:
+  プロジェクトを歩けるようにする
+
+Phase 8:
+  他人の手に渡せるようにする
+
+v0.90.0:
+  毎日開けるようにする
+```
+
+各 Phase の詳細は `roadmap.md` を参照してください。
 
 ---
 

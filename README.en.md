@@ -1,6 +1,6 @@
 # Pergamum
 
-[Japanese](./README.md) | [English](./README.en.md)
+[日本語](./README.md) | [English](./README.en.md)
 
 Pergamum is an **open-source integrated writing environment for novelists**.
 
@@ -8,45 +8,45 @@ It is free software released under the MIT License.
 
 However, Pergamum is not intended to be just another Markdown editor.
 
-When writing a novel, a large amount of information arises outside the manuscript itself.
+When writing a novel, a large amount of information appears outside the manuscript itself.
 
-Character names. Place names. Organization names. Proper nouns. Aliases. Notation variants. Timelines. Relationships between characters. When a certain event occurred. What a certain character knew at a particular point in the story.
+Character names. Place names. Organization names. Proper nouns. Aliases. Spelling variations. Timelines. Relationships between characters. When an event happened. What a character knew at a specific point in the story.
 
-The longer a work becomes, the harder it is to maintain all of this using the author’s memory alone.
+The longer a work becomes, the harder it is to keep all of that information only in the author's memory.
 
-Pergamum aims to **separate the place where the manuscript is written from the place where the author manages what they know about the fictional world, while treating both as part of a single writing environment**.
+Pergamum aims to treat **the place where the manuscript is written and the place where the author manages what they know about the fictional world** as parts of a single writing environment.
 
-Pergamum is still in an early stage of development. Not everything described here has been implemented yet.
+Pergamum is still in early development. Not everything described here has been implemented yet.
 
-The name Pergamum comes from an ancient Greek city in what is now western Turkey. It was home to a great library rivaling the Library of Alexandria, and it is also associated with the origin of the word “parchment.”
+The name Pergamum comes from an ancient Greek city in what is now western Turkey. Pergamum was known for its great library, which rivaled the Library of Alexandria, and the word “parchment” is derived from its name.
 
 ---
 
-## Why build this?
+## Why Pergamum exists
 
 A novel itself is just text.
 
-So the manuscript can simply be Markdown.
+So the manuscript can be Markdown.
 
-On the other hand, information such as:
+On the other hand,
 
-> What other names does this character have?  
-> Is this notation merely a variant, or is it an intentional alias?  
-> In what year and month did this event occur?  
-> Did this character know that fact at this point in the scene?
+> What aliases does this character have?  
+> Is this spelling just a variation, or is it an intentional alias?  
+> In what year and month did this event happen?  
+> Did this character know this fact at this point in the story?
 
-is difficult to manage as plain prose alone.
+This kind of information is difficult to manage as plain prose alone.
 
-Instead of forcing that information into Markdown, Pergamum keeps it separately as structured data.
+Pergamum does not try to force all of that information into Markdown. Instead, it stores structured information separately.
 
-Pergamum currently separates these roles as follows:
+Pergamum currently separates responsibilities as follows.
 
 ```text
 Markdown
   The source of truth for manuscript text
 
 pergamum.db
-  The source of truth for structured story information,
+  The source of truth for structured project data,
   such as characters, terms, places, organizations, and concepts
 
 pergamum.json
@@ -56,42 +56,44 @@ Assets
   Binary data such as images
 ```
 
-Pergamum does not force the manuscript to conform to database requirements, nor does it force structured information into Markdown.
+The manuscript is not forced to fit the database.
 
-Each kind of data belongs where it is easiest to handle.
+Structured information is not forced into the Markdown text.
+
+Each type of data is stored where it can be handled most naturally.
 
 ---
 
 ## What Pergamum values
 
-Pergamum’s ultimate goal is not to write novels on behalf of the author.
+Pergamum is not trying to write novels on behalf of the author.
 
-It is to build **a tool that helps authors remember what they have already decided**.
+It is a tool for **helping the author remember what they have already decided**.
 
-Pergamum does not rewrite the manuscript without explicit user action.
+Pergamum does not rewrite the manuscript automatically.
 
-This is especially important for Japanese text processing. Pergamum does not casually normalize, standardize, complete, or infer text.
+Especially for Japanese text processing, Pergamum avoids careless normalization, unification, completion, and inference.
 
 ```text
-Things Pergamum does not do:
+Pergamum does not:
   Modify manuscript text through Unicode normalization
-  Automatically fix notation variants
+  Automatically fix spelling variations
   Automatically insert or remove middle dots
-  Automatically normalize ellipses or dashes
+  Automatically format ellipses or dashes
   Automatically add Glossary aliases
   Automatically resolve ambiguous matches
 ```
 
-Pergamum acts as an aid only when the author explicitly chooses to use it.
+Pergamum acts as an assistant only when the author explicitly chooses to use such support.
 
-Pergamum’s UI protects the place where the manuscript is written.
+Pergamum's UI protects the writing area.
 
 ```text
-Places for writing the manuscript:
+Writing area:
   Editor
   Preview
 
-Places for surrounding tasks:
+Supporting work around the manuscript:
   Navigator
   Search
   Occurrences
@@ -101,29 +103,29 @@ Places for surrounding tasks:
   Utility Window
 ```
 
-Tasks such as searching, navigating, diagnosing, exporting, and checking logs should be moved to surrounding UI areas rather than covering the manuscript area itself.
+Searching, tracing, diagnosing, exporting, and checking logs should not take over the manuscript area. Those tasks belong in the surrounding UI.
 
 ---
 
 ## What is the Glossary?
 
-In Pergamum, characters, places, organizations, terms, concepts, and similar story-world information are managed in the Glossary.
+In Pergamum, characters, places, organizations, terms, concepts, and similar project information are managed in the Glossary.
 
-For example, suppose the following strings related to Oda Nobunaga appear in the manuscript:
+For example, suppose the following strings related to Oda Nobunaga appear in the manuscript.
 
 ```text
 Oda Nobunaga
 Kipposhi
 Nobunaga
 My lord
-Chasen-mage
+Chasenmage
 ```
 
-These may be interpreted differently depending on context:
+They may mean different things depending on context.
 
 ```text
 Oda Nobunaga:
-  The name of the person himself
+  The character's main name
 
 Kipposhi:
   Childhood name
@@ -132,62 +134,72 @@ Nobunaga:
   Short name
 
 My lord:
-  A form of address based on status or relationship
+  A title or form of address based on position
 
-Chasen-mage:
+Chasenmage:
   A hairstyle
 ```
 
-`Kipposhi` and `My lord` may refer to the same person.  
-On the other hand, `Chasen-mage` refers to a hairstyle, not a person, and is therefore not the same entity.
+`Kipposhi` and `My lord` may refer to the same person.
 
-Pergamum does not automatically merge strings into the same entity merely because they appear in similar contexts.
+On the other hand, `Chasenmage` refers to a hairstyle, not to the person themselves.
 
-Furthermore, even when multiple strings refer to the same person, they do not necessarily mean the same thing.
+Pergamum does not automatically merge strings into the same entity just because they appear in similar contexts.
 
-Pergamum treats this information not as a flat list of strings, but as several independent axes.
+Even when multiple strings refer to the same person, their meanings are not necessarily identical.
+
+Pergamum treats this kind of information as separate axes, not as a simple list of strings.
 
 ```text
 Entry:
-  A story-world entity such as a character, place, organization, term, or concept
+  An entity such as a character, place, organization, term, or concept
 
 Form:
   A surface form such as a canonical name, alias, or variant spelling
 
 Warning policy:
-  A policy such as whether to warn or ignore
+  Whether to warn, ignore, or apply another handling policy
 
 Boundary policy:
-  A policy that determines which range in the manuscript should be treated as a match
+  What range of text should be treated as a match in the manuscript
 ```
 
 Pergamum also allows the same surface form to refer to multiple entities.
 
-If the word “general” could refer to multiple characters, Pergamum will not choose one automatically.
+If the word “warrior” can refer to multiple characters, Pergamum does not choose one automatically.
 
-**If something is ambiguous, Pergamum reports it as ambiguous.**
+**If something is ambiguous, report it as ambiguous.**
 
-This is one of Pergamum’s core design principles.
+This is one of Pergamum's core design principles.
 
 ---
 
-## Current capabilities
+## What currently works
 
-Pergamum is still in an early stage of development, but the following foundations have been implemented:
+Pergamum is still in early development, but the foundation for connecting Markdown manuscripts and Glossary data is already working.
 
-```text
-Open Markdown projects
-Edit Markdown manuscripts
-Display Markdown Preview
-Create and edit Glossary entries
-Manage Glossary forms
-Decorate Glossary matches in Preview
-Display Hover Cards for Glossary matches
-Navigate from a Glossary entry to its occurrences in the manuscript
-Save structured project data in SQLite
-```
+The following features are currently available.
 
-For Glossary data, the Renderer accesses the Project Database through the following path:
+| Category | What works |
+| -- | -- |
+| Project | Open a Markdown project |
+| Editor | Edit Markdown manuscript text |
+| Preview | Show Markdown Preview |
+| Glossary | Create, edit, and delete Glossary entries |
+| Glossary | Manage Glossary forms |
+| Glossary | Decorate Glossary matches in Preview |
+| Glossary | Show Hover Cards for Glossary matches |
+| Glossary | Navigate from a Glossary entry to its occurrences in the manuscript |
+| Glossary | Search entries in the Glossary navigator |
+| Glossary | Check occurrences in the Glossary occurrences tab |
+| Workbench | Use Navigator / Editor / Preview panes |
+| Workbench | Collapse the Sidebar |
+| Utility Window | Open the Utility Window |
+| Debug | Output Debug mode JSONL logs |
+| Debug | Check logs in the Debug Log tab |
+| Persistence | Store structured project data in SQLite |
+
+Glossary data is accessed from the Renderer to the Project Database through the following route.
 
 ```text
 Renderer
@@ -207,36 +219,34 @@ The current Glossary model separates Entry and Form.
 
 ```text
 Entry:
-  A story-world entity
+  An entity in the fictional world
 
 Form:
   A string that appears in the manuscript
 ```
 
-A Form can have roles such as canonical, alias, or variant.
+A Form can have a role such as canonical, alias, or variant.
 
-Glossary matching also supports boundary policies.
+Glossary matching also supports boundary policy.
 
-For example, suppose there is a surface form `maid`.
+For example, if the surface form is `maid`, a naive match may incorrectly match both of the following.
 
 ```text
 maidservant
 custom-made
 ```
 
-A simple substring match would match both, which can cause false positives.
-
-To address this, Pergamum allows the match boundaries to be adjusted per Glossary form.
+To avoid this kind of false positive, Pergamum allows matching boundaries to be adjusted for each Glossary form.
 
 ```text
-Match start boundary:
-  Auto / Strict / None
+Start-side boundary:
+  auto / strict / none
 
-Match end boundary:
-  Auto / Strict / None
+End-side boundary:
+  auto / strict / none
 ```
 
-The internal values are:
+The internal values are as follows.
 
 ```text
 auto
@@ -244,42 +254,85 @@ strict
 none
 ```
 
-This allows authors to adjust matching behavior per form only when necessary.
+This allows the author to adjust matching behavior per form only when necessary.
+
+---
+
+## Current limitations
+
+Pergamum is still in early development.
+
+It is being developed through daily dogfooding, but it is not yet a stable release for general use.
+
+The current main limitations are as follows.
+
+| Category | Current limitation |
+| -- | -- |
+| File format | Only `*.md` manuscript files can be opened |
+| File format | `*.txt` and other text file formats are not yet supported |
+| Encoding | Only UTF-8 is currently supported |
+| Encoding | Shift_JIS / EUC-JP / UTF-16 and other non-UTF-8 encodings are not yet supported |
+| Editor tabs | Multiple documents can be opened in tabs |
+| Editor tabs | However, closing opened tabs from the UI is not yet implemented |
+| Glossary database | The Glossary / project database schema is still under development |
+| Glossary database | Future changes may include breaking changes |
+| Compatibility | Long-term database compatibility is not guaranteed at this stage |
+
+In particular, `pergamum.db` is currently the source of truth for structured data in Pergamum.
+
+At the same time, the Glossary model and project data model are not yet stable.
+
+Therefore, during this early development stage, an old `pergamum.db` may not remain usable as-is in future versions.
+
+If you use Pergamum for important manuscripts or Glossary data, please manage the entire working directory with Git or regular backups.
+
+Manuscript Markdown is stored as normal human-readable UTF-8 Markdown files.
+
+For Glossary data and project metadata, until v0.90.0, Pergamum may prioritize improving the correctness of the data model over preserving database compatibility.
 
 ---
 
 ## Current development focus
 
-Pergamum is currently in the latter half of Phase 3: “avoid connecting too much.”
+Pergamum is currently in the latter half of Phase 4: “Make it easy to find and use operations.”
 
-In the first half of Phase 3, Pergamum introduced the Glossary matching boundary resolver and the UI for editing matching boundary policies per form.
+In Phase 3, Pergamum established the foundation for separating the writing area from surrounding work areas, including Glossary, Navigation, Utility Window, Debug logging, and the runtime baseline.
 
-In the latter half of Phase 3, Pergamum is separating the place where the manuscript is written from the places where surrounding work happens.
-
-The current main development themes are:
+In Phase 4, Pergamum is organizing operation entry points so future features can be added without scattering behavior across unrelated UI implementations.
 
 ```text
-Workbench layout:
-  Make the Navigator / Editor / Preview panes easier to use
+Command:
+  The meaning of an operation
 
-Sidebar collapse:
-  Allow the left Navigator to be collapsed so the manuscript area can be wider
+Menu:
+  A discoverable entry point
 
-Utility Window:
-  A lower pane for occurrences, search, diagnostics, output, logs, and similar tasks
+Shortcut:
+  A fast entry point
 
-Occurrences tab:
-  A UI for continuously navigating the occurrences of a Glossary entry
+Context menu:
+  An entry point based on the current target
 
-Debug mode JSONL logging:
-  A debug logging foundation for dogfooding and issue analysis
+Command Palette / Command UI:
+  An entry point for finding and executing operations
 ```
 
-Glossary occurrence navigation has already been implemented as a technical foundation. However, at present, when navigating from the Glossary Editor to an occurrence, the screen switches to the Markdown Editor.
+The current main development themes are as follows.
 
-As a result, there is still room to improve the UX for continuously navigating occurrences.
+| Category | Development theme |
+| -- | -- |
+| Command infrastructure | Move application operations into the Command Registry |
+| Command Palette | Improve the entry point for searching and executing operations |
+| Application menu | Make common operations discoverable from the menu |
+| Shortcut | Make basic operations available from the keyboard |
+| Context menu | Provide operations based on the selected target |
+| Debug logging | Improve observability for dogfooding and issue analysis |
 
-In the future, Pergamum plans to allow this workflow to continue from an Occurrences tab in the Utility Window.
+The purpose of Phase 4 is not simply to add more menus or shortcuts.
+
+The purpose is to organize Pergamum's operations as commands, so that the same operation can be invoked consistently from menus, shortcuts, context menus, and the Command Palette.
+
+This allows future Glossary operations, editor support features, search, settings, export, and other functionality to be built on top of a consistent operation model instead of scattered UI-specific implementations.
 
 ---
 
@@ -289,13 +342,13 @@ A novel is data that an author may spend tens or hundreds of hours creating.
 
 For that reason, Pergamum does not treat structured information as something that can simply be recreated if it breaks.
 
-Pergamum treats `pergamum.db` as the source of truth for structured data. In the future, it plans to generate a deterministic, human-readable snapshot that can be inspected in Git diffs.
+`pergamum.db` is the source of truth for structured data. In the future, Pergamum plans to generate deterministic snapshots that are human-readable and suitable for Git diffs.
 
-The snapshot will not become a second source of truth.
+A snapshot is not a second source of truth.
 
-If there are two sources of truth, the question of which one is correct inevitably arises.
+If there are two sources of truth, it inevitably becomes unclear which one is correct.
 
-Instead, Pergamum follows a one-way relationship:
+Instead, Pergamum uses a one-way relationship.
 
 ```text
 pergamum.db
@@ -305,7 +358,7 @@ deterministic snapshot
 Git / backup / external tools
 ```
 
-When restoring from a snapshot, the current DB should be moved aside, the entire snapshot should be validated, and the database should be rebuilt using a transaction.
+When restoring from a snapshot, Pergamum intends to move the current database aside, validate the entire snapshot, and rebuild the database using a transaction.
 
 This has not been implemented yet, but it has already been decided as an architectural principle.
 
@@ -313,19 +366,21 @@ This has not been implemented yet, but it has already been decided as an archite
 
 ## About AI
 
-Pergamum uses generative AI to support design review and implementation during development.
+Pergamum uses generative AI during development for design review and implementation support.
 
-However, the Pergamum application itself currently has no feature that sends an author’s manuscript to generative AI or asks AI to write novel text.
+However, Pergamum itself currently has no feature that sends the author's manuscript to a generative AI service or asks AI to write the novel text.
 
-AI is used to support the development process. Replacing the author’s creative work is not the goal.
+AI is used to support the development process.
+
+Replacing the author's creative work is not the goal.
 
 ---
 
 ## Installation
 
-Pergamum is currently under development, and there are no general-use release builds yet.
+Pergamum is currently under development and does not yet provide a general release package.
 
-For now, it can be tried by setting up the development environment from source.
+At this stage, you can try it by setting up the development environment from source.
 
 Development uses Node.js 24 LTS.
 
@@ -334,7 +389,7 @@ npm install
 npm run dev
 ```
 
-Common verification commands during development are:
+The following commands are commonly used during development.
 
 ```bash
 npm run typecheck
@@ -348,17 +403,15 @@ npm run build
 
 Pergamum records major design decisions as ADRs, or Architecture Decision Records.
 
-If we only look at the code, reasons such as:
+If only the code remains, the reasons behind decisions will fade over time.
 
 > Why UUIDv7?  
 > Why are Glossary surface forms stored in a separate table?  
 > Why is SQLite the source of truth?  
-> Why is the snapshot not a source of truth?  
+> Why is a snapshot not the source of truth?  
 > Why are Command, Navigation, and Editor identity separated?
 
-will be lost over time.
-
-For that reason, Pergamum records not only what was adopted, but also what was considered and why other options were rejected.
+To preserve these reasons, Pergamum records not only what was adopted, but also what was considered and why other options were not chosen.
 
 Current major ADRs:
 
@@ -368,20 +421,47 @@ Current major ADRs:
 - [ADR-0004: Manuscript Non-Destructive Policy](./docs/adr/0004-manuscript-non-destructive-policy.md)
 - [ADR-0005: Command Domain Taxonomy](./docs/adr/0005-command-domain-taxonomy.md)
 
-Some design decisions are made before implementation.
+Sometimes design is decided before implementation.
 
-This is because code that is cheap to fix later is less dangerous than data structures that become expensive to fix later.
+This is because code can often be changed later at a relatively low cost, while data structures can become very expensive to change later.
 
 ---
 
 ## Roadmap
 
-Pergamum’s development roadmap is organized here:
+Pergamum's development roadmap is documented here.
 
 - [Pergamum Roadmap](./docs/roadmap.md)
 
-The source of truth for implementation scope is GitHub Issues.  
-The roadmap is treated as a map for keeping track of direction, priorities, and deferred items.
+The source of truth for implementation scope is GitHub Issues.
+
+The roadmap is treated as a map for keeping track of direction, priorities, and deferred topics.
+
+Pergamum is currently in the latter half of Phase 4: “Make it easy to find and use operations.”
+
+The broad development flow is as follows.
+
+```text
+Phase 4:
+  Make it easy to find and use operations
+
+Phase 5:
+  Avoid touching the manuscript too much
+
+Phase 6:
+  Make it possible to return after closing
+
+Phase 7:
+  Make it possible to walk through the project
+
+Phase 8:
+  Make it ready for other people to use
+
+v0.90.0:
+  Make it usable every day
+```
+
+See `roadmap.md` for details of each phase.
 
 ---
 
