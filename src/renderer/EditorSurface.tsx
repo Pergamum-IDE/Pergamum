@@ -1,4 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useRef, useState, type RefObject } from "react";
+import type { DebugLogViewportChangeSource } from "../shared/debugLog";
+import {
+  documentCharCount,
+  documentLineCount,
+  documentMaxLineLength
+} from "../shared/documentMetrics";
 import type {
   GlossaryEntryKind,
   GlossaryFormMatchBoundary,
@@ -21,6 +27,173 @@ import { useHorizontalDrag } from "./useHorizontalDrag";
 import { clampMarkdownEditorPreviewRatio } from "./workbenchLayout";
 
 const NARROW_MARKDOWN_WORKSPACE_MEDIA_QUERY = "(max-width: 760px)";
+
+/**
+ * Debounce window for `layout.viewport.changed` (#162) — window/pane resize
+ * fires continuously while dragging, so this settles to a single report
+ * `VIEWPORT_CHANGE_DEBOUNCE_MS` after the last size change.
+ */
+const VIEWPORT_CHANGE_DEBOUNCE_MS = 400;
+
+/**
+ * Safe aggregate document/window/pane metrics for `document.open.completed`
+ * only (#161) — see src/shared/debugLog.ts's `DebugLogDetails` comment for
+ * each field's exact definition.
+ */
+export interface DocumentOpenAggregateMetrics {
+  documentCharCount: number;
+  documentLineCount: number;
+  documentMaxLineLength: number;
+  appWindowWidth: number;
+  appWindowHeight: number;
+  editorPaneWidth: number;
+  editorPaneHeight: number;
+  previewPaneWidth: number;
+  previewPaneHeight: number;
+}
+
+/** `layout.viewport.changed`'s detail shape (#162). */
+export interface ViewportSizeDetails {
+  appWindowWidth: number;
+  appWindowHeight: number;
+  editorPaneWidth: number;
+  editorPaneHeight: number;
+  previewPaneWidth: number;
+  previewPaneHeight: number;
+  viewportChangeSource: DebugLogViewportChangeSource;
+}
+
+function viewportSizesEqual(
+  a: Omit<ViewportSizeDetails, "viewportChangeSource">,
+  b: Omit<ViewportSizeDetails, "viewportChangeSource">
+): boolean {
+  return (
+    a.appWindowWidth === b.appWindowWidth &&
+    a.appWindowHeight === b.appWindowHeight &&
+    a.editorPaneWidth === b.editorPaneWidth &&
+    a.editorPaneHeight === b.editorPaneHeight &&
+    a.previewPaneWidth === b.previewPaneWidth &&
+    a.previewPaneHeight === b.previewPaneHeight
+  );
+}
+
+/**
+ * Debounced `layout.viewport.changed` reporter (#162): watches the app
+ * window and the editor/preview pane elements for size changes and reports
+ * at most once per `VIEWPORT_CHANGE_DEBOUNCE_MS` of quiet.
+ *
+ * A window resize almost always also changes both panes' sizes (they're
+ * sized relative to the workspace container), so both the `resize` listener
+ * and the `ResizeObserver` typically fire for the same underlying resize.
+ * `windowResize` is treated as the higher-priority signal within one
+ * debounce window (it doesn't get overwritten by a `paneResize` that fires
+ * moments later as a side effect of the same window resize); a resize that
+ * only ever touches the panes (ratio drag, no window resize) still reports
+ * `paneResize`. This is a best-effort attribution, not a guarantee to fully
+ * disambiguate every case — #162 explicitly allows `source` to fall back to
+ * `unknown` (or be omitted) when precise attribution would add
+ * disproportionate complexity.
+ *
+ * ResizeObserver's first callback after `observe()` fires immediately with
+ * the current size, not because anything changed — that initial call is
+ * used only to establish a baseline (no report), so mounting this component
+ * for a newly-opened document never emits a spurious `layout.viewport.changed`
+ * on its own (that snapshot belongs to `document.open.completed`, #161).
+ */
+function useDebouncedViewportChangeDebugLog(
+  editorPaneRef: RefObject<HTMLElement | null>,
+  previewPaneRef: RefObject<HTMLElement | null>,
+  onViewportChanged: (details: ViewportSizeDetails) => void
+): void {
+  useEffect(() => {
+    const editorPaneElement = editorPaneRef.current;
+    const previewPaneElement = previewPaneRef.current;
+
+    if (!editorPaneElement || !previewPaneElement) {
+      return;
+    }
+
+    let debounceTimeoutId: ReturnType<typeof setTimeout> | null = null;
+    let pendingSource: DebugLogViewportChangeSource = "unknown";
+    let lastReportedSizes: Omit<
+      ViewportSizeDetails,
+      "viewportChangeSource"
+    > | null = null;
+    let hasEstablishedBaseline = false;
+
+    function currentSizes(): Omit<ViewportSizeDetails, "viewportChangeSource"> {
+      return {
+        appWindowWidth: window.innerWidth,
+        appWindowHeight: window.innerHeight,
+        editorPaneWidth: editorPaneElement!.clientWidth,
+        editorPaneHeight: editorPaneElement!.clientHeight,
+        previewPaneWidth: previewPaneElement!.clientWidth,
+        previewPaneHeight: previewPaneElement!.clientHeight
+      };
+    }
+
+    function scheduleReport(source: DebugLogViewportChangeSource): void {
+      if (source === "windowResize" || pendingSource === "unknown") {
+        pendingSource = source;
+      }
+
+      if (debounceTimeoutId !== null) {
+        clearTimeout(debounceTimeoutId);
+      }
+
+      debounceTimeoutId = setTimeout(() => {
+        debounceTimeoutId = null;
+
+        const sizes = currentSizes();
+        const source = pendingSource;
+        pendingSource = "unknown";
+
+        if (lastReportedSizes && viewportSizesEqual(lastReportedSizes, sizes)) {
+          return;
+        }
+
+        lastReportedSizes = sizes;
+        onViewportChanged({ ...sizes, viewportChangeSource: source });
+      }, VIEWPORT_CHANGE_DEBOUNCE_MS);
+    }
+
+    function handleWindowResize(): void {
+      scheduleReport("windowResize");
+    }
+
+    const resizeObserver = new ResizeObserver(() => {
+      if (!hasEstablishedBaseline) {
+        hasEstablishedBaseline = true;
+        lastReportedSizes = currentSizes();
+        return;
+      }
+
+      scheduleReport("paneResize");
+    });
+
+    resizeObserver.observe(editorPaneElement);
+    resizeObserver.observe(previewPaneElement);
+    window.addEventListener("resize", handleWindowResize);
+
+    return () => {
+      window.removeEventListener("resize", handleWindowResize);
+      resizeObserver.disconnect();
+
+      if (debounceTimeoutId !== null) {
+        clearTimeout(debounceTimeoutId);
+      }
+    };
+    // Deliberately an empty dependency array: editorPaneRef/previewPaneRef
+    // are stable ref objects, and onViewportChanged (App.tsx's
+    // handleViewportChanged) is a fresh function identity on every App.tsx
+    // render — listing it would tear down and recreate the ResizeObserver
+    // and resize listener (losing hasEstablishedBaseline/lastReportedSizes)
+    // on every keystroke-driven re-render, not just when the pane elements
+    // actually change. This effect's lifetime is meant to track
+    // MarkdownEditorSurface's own mount/unmount instead (mirrors the
+    // documentOpenId-only effect above).
+  }, []);
+}
 
 function useIsNarrowMarkdownWorkspace(): boolean {
   const [isNarrow, setIsNarrow] = useState(
@@ -94,10 +267,15 @@ interface EditorSurfaceProps {
     documentOpenId: string,
     previewRenderStartedAt: number
   ) => void;
-  /** Fired once after this document's preview has rendered, with its duration. */
+  /**
+   * Fired once after this document's preview has rendered, with its
+   * duration and the safe aggregate document/window/pane metrics for
+   * `document.open.completed` (#161).
+   */
   onDocumentOpenPreviewRendered: (
     documentOpenId: string,
-    previewRenderDurationMs: number
+    previewRenderDurationMs: number,
+    aggregateMetrics: DocumentOpenAggregateMetrics
   ) => void;
   /**
    * Fired once after the just-rendered preview HTML has been committed to
@@ -126,6 +304,14 @@ interface EditorSurfaceProps {
     documentOpenId: string,
     durationMs: number
   ) => void;
+  /**
+   * Fired at most once per `VIEWPORT_CHANGE_DEBOUNCE_MS` of quiet after the
+   * app window or the editor/preview pane sizes change (#162). Not tied to
+   * `documentOpenId` — this reports ongoing layout changes, not a one-time
+   * open snapshot (that's `onDocumentOpenPreviewRendered`'s aggregateMetrics
+   * above).
+   */
+  onViewportChanged: (details: ViewportSizeDetails) => void;
 }
 
 export function EditorSurface({
@@ -157,7 +343,8 @@ export function EditorSurface({
   onDocumentOpenPreviewRendered,
   onDocumentOpenPreviewDomCommitted,
   onDocumentOpenPreviewDecorationCompleted,
-  onDocumentOpenPreviewFrameObserved
+  onDocumentOpenPreviewFrameObserved,
+  onViewportChanged
 }: EditorSurfaceProps): JSX.Element {
   switch (editor.kind) {
     case "markdown":
@@ -184,6 +371,7 @@ export function EditorSurface({
           onDocumentOpenPreviewFrameObserved={
             onDocumentOpenPreviewFrameObserved
           }
+          onViewportChanged={onViewportChanged}
         />
       );
     case "glossaryEntry":
@@ -239,7 +427,8 @@ interface MarkdownEditorSurfaceProps {
   ) => void;
   onDocumentOpenPreviewRendered: (
     documentOpenId: string,
-    previewRenderDurationMs: number
+    previewRenderDurationMs: number,
+    aggregateMetrics: DocumentOpenAggregateMetrics
   ) => void;
   onDocumentOpenPreviewDomCommitted: (
     documentOpenId: string,
@@ -257,6 +446,7 @@ interface MarkdownEditorSurfaceProps {
     documentOpenId: string,
     durationMs: number
   ) => void;
+  onViewportChanged: (details: ViewportSizeDetails) => void;
 }
 
 function MarkdownEditorSurface({
@@ -274,7 +464,8 @@ function MarkdownEditorSurface({
   onDocumentOpenPreviewRendered,
   onDocumentOpenPreviewDomCommitted,
   onDocumentOpenPreviewDecorationCompleted,
-  onDocumentOpenPreviewFrameObserved
+  onDocumentOpenPreviewFrameObserved,
+  onViewportChanged
 }: MarkdownEditorSurfaceProps): JSX.Element {
   const content = currentDocumentContent(document);
   const previewRenderStartedAt = performance.now();
@@ -285,8 +476,10 @@ function MarkdownEditorSurface({
     glossaryRefreshToken
   );
   const reportedDocumentOpenIdRef = useRef<string | null>(null);
+  const editorPaneRef = useRef<HTMLElement | null>(null);
+  const previewPaneRef = useRef<HTMLElement | null>(null);
 
-  // One-shot measurement (#152, extended #154): fires only when
+  // One-shot measurement (#152, extended #154, #161): fires only when
   // documentOpenId changes (i.e. a new open just applied its editor state
   // and this component has now re-rendered with that document's content),
   // never on ordinary content edits. App.tsx clears documentOpenId after
@@ -297,17 +490,46 @@ function MarkdownEditorSurface({
   // see main.tsx), which would otherwise report the same open twice and
   // duplicate previewRender.started/previewRender.completed/usable/completed
   // in dev/dogfood logs.
+  //
+  // #163: this is a *passive* effect, so it runs after every layout effect
+  // in the tree has already run — including GlossaryPreviewDecorator's
+  // (child) useLayoutEffect, which logs previewDom.committed/
+  // previewDecoration.completed. previewRenderStartedAt above is captured
+  // during *render*, chronologically before that child layout effect runs,
+  // but the onDocumentOpenPreviewRenderStarted/onDocumentOpenPreviewRendered
+  // calls below don't happen until this passive effect fires — i.e. later
+  // than previewDom.committed's own log call. So previewRender.started/
+  // previewRender.completed can end up with a *later* seq than
+  // previewDom.committed/previewDecoration.completed despite describing an
+  // *earlier* moment. See src/shared/debugLog.ts's DebugLogEvent comment:
+  // read each event's own durationMs against its documented boundary, not
+  // seq/timestamp, to reconstruct actual ordering.
   useEffect(() => {
     if (documentOpenId && reportedDocumentOpenIdRef.current !== documentOpenId) {
       reportedDocumentOpenIdRef.current = documentOpenId;
       onDocumentOpenPreviewRenderStarted(documentOpenId, previewRenderStartedAt);
-      onDocumentOpenPreviewRendered(documentOpenId, previewRenderDurationMs);
+      onDocumentOpenPreviewRendered(documentOpenId, previewRenderDurationMs, {
+        documentCharCount: documentCharCount(content),
+        documentLineCount: documentLineCount(content),
+        documentMaxLineLength: documentMaxLineLength(content),
+        appWindowWidth: window.innerWidth,
+        appWindowHeight: window.innerHeight,
+        editorPaneWidth: editorPaneRef.current?.clientWidth ?? 0,
+        editorPaneHeight: editorPaneRef.current?.clientHeight ?? 0,
+        previewPaneWidth: previewPaneRef.current?.clientWidth ?? 0,
+        previewPaneHeight: previewPaneRef.current?.clientHeight ?? 0
+      });
     }
     // Deliberately keyed on documentOpenId alone: previewRenderStartedAt /
-    // previewRenderDurationMs are read from this same render's closure, but
-    // must not themselves be dependencies, or every content edit (not just
-    // an open) would re-fire.
+    // previewRenderDurationMs / content are read from this same render's
+    // closure, but must not themselves be dependencies, or every content
+    // edit (not just an open) would re-fire.
   }, [documentOpenId]);
+  useDebouncedViewportChangeDebugLog(
+    editorPaneRef,
+    previewPaneRef,
+    onViewportChanged
+  );
   const isNarrow = useIsNarrowMarkdownWorkspace();
   const workspaceRef = useRef<HTMLElement | null>(null);
   const ratioAtDragStartRef = useRef(ratio);
@@ -369,6 +591,7 @@ function MarkdownEditorSurface({
       <section
         className="pane"
         aria-label={translate("workspace.markdownEditor")}
+        ref={editorPaneRef}
       >
         <div className="paneHeader">
           {translate("workspace.editor")}
@@ -398,6 +621,7 @@ function MarkdownEditorSurface({
       <section
         className="pane"
         aria-label={translate("workspace.markdownPreview")}
+        ref={previewPaneRef}
       >
         <div className="paneHeader">
           {translate("workspace.preview")}

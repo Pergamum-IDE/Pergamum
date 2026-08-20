@@ -91,6 +91,7 @@ const eventLevelCatalog: Record<DebugLogEventName, DebugLogLevel> = {
   "document.open.completed": "debug",
   "document.open.failed": "error",
   "document.save.failed": "error",
+  "layout.viewport.changed": "debug",
   "ime.composition.started": "debug",
   "ime.composition.ended": "debug",
   "ime.command.passed_through": "debug",

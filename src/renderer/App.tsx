@@ -90,7 +90,11 @@ import {
 } from "./debugLog";
 import { DebugLogPanel } from "./DebugLogPanel";
 import { createDocumentOpenIdFactory } from "./documentOpenId";
-import { EditorSurface } from "./EditorSurface";
+import {
+  EditorSurface,
+  type DocumentOpenAggregateMetrics,
+  type ViewportSizeDetails
+} from "./EditorSurface";
 import {
   createContextMenuInteractionIdFactory,
   delegatedContextSurfaceFromDocument,
@@ -1402,7 +1406,8 @@ export function App(): JSX.Element {
    */
   function handleDocumentOpenMeasured(
     documentOpenId: string,
-    previewRenderDurationMs: number
+    previewRenderDurationMs: number,
+    aggregateMetrics: DocumentOpenAggregateMetrics
   ): void {
     if (
       !documentOpenMeasurement ||
@@ -1428,17 +1433,36 @@ export function App(): JSX.Element {
       event: "document.open.usable",
       details: { documentOpenId, durationMs: usableDurationMs }
     });
+    // aggregateMetrics (#161) is attached only here, never to `usable` above
+    // — it's a one-time snapshot for the whole open, not a per-boundary
+    // measurement.
     logRendererDebugEvent({
       level: "debug",
       event: "document.open.completed",
       details: {
         documentOpenId,
         result: "succeeded",
-        durationMs: usableDurationMs
+        durationMs: usableDurationMs,
+        ...aggregateMetrics
       }
     });
 
     setDocumentOpenMeasurement(null);
+  }
+
+  /**
+   * Fired at most once per debounce window when the app window or the
+   * editor/preview pane sizes change while a markdown document is open
+   * (#162). Not part of the document-open measurement lifecycle (no
+   * documentOpenId gating) — this reports layout changes that can happen
+   * long after any open completed.
+   */
+  function handleViewportChanged(details: ViewportSizeDetails): void {
+    logRendererDebugEvent({
+      level: "debug",
+      event: "layout.viewport.changed",
+      details: { ...details }
+    });
   }
 
   /**
@@ -2717,6 +2741,7 @@ export function App(): JSX.Element {
                     onDocumentOpenPreviewFrameObserved={
                       handleDocumentOpenPreviewFrameObserved
                     }
+                    onViewportChanged={handleViewportChanged}
                   />
 
                   {layout.utilityWindow.open ? (

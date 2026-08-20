@@ -40,6 +40,7 @@ export const debugLogEventNames = [
   "document.open.completed",
   "document.open.failed",
   "document.save.failed",
+  "layout.viewport.changed",
   "ime.composition.started",
   "ime.composition.ended",
   "ime.command.passed_through",
@@ -285,6 +286,22 @@ export const debugLogEncodingAssumptions = ["utf8", "unknown"] as const;
 export type DebugLogEncodingAssumption =
   (typeof debugLogEncodingAssumptions)[number];
 
+/**
+ * Closed enum for `layout.viewport.changed`'s optional `viewportChangeSource`
+ * detail (#162). Deliberately its own key/catalog rather than reusing the
+ * generic `source` detail (`DebugLogCommandExecutionSource`, used by command
+ * execution events) — the two describe unrelated things, and sharing one key
+ * would let either catalog silently accept the other's values.
+ */
+export const debugLogViewportChangeSources = [
+  "windowResize",
+  "paneResize",
+  "unknown"
+] as const;
+
+export type DebugLogViewportChangeSource =
+  (typeof debugLogViewportChangeSources)[number];
+
 export type DebugLogErrorCategory =
   | "notFound"
   | "permissionDenied"
@@ -370,15 +387,76 @@ export interface DebugLogDetails {
   droppedKeyCount?: number;
   rotated?: boolean;
 
+  /**
+   * Safe aggregate document/window/pane metrics attached to
+   * `document.open.completed` only, never `document.open.usable` (#161).
+   * See src/shared/documentMetrics.ts for `documentCharCount` /
+   * `documentLineCount` / `documentMaxLineLength`'s exact definitions.
+   * `appWindowWidth`/`appWindowHeight` are the renderer's content-area
+   * viewport (`window.innerWidth`/`innerHeight`), not the OS window's outer
+   * bounds or position. `editorPane*`/`previewPane*` are each pane element's
+   * `clientWidth`/`clientHeight`. Width/height only — no x/y, no screen or
+   * monitor identity.
+   */
+  documentCharCount?: number;
+  documentLineCount?: number;
+  documentMaxLineLength?: number;
+  appWindowWidth?: number;
+  appWindowHeight?: number;
+  editorPaneWidth?: number;
+  editorPaneHeight?: number;
+  previewPaneWidth?: number;
+  previewPaneHeight?: number;
+  /** Best-effort trigger attribution for `layout.viewport.changed` (#162). */
+  viewportChangeSource?: DebugLogViewportChangeSource;
+
   error?: SanitizedErrorInfo;
 }
 
+/**
+ * #163 investigated why `document.open.*` events' `seq`/`timestamp` order
+ * can disagree with the chronological order of what they measured (e.g.
+ * `previewRender.started` — whose mark is captured earliest, during React
+ * render — can log *after* `previewDom.committed`, whose mark is captured
+ * later, during a child's layout effect that runs before the parent's
+ * passive effect that reports `previewRender.started`). Conclusion below;
+ * see the DebugLogEvent fields for what each one actually means.
+ */
 export interface DebugLogEvent {
+  /**
+   * Emit order: assigned in `DebugLogger.createEvent` (main process) each
+   * time `log()`/`logRendererRequest()` is *called*, one per call, strictly
+   * increasing. For renderer-originated events this is effectively IPC
+   * receipt order (the `debugLog.logEvent` handler in debugLogIpc.ts is
+   * synchronous, so it matches the order `logRendererDebugEvent` was called
+   * in the renderer) — NOT the chronological order of the moment each event
+   * describes. A React passive effect can call `logRendererDebugEvent` for
+   * an earlier-captured `performance.now()` mark after a child's layout
+   * effect has already logged a later-captured one (see #163). Do not infer
+   * measurement-occurrence order from `seq` across different events.
+   */
   seq: number;
+  /**
+   * Wall-clock time the main-process logger received/processed this event
+   * (`formatLocalDebugLogTimestamp(this.now())` in `createEvent`) — i.e. the
+   * same "emit order" boundary as `seq`, just as a clock reading rather than
+   * a counter. Not the time the underlying measured moment occurred in the
+   * renderer.
+   */
   timestamp: string;
   level: DebugLogLevel;
   event: DebugLogEventName;
   sessionId: string;
+  /**
+   * Each event's own `durationMs` (where present) is the authoritative
+   * value for "how long did this take" / "how far from what boundary" — its
+   * meaning is documented per call site (e.g. App.tsx's
+   * handleDocumentOpen* functions, GlossaryPreviewDecorator's layout
+   * effect). Reconstructing the true chronological order across multiple
+   * `document.open.*` events for one `documentOpenId` means reading each
+   * event's own documented boundary and comparing `durationMs` values, not
+   * comparing `seq`/`timestamp`.
+   */
   details?: DebugLogDetails;
 }
 

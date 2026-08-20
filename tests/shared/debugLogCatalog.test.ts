@@ -7,6 +7,7 @@ import {
   debugLogEditorKinds,
   debugLogEventNames,
   debugLogReasons,
+  debugLogViewportChangeSources,
   type DebugLogDetails
 } from "../../src/shared/debugLog";
 import { contextMenuSurfaces } from "../../src/shared/editContextMenu";
@@ -278,6 +279,70 @@ describe("debug log catalog", () => {
     expect(debugLogEventNames).not.toContain(
       "document.open.markdownEditor.effect.completed"
     );
+  });
+
+  it("includes the safe aggregate document/window/pane metric detail keys on document.open.completed (#161)", () => {
+    type HasDocumentCharCount =
+      "documentCharCount" extends keyof DebugLogDetails ? true : false;
+    type HasDocumentLineCount =
+      "documentLineCount" extends keyof DebugLogDetails ? true : false;
+    type HasDocumentMaxLineLength =
+      "documentMaxLineLength" extends keyof DebugLogDetails ? true : false;
+    type HasAppWindowWidth =
+      "appWindowWidth" extends keyof DebugLogDetails ? true : false;
+    type HasAppWindowHeight =
+      "appWindowHeight" extends keyof DebugLogDetails ? true : false;
+    type HasEditorPaneWidth =
+      "editorPaneWidth" extends keyof DebugLogDetails ? true : false;
+    type HasEditorPaneHeight =
+      "editorPaneHeight" extends keyof DebugLogDetails ? true : false;
+    type HasPreviewPaneWidth =
+      "previewPaneWidth" extends keyof DebugLogDetails ? true : false;
+    type HasPreviewPaneHeight =
+      "previewPaneHeight" extends keyof DebugLogDetails ? true : false;
+    const hasDocumentCharCount: HasDocumentCharCount = true;
+    const hasDocumentLineCount: HasDocumentLineCount = true;
+    const hasDocumentMaxLineLength: HasDocumentMaxLineLength = true;
+    const hasAppWindowWidth: HasAppWindowWidth = true;
+    const hasAppWindowHeight: HasAppWindowHeight = true;
+    const hasEditorPaneWidth: HasEditorPaneWidth = true;
+    const hasEditorPaneHeight: HasEditorPaneHeight = true;
+    const hasPreviewPaneWidth: HasPreviewPaneWidth = true;
+    const hasPreviewPaneHeight: HasPreviewPaneHeight = true;
+
+    expect(hasDocumentCharCount).toBe(true);
+    expect(hasDocumentLineCount).toBe(true);
+    expect(hasDocumentMaxLineLength).toBe(true);
+    expect(hasAppWindowWidth).toBe(true);
+    expect(hasAppWindowHeight).toBe(true);
+    expect(hasEditorPaneWidth).toBe(true);
+    expect(hasEditorPaneHeight).toBe(true);
+    expect(hasPreviewPaneWidth).toBe(true);
+    expect(hasPreviewPaneHeight).toBe(true);
+  });
+
+  it("includes layout.viewport.changed as a debug-only event, distinct from document.open.* (#162)", () => {
+    expect(debugLogEventNames).toContain("layout.viewport.changed");
+  });
+
+  it("defines a closed viewportChangeSource catalog, separate from the generic command-execution source catalog (#162)", () => {
+    expect([...debugLogViewportChangeSources]).toEqual([
+      "windowResize",
+      "paneResize",
+      "unknown"
+    ]);
+    // Deliberately distinct from debugLogCommandExecutionSources — reusing
+    // one key/catalog for two unrelated concepts would let either accept
+    // the other's values.
+    expect([...debugLogViewportChangeSources]).not.toEqual([
+      ...debugLogCommandExecutionSources
+    ]);
+
+    type HasViewportChangeSource =
+      "viewportChangeSource" extends keyof DebugLogDetails ? true : false;
+    const hasViewportChangeSource: HasViewportChangeSource = true;
+
+    expect(hasViewportChangeSource).toBe(true);
   });
 
   it("includes the DB skipped reason catalog values", () => {

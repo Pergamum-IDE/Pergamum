@@ -388,6 +388,114 @@ describe("debug log details sanitizer", () => {
     expect(fractional).toBeUndefined();
   });
 
+  it("accepts the document.open.completed aggregate metric details (#161)", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        documentOpenId: "documentOpen.1",
+        result: "succeeded",
+        durationMs: 42,
+        documentCharCount: 120000,
+        documentLineCount: 1,
+        documentMaxLineLength: 119998,
+        appWindowWidth: 1920,
+        appWindowHeight: 1080,
+        editorPaneWidth: 960,
+        editorPaneHeight: 1020,
+        previewPaneWidth: 954,
+        previewPaneHeight: 1020
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      documentOpenId: "documentOpen.1",
+      result: "succeeded",
+      durationMs: 42,
+      documentCharCount: 120000,
+      documentLineCount: 1,
+      documentMaxLineLength: 119998,
+      appWindowWidth: 1920,
+      appWindowHeight: 1080,
+      editorPaneWidth: 960,
+      editorPaneHeight: 1020,
+      previewPaneWidth: 954,
+      previewPaneHeight: 1020
+    });
+  });
+
+  it("drops negative, fractional, NaN, Infinity, or string values for every #161 aggregate metric key", () => {
+    const keys = [
+      "documentCharCount",
+      "documentLineCount",
+      "documentMaxLineLength",
+      "appWindowWidth",
+      "appWindowHeight",
+      "editorPaneWidth",
+      "editorPaneHeight",
+      "previewPaneWidth",
+      "previewPaneHeight"
+    ] as const;
+    const invalidValues: unknown[] = [-1, 1.5, NaN, Infinity, "120000"];
+
+    for (const key of keys) {
+      for (const invalidValue of invalidValues) {
+        expect(
+          sanitizeDebugLogDetails({ [key]: invalidValue }, context())
+        ).toBeUndefined();
+      }
+
+      expect(
+        sanitizeDebugLogDetails({ [key]: 0 }, context())
+      ).toEqual({ [key]: 0 });
+    }
+  });
+
+  it("accepts layout.viewport.changed's size + viewportChangeSource details (#162)", () => {
+    const details = sanitizeDebugLogDetails(
+      {
+        appWindowWidth: 1280,
+        appWindowHeight: 800,
+        editorPaneWidth: 640,
+        editorPaneHeight: 740,
+        previewPaneWidth: 634,
+        previewPaneHeight: 740,
+        viewportChangeSource: "windowResize"
+      },
+      context()
+    );
+
+    expect(details).toEqual({
+      appWindowWidth: 1280,
+      appWindowHeight: 800,
+      editorPaneWidth: 640,
+      editorPaneHeight: 740,
+      previewPaneWidth: 634,
+      previewPaneHeight: 740,
+      viewportChangeSource: "windowResize"
+    });
+  });
+
+  it("normalizes an unrecognized viewportChangeSource to unknown rather than dropping the whole event", () => {
+    const details = sanitizeDebugLogDetails(
+      { viewportChangeSource: "dragResize" },
+      context()
+    );
+
+    expect(details).toEqual({ viewportChangeSource: "unknown" });
+  });
+
+  it("keeps viewportChangeSource's catalog independent from the generic command-execution source key (#162)", () => {
+    // "windowResize"/"paneResize" are not in debugLogCommandExecutionSources
+    // — passed under the generic `source` key they must normalize to
+    // "unknown", not leak through as a command-execution source value.
+    const details = sanitizeDebugLogDetails(
+      { source: "windowResize" },
+      context()
+    );
+
+    expect(details).toEqual({ source: "unknown" });
+  });
+
   it("sanitizes errors without message or stack summaries", () => {
     const error = new Error("C:\\Users\\name\\secret.md could not be opened");
     Object.assign(error, {

@@ -374,7 +374,7 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
       const effectBody = editorSurfaceSource.slice(effectStart, effectEnd);
 
       expect(effectBody).toContain(
-        "onDocumentOpenPreviewRendered(documentOpenId, previewRenderDurationMs);"
+        "onDocumentOpenPreviewRendered(documentOpenId, previewRenderDurationMs, {"
       );
     });
 
@@ -628,7 +628,7 @@ describe("document open performance instrumentation wiring (#140 / #152)", () =>
         "onDocumentOpenPreviewRenderStarted(documentOpenId, previewRenderStartedAt);"
       );
       const renderedIndex = effectBody.indexOf(
-        "onDocumentOpenPreviewRendered(documentOpenId, previewRenderDurationMs);"
+        "onDocumentOpenPreviewRendered(documentOpenId, previewRenderDurationMs, {"
       );
 
       expect(startedIndex).toBeGreaterThan(-1);
