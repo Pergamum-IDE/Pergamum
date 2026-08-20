@@ -18,6 +18,7 @@ import {
   debugLogResults,
   debugLogSaveTargetKinds,
   debugLogSizeBuckets,
+  debugLogViewportChangeSources,
   isDebugLogContextMenuSurface,
   type DebugLogApplicationMenuTrigger,
   type DebugLogCommandExecutionSource,
@@ -41,6 +42,7 @@ import {
   type DebugLogResult,
   type DebugLogSaveTargetKind,
   type DebugLogSizeBucket,
+  type DebugLogViewportChangeSource,
   type SanitizedErrorInfo
 } from "../shared/debugLog";
 
@@ -604,6 +606,85 @@ export function sanitizeDebugLogDetails(
         if (typeof value === "boolean") {
           sanitized.rotated = value;
         }
+        break;
+      case "documentCharCount": {
+        const documentCharCount = sanitizeNonNegativeInteger(value);
+
+        if (documentCharCount !== undefined) {
+          sanitized.documentCharCount = documentCharCount;
+        }
+        break;
+      }
+      case "documentLineCount": {
+        const documentLineCount = sanitizeNonNegativeInteger(value);
+
+        if (documentLineCount !== undefined) {
+          sanitized.documentLineCount = documentLineCount;
+        }
+        break;
+      }
+      case "documentMaxLineLength": {
+        const documentMaxLineLength = sanitizeNonNegativeInteger(value);
+
+        if (documentMaxLineLength !== undefined) {
+          sanitized.documentMaxLineLength = documentMaxLineLength;
+        }
+        break;
+      }
+      case "appWindowWidth": {
+        const appWindowWidth = sanitizeNonNegativeInteger(value);
+
+        if (appWindowWidth !== undefined) {
+          sanitized.appWindowWidth = appWindowWidth;
+        }
+        break;
+      }
+      case "appWindowHeight": {
+        const appWindowHeight = sanitizeNonNegativeInteger(value);
+
+        if (appWindowHeight !== undefined) {
+          sanitized.appWindowHeight = appWindowHeight;
+        }
+        break;
+      }
+      case "editorPaneWidth": {
+        const editorPaneWidth = sanitizeNonNegativeInteger(value);
+
+        if (editorPaneWidth !== undefined) {
+          sanitized.editorPaneWidth = editorPaneWidth;
+        }
+        break;
+      }
+      case "editorPaneHeight": {
+        const editorPaneHeight = sanitizeNonNegativeInteger(value);
+
+        if (editorPaneHeight !== undefined) {
+          sanitized.editorPaneHeight = editorPaneHeight;
+        }
+        break;
+      }
+      case "previewPaneWidth": {
+        const previewPaneWidth = sanitizeNonNegativeInteger(value);
+
+        if (previewPaneWidth !== undefined) {
+          sanitized.previewPaneWidth = previewPaneWidth;
+        }
+        break;
+      }
+      case "previewPaneHeight": {
+        const previewPaneHeight = sanitizeNonNegativeInteger(value);
+
+        if (previewPaneHeight !== undefined) {
+          sanitized.previewPaneHeight = previewPaneHeight;
+        }
+        break;
+      }
+      case "viewportChangeSource":
+        sanitized.viewportChangeSource =
+          enumOrUnknown<DebugLogViewportChangeSource>(
+            debugLogViewportChangeSources,
+            value
+          );
         break;
       case "error":
         sanitized.error = sanitizeErrorForDebugLog(value);
