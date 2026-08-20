@@ -24,6 +24,8 @@ ADR は、単なる設計メモではありません。
 | ADR-0001 | Project Persistence Architecture | Accepted | プロジェクトの永続化方式（Markdown / SQLite / Assets）の基本方針を定義する。 |
 | ADR-0002 | Structured Project Data and Glossary Model | Accepted | 構造化 Project Data の正本、Glossary entity/form model、UUIDv7、snapshot/restore 原則を定義する。 |
 | ADR-0005 | Command Domain Taxonomy | Draft | Command ID domain の責務境界、built-in domain、reserved plugin namespace、collision policy を定義する。 |
+| ADR-0006 | Durable State Categories and Settings Architecture | Proposed | settings / meta / session / recovery / runtime coordination のカテゴリ境界と Settings Catalog / resolution / validation 方針を定義する。日本語版: `0006-settings-architecture.ja.md` / English: `0006-settings-architecture.en.md` |
+| ADR-0007 | Recovery and Runtime Coordination | Proposed | recovery storage / identity / restore と runtime coordination marker の非破壊・best-effort 方針を定義する。日本語版: `0007-recovery-and-runtime-coordination.ja.md` / English: `0007-recovery-and-runtime-coordination.en.md` |
 
 ---
 
