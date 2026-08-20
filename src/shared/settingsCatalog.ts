@@ -1,0 +1,619 @@
+/**
+ * Settings Catalog Foundation (ADR-0006).
+ *
+ * This module is the single source of truth for cataloged setting
+ * definitions: key naming, scope, default values, and validation metadata
+ * (ADR-0006 S-9 / S-10 / S-11). It does not own settings file I/O, effective
+ * (Project > Application > Default) resolution, or runtime application of
+ * setting values — those remain main-process/store/runtime-coordination
+ * responsibilities (ADR-0006 S-13).
+ *
+ * This module intentionally does not merge with the pre-ADR-0006 metadata
+ * in src/shared/settings.ts (`settingsCatalog` / `SettingsCatalogKey` /
+ * `SettingsCatalogEntry` / `SettingScope` there use different names and a
+ * different scope enum, and have zero consumers beyond that file's own
+ * re-export). That legacy metadata is left in place rather than merged or
+ * removed here.
+ */
+
+// ---------------------------------------------------------------------------
+// Setting scope (ADR-0006 S-11)
+// ---------------------------------------------------------------------------
+
+export const settingScopes = [
+  "applicationOnly",
+  "projectOnly",
+  "applicationWithProjectOverride"
+] as const;
+
+export type SettingScope = (typeof settingScopes)[number];
+
+// ---------------------------------------------------------------------------
+// Setting area (ADR-0006 S-10 closed area set)
+// ---------------------------------------------------------------------------
+
+export const settingAreas = [
+  "workbench",
+  "editor",
+  "preview",
+  "quickAccess",
+  "files",
+  "debug"
+] as const;
+
+export type SettingArea = (typeof settingAreas)[number];
+
+// ---------------------------------------------------------------------------
+// Validation metadata types
+// ---------------------------------------------------------------------------
+
+export type SettingValueType = "boolean" | "string" | "number" | "enum";
+
+/**
+ * `fontFamilyName` / `themeName` are allowlist policies (see the character
+ * pattern constants below for the exact allowed character sets). `none` is
+ * an explicit placeholder for a string setting with no character policy yet
+ * — it still rejects non-string, empty (after trim), and over-length
+ * values. The production catalog never uses `none`; it exists for fixture
+ * catalog tests only.
+ */
+export type AllowedCharacterPolicy = "fontFamilyName" | "themeName" | "none";
+
+export type SettingValidationFailure =
+  | "typeMismatch"
+  | "enumValue"
+  | "numericRange"
+  | "integer"
+  | "maxLength"
+  | "disallowedCharacters"
+  | "emptyString";
+
+export type SettingValidationResult =
+  | { ok: true }
+  | { ok: false; failure: SettingValidationFailure };
+
+// ---------------------------------------------------------------------------
+// Catalog entry shapes
+// ---------------------------------------------------------------------------
+
+interface CommonSettingFields<TKey extends string> {
+  readonly key: TKey;
+  readonly scope: SettingScope;
+  readonly labelKey: string;
+  readonly descriptionKey: string;
+  readonly deprecatedAliases: readonly string[];
+  readonly migrationNotes: readonly string[];
+}
+
+export interface StringSettingEntry<TKey extends string = string>
+  extends CommonSettingFields<TKey> {
+  readonly type: "string";
+  readonly defaultValue: string;
+  readonly maxLength: number;
+  readonly allowedCharacters: AllowedCharacterPolicy;
+}
+
+export interface EnumSettingEntry<
+  TKey extends string = string,
+  TValues extends readonly [string, ...string[]] = readonly [
+    string,
+    ...string[]
+  ]
+> extends CommonSettingFields<TKey> {
+  readonly type: "enum";
+  readonly defaultValue: TValues[number];
+  readonly enumValues: TValues;
+}
+
+export interface SettingNumericRange {
+  readonly min: number;
+  readonly max: number;
+  readonly integer?: boolean;
+}
+
+export interface NumberSettingEntry<TKey extends string = string>
+  extends CommonSettingFields<TKey> {
+  readonly type: "number";
+  readonly defaultValue: number;
+  readonly numericRange: SettingNumericRange;
+}
+
+export interface BooleanSettingEntry<TKey extends string = string>
+  extends CommonSettingFields<TKey> {
+  readonly type: "boolean";
+  readonly defaultValue: boolean;
+}
+
+export type SettingCatalogEntry =
+  | StringSettingEntry
+  | EnumSettingEntry
+  | NumberSettingEntry
+  | BooleanSettingEntry;
+
+// ---------------------------------------------------------------------------
+// Key pattern / area validation (ADR-0006 S-10)
+// ---------------------------------------------------------------------------
+
+// Dotted segments: {area}.{...}.{property}, at least one dot. Each segment
+// starts with a lowercase letter followed by letters/digits (camelCase),
+// e.g. "workbench.colorTheme" or "files.newFile.lineEnding". No fixed
+// maximum segment count: ADR-0006 S-11's own worked example
+// ("editor.decorations.lineEndingMarkers.enabled") has more than three
+// segments, so this pattern does not impose an unsupported depth cap.
+const settingKeyPattern = /^[a-z][a-zA-Z0-9]*(\.[a-z][a-zA-Z0-9]*)+$/;
+
+function assertValidSettingKey(key: string): void {
+  if (!settingKeyPattern.test(key)) {
+    throw new Error(
+      `Settings catalog key "${key}" does not match the dotted key pattern.`
+    );
+  }
+
+  const area = key.slice(0, key.indexOf("."));
+
+  if (!(settingAreas as readonly string[]).includes(area)) {
+    throw new Error(
+      `Settings catalog key "${key}" uses area "${area}", which is outside the allowed area set.`
+    );
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Allowed character policies
+// ---------------------------------------------------------------------------
+
+// Unicode letters (\p{L}), Unicode digits (\p{N}), space, - _ . , ( ).
+// Comma is allowed: fontFamilyName values are CSS font-family lists, not a
+// single font name. Bidi control characters and zero-width characters are
+// Unicode category Cf (format characters) and are not \p{L}/\p{N}, so this
+// allowlist rejects them without a separate denylist.
+const fontFamilyNamePattern = /^[\p{L}\p{N} \-_.,()]*$/u;
+
+// Same as fontFamilyName but without comma: a theme name is a single
+// selection, not a fallback list.
+const themeNamePattern = /^[\p{L}\p{N} \-_.()]*$/u;
+
+function satisfiesAllowedCharacterPolicy(
+  value: string,
+  policy: AllowedCharacterPolicy
+): boolean {
+  switch (policy) {
+    case "fontFamilyName":
+      return fontFamilyNamePattern.test(value);
+    case "themeName":
+      return themeNamePattern.test(value);
+    case "none":
+      return true;
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Per-type validation (defined value only — see validateCatalogValue below)
+// ---------------------------------------------------------------------------
+
+function validateStringValue(
+  entry: StringSettingEntry,
+  value: unknown
+): SettingValidationResult {
+  if (typeof value !== "string") {
+    return { ok: false, failure: "typeMismatch" };
+  }
+
+  if (value.trim().length === 0) {
+    return { ok: false, failure: "emptyString" };
+  }
+
+  if (value.length > entry.maxLength) {
+    return { ok: false, failure: "maxLength" };
+  }
+
+  if (!satisfiesAllowedCharacterPolicy(value, entry.allowedCharacters)) {
+    return { ok: false, failure: "disallowedCharacters" };
+  }
+
+  return { ok: true };
+}
+
+function validateEnumValue(
+  entry: EnumSettingEntry,
+  value: unknown
+): SettingValidationResult {
+  if (typeof value !== "string") {
+    return { ok: false, failure: "typeMismatch" };
+  }
+
+  if (!(entry.enumValues as readonly string[]).includes(value)) {
+    return { ok: false, failure: "enumValue" };
+  }
+
+  return { ok: true };
+}
+
+function validateNumberValue(
+  entry: NumberSettingEntry,
+  value: unknown
+): SettingValidationResult {
+  if (typeof value !== "number" || !Number.isFinite(value)) {
+    return { ok: false, failure: "typeMismatch" };
+  }
+
+  if (entry.numericRange.integer === true && !Number.isInteger(value)) {
+    return { ok: false, failure: "integer" };
+  }
+
+  if (value < entry.numericRange.min || value > entry.numericRange.max) {
+    return { ok: false, failure: "numericRange" };
+  }
+
+  return { ok: true };
+}
+
+function validateBooleanValue(value: unknown): SettingValidationResult {
+  return typeof value === "boolean"
+    ? { ok: true }
+    : { ok: false, failure: "typeMismatch" };
+}
+
+function validateEntryValue(
+  entry: SettingCatalogEntry,
+  value: unknown
+): SettingValidationResult {
+  switch (entry.type) {
+    case "string":
+      return validateStringValue(entry, value);
+    case "enum":
+      return validateEnumValue(entry, value);
+    case "number":
+      return validateNumberValue(entry, value);
+    case "boolean":
+      return validateBooleanValue(value);
+  }
+}
+
+// ---------------------------------------------------------------------------
+// Define helpers
+// ---------------------------------------------------------------------------
+
+interface CommonDefineInput<TKey extends string> {
+  key: TKey;
+  scope: SettingScope;
+  labelKey: string;
+  descriptionKey: string;
+  deprecatedAliases: readonly string[];
+  migrationNotes: readonly string[];
+}
+
+/**
+ * Validates the entry's key (pattern + allowed area) and confirms its
+ * defaultValue passes the entry's own validation, per the acceptance
+ * criterion "全 catalog entry の defaultValue が、自身の validation を通る".
+ * Shared by every defineXSetting helper below.
+ */
+function finalizeEntry<TEntry extends SettingCatalogEntry>(entry: TEntry): TEntry {
+  assertValidSettingKey(entry.key);
+
+  const defaultValueValidation = validateEntryValue(entry, entry.defaultValue);
+
+  if (!defaultValueValidation.ok) {
+    throw new Error(
+      `Settings catalog entry "${entry.key}" has a defaultValue that fails its own validation (${defaultValueValidation.failure}).`
+    );
+  }
+
+  return entry;
+}
+
+export interface DefineStringSettingInput<TKey extends string>
+  extends CommonDefineInput<TKey> {
+  defaultValue: string;
+  maxLength: number;
+  allowedCharacters: AllowedCharacterPolicy;
+}
+
+export function defineStringSetting<TKey extends string>(
+  input: DefineStringSettingInput<TKey>
+): StringSettingEntry<TKey> {
+  return finalizeEntry({ type: "string", ...input });
+}
+
+export interface DefineEnumSettingInput<
+  TKey extends string,
+  TValues extends readonly [string, ...string[]]
+> extends CommonDefineInput<TKey> {
+  enumValues: TValues;
+  defaultValue: TValues[number];
+}
+
+export function defineEnumSetting<
+  TKey extends string,
+  const TValues extends readonly [string, ...string[]]
+>(
+  input: DefineEnumSettingInput<TKey, TValues>
+): EnumSettingEntry<TKey, TValues> {
+  return finalizeEntry({ type: "enum", ...input });
+}
+
+export interface DefineNumberSettingInput<TKey extends string>
+  extends CommonDefineInput<TKey> {
+  defaultValue: number;
+  numericRange: SettingNumericRange;
+}
+
+export function defineNumberSetting<TKey extends string>(
+  input: DefineNumberSettingInput<TKey>
+): NumberSettingEntry<TKey> {
+  return finalizeEntry({ type: "number", ...input });
+}
+
+export interface DefineBooleanSettingInput<TKey extends string>
+  extends CommonDefineInput<TKey> {
+  defaultValue: boolean;
+}
+
+export function defineBooleanSetting<TKey extends string>(
+  input: DefineBooleanSettingInput<TKey>
+): BooleanSettingEntry<TKey> {
+  return finalizeEntry({ type: "boolean", ...input });
+}
+
+/**
+ * Wraps a catalog entries object, performing the cross-entry integrity
+ * checks that a single defineXSetting call can't perform on its own:
+ * object-key/entry.key consistency, and deprecated-alias collisions (alias
+ * vs. primary key, alias vs. alias). Per-entry checks (key pattern/area,
+ * defaultValue self-validation) already happened in finalizeEntry above.
+ */
+export function defineSettingsCatalog<
+  const TEntries extends Record<string, SettingCatalogEntry>
+>(entries: TEntries): TEntries {
+  for (const [objectKey, entry] of Object.entries(entries)) {
+    if (entry.key !== objectKey) {
+      throw new Error(
+        `Settings catalog entry object key "${objectKey}" does not match its entry.key "${entry.key}".`
+      );
+    }
+  }
+
+  const primaryKeys = new Set(Object.keys(entries));
+  const aliasOwners = new Map<string, string>();
+
+  for (const [primaryKey, entry] of Object.entries(entries)) {
+    for (const alias of entry.deprecatedAliases) {
+      if (primaryKeys.has(alias)) {
+        throw new Error(
+          `Deprecated alias "${alias}" declared on "${primaryKey}" collides with an existing primary key.`
+        );
+      }
+
+      const existingOwner = aliasOwners.get(alias);
+
+      if (existingOwner && existingOwner !== primaryKey) {
+        throw new Error(
+          `Deprecated alias "${alias}" is claimed by both "${existingOwner}" and "${primaryKey}".`
+        );
+      }
+
+      aliasOwners.set(alias, primaryKey);
+    }
+  }
+
+  return entries;
+}
+
+// ---------------------------------------------------------------------------
+// Initial catalog entries
+// ---------------------------------------------------------------------------
+
+export const settingsCatalog = defineSettingsCatalog({
+  "workbench.fontFamily": defineStringSetting({
+    key: "workbench.fontFamily",
+    scope: "applicationOnly",
+    defaultValue: "system-ui",
+    labelKey: "settings.workbench.fontFamily.label",
+    descriptionKey: "settings.workbench.fontFamily.description",
+    maxLength: 128,
+    allowedCharacters: "fontFamilyName",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "workbench.colorTheme": defineStringSetting({
+    key: "workbench.colorTheme",
+    scope: "applicationOnly",
+    defaultValue: "Pergamum Light",
+    labelKey: "settings.workbench.colorTheme.label",
+    descriptionKey: "settings.workbench.colorTheme.description",
+    maxLength: 80,
+    allowedCharacters: "themeName",
+    deprecatedAliases: ["appearance.uiTheme"],
+    migrationNotes: [
+      "appearance.uiTheme is accepted as a deprecated read alias for workbench.colorTheme."
+    ]
+  }),
+  "editor.fontFamily": defineStringSetting({
+    key: "editor.fontFamily",
+    scope: "applicationWithProjectOverride",
+    defaultValue: "monospace",
+    labelKey: "settings.editor.fontFamily.label",
+    descriptionKey: "settings.editor.fontFamily.description",
+    maxLength: 128,
+    allowedCharacters: "fontFamilyName",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "files.newFile.lineEnding": defineEnumSetting({
+    key: "files.newFile.lineEnding",
+    scope: "applicationOnly",
+    enumValues: ["lf", "crlf"],
+    defaultValue: "lf",
+    labelKey: "settings.files.newFile.lineEnding.label",
+    descriptionKey: "settings.files.newFile.lineEnding.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "files.newFile.encoding": defineEnumSetting({
+    key: "files.newFile.encoding",
+    scope: "applicationOnly",
+    enumValues: ["utf8"],
+    defaultValue: "utf8",
+    labelKey: "settings.files.newFile.encoding.label",
+    descriptionKey: "settings.files.newFile.encoding.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "preview.renderer": defineEnumSetting({
+    key: "preview.renderer",
+    scope: "applicationWithProjectOverride",
+    enumValues: ["markdown"],
+    defaultValue: "markdown",
+    labelKey: "settings.preview.renderer.label",
+    descriptionKey: "settings.preview.renderer.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  })
+});
+
+// ---------------------------------------------------------------------------
+// Key / value types derived from the catalog
+// ---------------------------------------------------------------------------
+
+/** Primary keys only — deprecated aliases are never part of this type. */
+export type SettingKey = keyof typeof settingsCatalog;
+
+export type SettingValueOf<K extends SettingKey> =
+  (typeof settingsCatalog)[K] extends EnumSettingEntry<string, infer TValues>
+    ? TValues[number]
+    : (typeof settingsCatalog)[K] extends StringSettingEntry
+      ? string
+      : (typeof settingsCatalog)[K] extends NumberSettingEntry
+        ? number
+        : (typeof settingsCatalog)[K] extends BooleanSettingEntry
+          ? boolean
+          : never;
+
+// ---------------------------------------------------------------------------
+// Resolution result type
+// ---------------------------------------------------------------------------
+
+export type CatalogResolution<T> =
+  | { ok: true; value: T; source: "raw" | "default" }
+  | {
+      ok: false;
+      value: T;
+      source: "default";
+      failure: SettingValidationFailure;
+    };
+
+// ---------------------------------------------------------------------------
+// Deprecated alias index (built once from the finished catalog)
+// ---------------------------------------------------------------------------
+
+const deprecatedAliasIndex: ReadonlyMap<string, SettingKey> = (() => {
+  const index = new Map<string, SettingKey>();
+
+  for (const [primaryKey, entry] of Object.entries(settingsCatalog)) {
+    for (const alias of entry.deprecatedAliases) {
+      index.set(alias, primaryKey as SettingKey);
+    }
+  }
+
+  return index;
+})();
+
+function isSettingKey(value: string): value is SettingKey {
+  return Object.prototype.hasOwnProperty.call(settingsCatalog, value);
+}
+
+// ---------------------------------------------------------------------------
+// Helper functions
+// ---------------------------------------------------------------------------
+
+/**
+ * Resolves a raw string key (from on-disk settings or user-editable JSON)
+ * to its primary `SettingKey`, following deprecated aliases. Returns
+ * `undefined` for an unknown key rather than throwing — an unknown key is a
+ * normal, expected occurrence for on-disk input (ADR-0006 S-19/S-20) and
+ * must not be silently resolved to a catalog default.
+ */
+export function resolvePrimarySettingKey(
+  keyOrAlias: string
+): SettingKey | undefined {
+  if (isSettingKey(keyOrAlias)) {
+    return keyOrAlias;
+  }
+
+  return deprecatedAliasIndex.get(keyOrAlias);
+}
+
+export function getCatalogEntry<K extends SettingKey>(
+  key: K
+): (typeof settingsCatalog)[K] {
+  return settingsCatalog[key];
+}
+
+export function getCatalogEntries(): readonly SettingCatalogEntry[] {
+  return Object.values(settingsCatalog);
+}
+
+export function getSettingArea<K extends SettingKey>(key: K): SettingArea {
+  return key.slice(0, key.indexOf(".")) as SettingArea;
+}
+
+export function getCatalogEntriesByArea(
+  area: SettingArea
+): readonly SettingCatalogEntry[] {
+  return getCatalogEntries().filter(
+    (entry) => getSettingArea(entry.key as SettingKey) === area
+  );
+}
+
+export function getCatalogDefaultValue<K extends SettingKey>(
+  key: K
+): SettingValueOf<K> {
+  return settingsCatalog[key].defaultValue as SettingValueOf<K>;
+}
+
+/**
+ * Validates a *defined* value against a cataloged setting. Does not fall
+ * back to the default, does not merge scopes, and does not log a rejection
+ * — see resolveCatalogValue for the `undefined` (unset) case. `settings.rejected`
+ * logging (ADR-0006 S-21/S-22) is the resolution layer's responsibility, not
+ * this module's.
+ */
+export function validateCatalogValue<K extends SettingKey>(
+  key: K,
+  value: unknown
+): SettingValidationResult {
+  return validateEntryValue(settingsCatalog[key], value);
+}
+
+/**
+ * Resolves a single raw source's value against the catalog: `undefined`
+ * (unset) becomes the catalog default; a valid value passes through; an
+ * invalid value falls back to the catalog default while preserving the
+ * validation failure. This is a single-source helper — it does not perform
+ * the Project > Application > Default effective-resolution chain (ADR-0006
+ * S-12), which is a separate resolution-layer responsibility.
+ */
+export function resolveCatalogValue<K extends SettingKey>(
+  key: K,
+  rawValue: unknown
+): CatalogResolution<SettingValueOf<K>> {
+  const defaultValue = getCatalogDefaultValue(key);
+
+  if (rawValue === undefined) {
+    return { ok: true, value: defaultValue, source: "default" };
+  }
+
+  const validation = validateCatalogValue(key, rawValue);
+
+  if (validation.ok) {
+    return { ok: true, value: rawValue as SettingValueOf<K>, source: "raw" };
+  }
+
+  return {
+    ok: false,
+    value: defaultValue,
+    source: "default",
+    failure: validation.failure
+  };
+}

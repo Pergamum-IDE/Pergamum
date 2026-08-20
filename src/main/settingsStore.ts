@@ -4,12 +4,12 @@ import path from "node:path";
 import {
   createDefaultApplicationSettings,
   defaultApplicationSettings,
-  isPreviewRendererId,
   type ApplicationSettings,
   type RecentProject,
   type SaveApplicationSettingsRequest
 } from "../shared/settings";
 import { isLanguage } from "../shared/i18n";
+import { resolveCatalogValue } from "../shared/settingsCatalog";
 
 const settingsFileName = "settings.json";
 const maxRecentProjects = 10;
@@ -71,17 +71,19 @@ function readRecentProjects(value: unknown): RecentProject[] {
   return normalizeRecentProjects(value.filter(isRecentProject));
 }
 
+// Default and validation both come from the catalog: missing or invalid
+// input falls back to the catalog default, a valid value passes through.
+// This is a single-source resolution over this file's own raw JSON — not
+// the Project > Application > Default effective-resolution chain.
 function readPreviewSettings(value: unknown): ApplicationSettings["preview"] {
   if (!isObject(value)) {
     return {
-      renderer: defaultApplicationSettings.preview.renderer
+      renderer: resolveCatalogValue("preview.renderer", undefined).value
     };
   }
 
   return {
-    renderer: isPreviewRendererId(value.renderer)
-      ? value.renderer
-      : defaultApplicationSettings.preview.renderer
+    renderer: resolveCatalogValue("preview.renderer", value.renderer).value
   };
 }
 
@@ -182,13 +184,19 @@ function parsePreviewSettingsForWrite(
   if (
     keys.length !== 1 ||
     !keys.includes("renderer") ||
-    !isPreviewRendererId(value.renderer)
+    value.renderer === undefined
   ) {
     throw new Error("Invalid application settings.");
   }
 
+  const resolution = resolveCatalogValue("preview.renderer", value.renderer);
+
+  if (!resolution.ok) {
+    throw new Error("Invalid application settings.");
+  }
+
   return {
-    renderer: value.renderer
+    renderer: resolution.value
   };
 }
 

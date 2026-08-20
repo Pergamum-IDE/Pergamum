@@ -1,11 +1,8 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { PergamumProjectConfig } from "../shared/api";
-import {
-  isPreviewRendererId,
-  type ProjectPreviewSettings,
-  type ProjectSettings
-} from "../shared/settings";
+import type { ProjectPreviewSettings, ProjectSettings } from "../shared/settings";
+import { resolveCatalogValue } from "../shared/settingsCatalog";
 
 export const projectConfigFileName = "pergamum.json";
 
@@ -69,21 +66,35 @@ function assertNoApplicationOnlyCategorySetting(
   }
 }
 
+// Project config parsing is strict for an explicitly present "preview"
+// section: once a project declares settings.preview, renderer is required
+// and must be a catalog-valid value, or the whole project config is
+// rejected. Catalog validation (validateCatalogValue/resolveCatalogValue)
+// is the source of what values are allowed; this function does not fall
+// back to a default for a present-but-invalid or present-but-missing
+// renderer. Tolerant defaulting for an absent value belongs to the settings
+// resolution/read path, not here.
 function parseProjectPreviewSettings(
   settings: Record<string, unknown>
 ): ProjectPreviewSettings | undefined {
   const preview = assertObjectCategory(settings, "preview");
 
-  if (!preview || !("renderer" in preview)) {
+  if (!preview) {
     return undefined;
   }
 
-  if (!isPreviewRendererId(preview.renderer)) {
+  if (preview.renderer === undefined) {
+    throw invalidProjectConfig('settings.preview.renderer must be "markdown".');
+  }
+
+  const resolution = resolveCatalogValue("preview.renderer", preview.renderer);
+
+  if (!resolution.ok) {
     throw invalidProjectConfig('settings.preview.renderer must be "markdown".');
   }
 
   return {
-    renderer: preview.renderer
+    renderer: resolution.value
   };
 }
 
