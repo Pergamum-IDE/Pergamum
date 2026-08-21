@@ -141,11 +141,9 @@ export type SettingCatalogEntry =
 // Cross-module type imports
 // ---------------------------------------------------------------------------
 
-// #174: workbench.language's enumValues/defaultValue are catalog-owned
-// literals, but they must stay in lockstep with the pre-existing Language
-// type/defaultLanguage constant (src/shared/i18n) rather than drift as a
-// second, independently-maintained source of truth.
-import { defaultLanguage, type Language } from "./i18n";
+// #186: workbench.language's selectable values are owned by i18n, while the
+// catalog remains the owner of the setting's default and metadata.
+import { defaultLanguage, supportedLanguages, type Language } from "./i18n";
 
 // ---------------------------------------------------------------------------
 // Key pattern / area validation (ADR-0006 S-10)
@@ -478,7 +476,7 @@ export const settingsCatalog = defineSettingsCatalog({
   "workbench.language": defineEnumSetting({
     key: "workbench.language",
     scope: "applicationOnly",
-    enumValues: ["ja", "en"],
+    enumValues: supportedLanguages,
     defaultValue: defaultLanguage,
     labelKey: "settings.workbench.language.label",
     descriptionKey: "settings.workbench.language.description",
@@ -557,10 +555,10 @@ export type SettingValueOf<K extends SettingKey> =
           ? boolean
           : never;
 
-// #174: compile-time guard that workbench.language's catalog enum values
-// stay exactly in sync with the pre-existing Language type — if either side
-// changes without the other, this line fails to type-check instead of
-// silently drifting.
+// #186: compile-time guard that workbench.language's catalog enum values
+// stay exactly in sync with the Language type. The catalog enum values now
+// come from supportedLanguages, so this also catches drift between the i18n
+// selectable values and Language.
 type AssertExact<A, B> = [A] extends [B]
   ? [B] extends [A]
     ? true

@@ -3,14 +3,11 @@ import type {
   SaveApplicationSettingsRequest
 } from "../shared/api";
 import {
+  languageDefinitions,
   supportedLanguages,
   type Language,
   type Translate
 } from "../shared/i18n";
-
-function languageLabelKey(language: Language): "language.ja" | "language.en" {
-  return language === "ja" ? "language.ja" : "language.en";
-}
 
 interface SettingsPanelProps {
   settings: ApplicationSettings;
@@ -63,7 +60,7 @@ export function SettingsPanel({
         >
           {supportedLanguages.map((language) => (
             <option key={language} value={language}>
-              {translate(languageLabelKey(language))}
+              {languageDefinitions[language].nativeName}
             </option>
           ))}
         </select>
