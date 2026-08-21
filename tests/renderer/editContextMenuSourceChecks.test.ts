@@ -23,19 +23,50 @@ function allSourceText(): string {
 }
 
 /**
- * CommandPalette.tsx is the one deliberate exception to the no-onKeyDown
- * rule below: ArrowUp/ArrowDown/Enter/Escape navigation inside its own,
+ * CommandPalette.tsx is a deliberate exception to the no-onKeyDown rule
+ * below: ArrowUp/ArrowDown/Enter/Escape navigation inside its own,
  * already-focused search input is local widget interaction (Issue #126),
  * not a competing global shortcut system, and it reuses the existing IME
  * composition signal rather than adding new composition tracking.
+ *
+ * ConfirmDialog.tsx (#182) is the same category of exception: its
+ * `onKeyDown` implements Escape-to-cancel and the modal's own Tab focus
+ * trap, scoped to the dialog's own subtree while it is open — not a
+ * document-level/global shortcut listener, and unrelated to the Markdown
+ * editor's native-edit-command delegation this guard otherwise protects.
  */
+const onKeyDownExemptFileNames = new Set([
+  "CommandPalette.tsx",
+  "ConfirmDialog.tsx"
+]);
+
 function allSourceTextExcludingCommandPalette(): string {
   return sourceRoots
     .flatMap(sourceFiles)
     .filter(
       (filePath) =>
         /\.(ts|tsx)$/.test(filePath) &&
-        path.basename(filePath) !== "CommandPalette.tsx"
+        !onKeyDownExemptFileNames.has(path.basename(filePath))
+    )
+    .map((filePath) => readFileSync(filePath, "utf8"))
+    .join("\n");
+}
+
+/**
+ * `clipboardAdapter.ts` (#182 D-9) is a deliberate, isolated exception to
+ * the no-`navigator.clipboard` rule below: the dialog foundation's copy
+ * diagnostic button writes through this single testable adapter — never
+ * called directly from `ConfirmDialog.tsx` — and is unrelated to the
+ * Markdown editor's native cut/copy/paste delegation this guard otherwise
+ * protects against ad-hoc reimplementation.
+ */
+function allSourceTextExcludingClipboardAdapter(): string {
+  return sourceRoots
+    .flatMap(sourceFiles)
+    .filter(
+      (filePath) =>
+        /\.(ts|tsx)$/.test(filePath) &&
+        path.basename(filePath) !== "clipboardAdapter.ts"
     )
     .map((filePath) => readFileSync(filePath, "utf8"))
     .join("\n");
@@ -48,10 +79,14 @@ function sourceText(filePath: string): string {
 describe("edit context menu source checks", () => {
   it("does not add shortcut or clipboard implementations", () => {
     const source = allSourceText();
+    const sourceExcludingClipboardAdapter =
+      allSourceTextExcludingClipboardAdapter();
 
     expect(source).not.toContain("globalShortcut");
     expect(source).not.toContain("document.execCommand");
-    expect(source).not.toContain("navigator.clipboard");
+    expect(sourceExcludingClipboardAdapter).not.toContain(
+      "navigator.clipboard"
+    );
     expect(source).not.toContain("selectionchange");
     expect(source).not.toContain("clipboardBuffer");
   });

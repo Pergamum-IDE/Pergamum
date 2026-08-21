@@ -1,4 +1,5 @@
 import { contextBridge, ipcRenderer } from "electron";
+import { nodePlatformToAppPlatform } from "./platform";
 import {
   APPLICATION_MENU_CHANNELS,
   CONTEXT_MENU_CHANNELS,
@@ -43,6 +44,7 @@ function contextMenuCommandSelectionFromUnknown(
 }
 
 const pergamumApi: PergamumApi = {
+  platform: nodePlatformToAppPlatform(process.platform),
   files: {
     openMarkdown: (documentOpenId) =>
       ipcRenderer.invoke(FILE_CHANNELS.openMarkdown, { documentOpenId }),

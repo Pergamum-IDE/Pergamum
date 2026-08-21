@@ -19,6 +19,9 @@ import type {
   EditContextMenuPopupRequest,
   NativeEditDelegationRequest
 } from "./editContextMenu";
+import type { AppPlatform } from "./platform";
+
+export type { AppPlatform } from "./platform";
 
 export type {
   ApplicationSettings,
@@ -162,6 +165,12 @@ export interface GlossarySurfaceLookupRequest {
 }
 
 export interface PergamumApi {
+  /**
+   * Renderer-safe application platform (#182), resolved once at preload
+   * time via `nodePlatformToAppPlatform`. Dialog and other renderer UI code
+   * must read this instead of any Node-specific platform value.
+   */
+  platform: AppPlatform;
   files: {
     /**
      * `documentOpenId` correlates this open's document-open timing debug
