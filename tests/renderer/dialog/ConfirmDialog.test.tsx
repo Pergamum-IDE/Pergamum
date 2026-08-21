@@ -309,7 +309,7 @@ describe("ConfirmDialog platform action order and DOM structure (#182 D-11 / D-1
     expect(cancelIndex).toBeLessThan(confirmIndex);
   });
 
-  it("DOM order matches visual order: copy -> confirm -> cancel for confirmCancel", () => {
+  it("LTR DOM order matches visual order: copy -> confirm -> cancel for confirmCancel", () => {
     const markup = renderDialog({
       actionOrder: "confirmCancel",
       options: baseOptions({ clipboardText: "diagnostic" })
@@ -322,7 +322,7 @@ describe("ConfirmDialog platform action order and DOM structure (#182 D-11 / D-1
     expect(confirmIndex).toBeLessThan(cancelIndex);
   });
 
-  it("DOM order matches visual order: copy -> cancel -> confirm for cancelConfirm", () => {
+  it("LTR DOM order matches visual order: copy -> cancel -> confirm for cancelConfirm", () => {
     const markup = renderDialog({
       actionOrder: "cancelConfirm",
       options: baseOptions({ clipboardText: "diagnostic" })
@@ -343,6 +343,47 @@ describe("ConfirmDialog platform action order and DOM structure (#182 D-11 / D-1
       expect(markup).toContain("appDialogButton-confirm");
       expect(markup).toContain("appDialogButton-cancel");
     }
+  });
+
+  it("documents actionOrder as DOM order while leaving visual order to CSS and writing direction", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync("src/renderer/dialog/ConfirmDialog.tsx", "utf8");
+
+    expect(source).toContain(
+      "DOM order follows the platform action order"
+    );
+    expect(source).toContain(
+      "order is resolved by CSS and the effective writing direction"
+    );
+    expect(source).not.toContain("visual (and DOM) order");
+  });
+
+  it("does not manually reverse action button arrays for RTL in JS", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync("src/renderer/dialog/ConfirmDialog.tsx", "utf8");
+
+    expect(source).not.toContain("TextDirection");
+    expect(source).not.toContain("getLanguageDirection");
+    expect(source).not.toContain("languageMetadata");
+    expect(source).not.toContain(".reverse(");
+  });
+});
+
+describe("ConfirmDialog footer CSS direction-safety (#187)", () => {
+  it("uses logical spacing in the dialog footer/action area", async () => {
+    const { readFileSync } = await import("node:fs");
+    const styles = readFileSync("src/renderer/styles.css", "utf8");
+    const dialogFooterCss = styles.slice(
+      styles.indexOf(".appDialogFooter"),
+      styles.indexOf(".appDialogButton-confirm")
+    );
+
+    expect(dialogFooterCss).toContain("padding-block");
+    expect(dialogFooterCss).toContain("padding-inline");
+    expect(dialogFooterCss).toContain("margin-inline-start: auto");
+    expect(dialogFooterCss).toContain("text-align: start");
+    expect(dialogFooterCss).not.toMatch(/\b(?:margin-left|margin-right)\b/);
+    expect(dialogFooterCss).not.toMatch(/\b(?:left|right)\s*:/);
   });
 });
 

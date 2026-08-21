@@ -169,9 +169,11 @@ export function ConfirmDialog({
     </button>
   );
 
-  // D-11 / D-15: visual (and DOM) order changes with platform convention,
-  // but semantics never do — the confirm button always resolves "confirm"
-  // and the cancel button always resolves "cancel" regardless of position.
+  // D-11 / D-15 / #187: DOM order follows the platform action order. Visual
+  // order is resolved by CSS and the effective writing direction; in LTR
+  // contexts, DOM order and visual order match. Result semantics never
+  // change — the confirm button always resolves "confirm" and the cancel
+  // button always resolves "cancel" regardless of placement.
   const actionButtons =
     actionOrder === "confirmCancel"
       ? [confirmButton, cancelButton]
