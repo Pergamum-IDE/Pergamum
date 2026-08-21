@@ -797,6 +797,9 @@ export function App(): JSX.Element {
     );
 
     registry.setCommandContextProvider(() => commandContextRef.current);
+    registry.setCommandExecutionBlocker(() =>
+      dialogController.getPendingRequest() ? "app_modal_open" : null
+    );
     registry.setOnCommandIgnored((event) => {
       logRendererDebugEvent({
         level: "debug",
@@ -805,7 +808,7 @@ export function App(): JSX.Element {
           commandId: event.commandId,
           source: event.source,
           result: "ignored",
-          reason: "disabled_command"
+          reason: event.reason ?? "disabled_command"
         }
       });
     });
@@ -821,7 +824,13 @@ export function App(): JSX.Element {
     });
 
     return registry;
-  }, [activeProjectContext, layout.sidebar.collapsed, sidebarMode, translate]);
+  }, [
+    activeProjectContext,
+    dialogController,
+    layout.sidebar.collapsed,
+    sidebarMode,
+    translate
+  ]);
   useEffect(
     () =>
       window.pergamum.contextMenu.onCommandSelected((selection) => {
@@ -1094,6 +1103,10 @@ export function App(): JSX.Element {
         input
       );
     } catch (error) {
+      if (error instanceof CommandDisabledError) {
+        return false;
+      }
+
       setStatus({
         key: "status.commandFailed",
         values: { message: errorMessage(error, translate) }
@@ -2151,6 +2164,10 @@ export function App(): JSX.Element {
 
       return didOpen;
     } catch (error) {
+      if (error instanceof CommandDisabledError) {
+        return false;
+      }
+
       setGlossaryOccurrenceTrackingState(
         inactiveGlossaryOccurrenceTrackingState
       );

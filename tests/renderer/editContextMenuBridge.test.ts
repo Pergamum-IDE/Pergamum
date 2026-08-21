@@ -337,6 +337,58 @@ describe("edit context menu renderer bridge", () => {
     });
   });
 
+  it("logs modal-blocked edit commands as ignored instead of failed", async () => {
+    const registry = new CommandRegistry();
+    const log = vi.fn();
+    const execute = vi.fn();
+    const clearNativeEditCommandContext = vi.fn();
+
+    registry.register({
+      id: editorCommandIds.copySelection,
+      title: "Copy",
+      execute
+    });
+    registry.setCommandExecutionBlocker(() => "app_modal_open");
+
+    const executed = await executeContextMenuEditCommand(
+      {
+        interactionId: "contextMenu.5",
+        commandId: editorCommandIds.copySelection,
+        requestedSurface: "markdownEditor"
+      },
+      {
+        commandRegistry: registry,
+        editorIdKind: "projectDocument",
+        delegatedSurface: "markdownEditor",
+        hasSelection: true,
+        log,
+        setNativeEditCommandContext: vi.fn(),
+        clearNativeEditCommandContext
+      }
+    );
+
+    expect(executed).toBe(false);
+    expect(execute).not.toHaveBeenCalled();
+    expect(clearNativeEditCommandContext).toHaveBeenCalledTimes(1);
+    expect(log).toHaveBeenCalledWith({
+      level: "debug",
+      event: "edit.command.ignored",
+      details: {
+        interactionId: "contextMenu.5",
+        commandId: editorCommandIds.copySelection,
+        requestedSurface: "markdownEditor",
+        delegatedSurface: "markdownEditor",
+        editorIdKind: "projectDocument",
+        hasSelection: true,
+        result: "ignored",
+        reason: "app_modal_open"
+      }
+    });
+    expect(log.mock.calls.map((call) => call[0].event)).not.toContain(
+      "edit.command.failed"
+    );
+  });
+
   it("does not clear a newer native edit context when overlapping command executions finish out of order", async () => {
     let currentContext: unknown = null;
     const receivedContexts: unknown[] = [];

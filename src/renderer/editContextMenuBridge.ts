@@ -1,8 +1,9 @@
 import type { EditCommandId } from "../shared/commandIds";
-import type {
-  CommandArgumentList,
-  CommandId,
-  CommandRegistry
+import {
+  CommandDisabledError,
+  type CommandArgumentList,
+  type CommandId,
+  type CommandRegistry
 } from "../shared/commandRegistry";
 import type { DebugLogEditorIdKind, DebugLogLevel } from "../shared/debugLog";
 import {
@@ -343,6 +344,19 @@ export async function executeContextMenuEditCommand<TCommandId extends EditComma
       ...([] as CommandArgumentList<readonly []>)
     );
   } catch (error) {
+    if (error instanceof CommandDisabledError) {
+      input.log({
+        level: "debug",
+        event: "edit.command.ignored",
+        details: {
+          ...context,
+          result: "ignored",
+          reason: error.reason
+        }
+      });
+      return false;
+    }
+
     input.log({
       level: "error",
       event: "edit.command.failed",
