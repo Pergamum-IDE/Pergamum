@@ -9,8 +9,12 @@ vi.mock("node:fs", () => ({
 }));
 
 import { readProjectConfig } from "../../src/main/projectConfigStore";
+import {
+  defaultApplicationSettings,
+  resolveEffectiveSettings
+} from "../../src/shared/settings";
 
-describe("projectConfigStore preview.renderer (#150 consumer replacement)", () => {
+describe("projectConfigStore preview.renderer read-path hardening (#170, ADR-0006 S-23)", () => {
   beforeEach(() => {
     fsMock.readFile.mockReset();
   });
@@ -25,7 +29,133 @@ describe("projectConfigStore preview.renderer (#150 consumer replacement)", () =
     expect(config).toBeNull();
   });
 
-  it("accepts a valid settings.preview.renderer value", async () => {
+  it("malformed JSON still fails project open", async () => {
+    fsMock.readFile.mockResolvedValue("{ not valid json");
+
+    await expect(readProjectConfig("C:\\fake-project")).rejects.toThrow(
+      /Invalid pergamum\.json/
+    );
+  });
+
+  it("malformed project identity outside settings still fails project open", async () => {
+    fsMock.readFile.mockResolvedValue(
+      JSON.stringify({
+        name: 123
+      })
+    );
+
+    await expect(readProjectConfig("C:\\fake-project")).rejects.toThrow(
+      /"name" must be a string/
+    );
+  });
+
+  it("opens with no project settings when settings is missing", async () => {
+    fsMock.readFile.mockResolvedValue(
+      JSON.stringify({
+        name: "My Project"
+      })
+    );
+
+    const config = await readProjectConfig("C:\\fake-project");
+
+    expect(config?.settings).toBeUndefined();
+  });
+
+  it("opens with no accepted project settings when settings is not an object (string)", async () => {
+    fsMock.readFile.mockResolvedValue(
+      JSON.stringify({
+        name: "My Project",
+        settings: "not an object"
+      })
+    );
+
+    const config = await readProjectConfig("C:\\fake-project");
+
+    expect(config?.settings).toBeUndefined();
+  });
+
+  it("opens with no accepted project settings when settings is an array", async () => {
+    fsMock.readFile.mockResolvedValue(
+      JSON.stringify({
+        name: "My Project",
+        settings: []
+      })
+    );
+
+    const config = await readProjectConfig("C:\\fake-project");
+
+    expect(config?.settings).toBeUndefined();
+  });
+
+  it("opens with no accepted project settings when settings is null", async () => {
+    fsMock.readFile.mockResolvedValue(
+      JSON.stringify({
+        name: "My Project",
+        settings: null
+      })
+    );
+
+    const config = await readProjectConfig("C:\\fake-project");
+
+    expect(config?.settings).toBeUndefined();
+  });
+
+  it("opens with no accepted project settings when settings is a number", async () => {
+    fsMock.readFile.mockResolvedValue(
+      JSON.stringify({
+        name: "My Project",
+        settings: 1
+      })
+    );
+
+    const config = await readProjectConfig("C:\\fake-project");
+
+    expect(config?.settings).toBeUndefined();
+  });
+
+  it("opens with no preview override when settings.preview is missing", async () => {
+    fsMock.readFile.mockResolvedValue(
+      JSON.stringify({
+        name: "My Project",
+        settings: {}
+      })
+    );
+
+    const config = await readProjectConfig("C:\\fake-project");
+
+    expect(config?.settings?.preview).toBeUndefined();
+    expect(config?.settings).toBeUndefined();
+  });
+
+  it("opens with no preview override when settings.preview is not an object", async () => {
+    fsMock.readFile.mockResolvedValue(
+      JSON.stringify({
+        name: "My Project",
+        settings: { preview: "markdown" }
+      })
+    );
+
+    const config = await readProjectConfig("C:\\fake-project");
+
+    expect(config?.settings?.preview).toBeUndefined();
+    expect(config?.settings).toBeUndefined();
+  });
+
+  it("opens with no preview override when settings.preview = {}", async () => {
+    fsMock.readFile.mockResolvedValue(
+      JSON.stringify({
+        name: "My Project",
+        settings: { preview: {} }
+      })
+    );
+
+    const config = await readProjectConfig("C:\\fake-project");
+
+    expect(config?.settings?.preview).toBeUndefined();
+    expect(config?.settings).toBeUndefined();
+  });
+
+  it("accepts settings.preview.renderer = \"markdown\" as a project override", async () => {
     fsMock.readFile.mockResolvedValue(
       JSON.stringify({
         name: "My Project",
@@ -38,7 +168,7 @@ describe("projectConfigStore preview.renderer (#150 consumer replacement)", () =
     expect(config?.settings?.preview?.renderer).toBe("markdown");
   });
 
-  it("still throws (project open fails) on an invalid settings.preview.renderer value — #150 does not implement ADR-0006 S-23's reject-entry-and-continue behavior", async () => {
+  it("rejects settings.preview.renderer = \"html\" without failing project open, and it does not appear as an accepted project override", async () => {
     fsMock.readFile.mockResolvedValue(
       JSON.stringify({
         name: "My Project",
@@ -46,24 +176,14 @@ describe("projectConfigStore preview.renderer (#150 consumer replacement)", () =
       })
     );
 
-    await expect(readProjectConfig("C:\\fake-project")).rejects.toThrow(
-      /settings\.preview\.renderer must be "markdown"/
-    );
-  });
-
-  it("returns undefined settings when the settings.preview section is absent (unchanged behavior)", async () => {
-    fsMock.readFile.mockResolvedValue(
-      JSON.stringify({
-        name: "My Project"
-      })
-    );
-
     const config = await readProjectConfig("C:\\fake-project");
 
+    expect(config).not.toBeNull();
+    expect(config?.settings?.preview).toBeUndefined();
     expect(config?.settings).toBeUndefined();
   });
 
-  it("still throws on a non-object settings.preview.renderer value (e.g. a number)", async () => {
+  it("rejects settings.preview.renderer = 1 without failing project open, and it does not appear as an accepted project override", async () => {
     fsMock.readFile.mockResolvedValue(
       JSON.stringify({
         name: "My Project",
@@ -71,21 +191,56 @@ describe("projectConfigStore preview.renderer (#150 consumer replacement)", () =
       })
     );
 
-    await expect(readProjectConfig("C:\\fake-project")).rejects.toThrow(
-      /settings\.preview\.renderer must be "markdown"/
-    );
+    const config = await readProjectConfig("C:\\fake-project");
+
+    expect(config).not.toBeNull();
+    expect(config?.settings?.preview).toBeUndefined();
+    expect(config?.settings).toBeUndefined();
   });
 
-  it("throws when settings.preview is present but empty (renderer missing) — an explicitly declared preview section requires a valid renderer", async () => {
+  it("does not fail project open for an application-only key under settings, and does not accept it as a project override", async () => {
     fsMock.readFile.mockResolvedValue(
       JSON.stringify({
         name: "My Project",
-        settings: { preview: {} }
+        settings: { language: "en", preview: { renderer: "markdown" } }
       })
     );
 
-    await expect(readProjectConfig("C:\\fake-project")).rejects.toThrow(
-      /settings\.preview\.renderer must be "markdown"/
+    const config = await readProjectConfig("C:\\fake-project");
+
+    expect(config).not.toBeNull();
+    expect(config?.settings?.preview?.renderer).toBe("markdown");
+    expect((config?.settings as Record<string, unknown>).language).toBeUndefined();
+  });
+
+  it("missing and rejected settings.preview.renderer produce the same effective value under the same application/default inputs", async () => {
+    fsMock.readFile.mockResolvedValue(
+      JSON.stringify({
+        name: "Missing renderer project",
+        settings: { preview: {} }
+      })
+    );
+    const missingConfig = await readProjectConfig("C:\\fake-project");
+
+    fsMock.readFile.mockResolvedValue(
+      JSON.stringify({
+        name: "Rejected renderer project",
+        settings: { preview: { renderer: "html" } }
+      })
+    );
+    const rejectedConfig = await readProjectConfig("C:\\fake-project");
+
+    const missingEffective = resolveEffectiveSettings(
+      defaultApplicationSettings,
+      missingConfig?.settings
+    );
+    const rejectedEffective = resolveEffectiveSettings(
+      defaultApplicationSettings,
+      rejectedConfig?.settings
+    );
+
+    expect(missingEffective.preview.renderer).toBe(
+      rejectedEffective.preview.renderer
     );
   });
 });
