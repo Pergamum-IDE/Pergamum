@@ -26,10 +26,7 @@ export type {
   PreviewRendererId,
   ProjectSettings,
   RecentProject,
-  SaveApplicationSettingsRequest,
-  SettingScope,
-  SettingsCatalogEntry,
-  SettingsCatalogKey
+  SaveApplicationSettingsRequest
 } from "./settings";
 export type {
   CreateGlossaryEntryInput,

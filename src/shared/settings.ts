@@ -4,47 +4,12 @@ import {
   validateCatalogValue
 } from "./settingsCatalog";
 
-export type SettingScope =
-  | "application"
-  | "project"
-  | "applicationProjectOverride";
-
 export type SettingsCategory =
   | "general"
   | "appearance"
   | "editor"
   | "preview"
   | "project";
-
-export type SettingsCatalogKey =
-  | "general.language"
-  | "general.showStatusBar"
-  | "appearance.uiTheme"
-  | "appearance.uiFontFamily"
-  | "appearance.uiFontSize"
-  | "editor.fontFamily"
-  | "editor.fontSize"
-  | "editor.fontWeight"
-  | "editor.lineHeight"
-  | "editor.letterSpacing"
-  | "editor.wordWrap"
-  | "editor.caretWidth"
-  | "editor.caretStyle"
-  | "editor.caretBlink"
-  | "preview.renderer"
-  | "preview.fontFamily"
-  | "preview.fontSize"
-  | "preview.writingDirection"
-  | "project.manuscriptDirectory"
-  | "project.glossaryDirectory"
-  | "project.assetsDirectory";
-
-export interface SettingsCatalogEntry {
-  key: SettingsCatalogKey;
-  category: SettingsCategory;
-  scope: SettingScope;
-  implemented: boolean;
-}
 
 export type PreviewRendererId = "markdown";
 
@@ -115,135 +80,6 @@ export const defaultApplicationSettings: ApplicationSettings = {
   },
   recentProjects: []
 };
-
-export const settingsCatalog = [
-  {
-    key: "general.language",
-    category: "general",
-    scope: "application",
-    implemented: true
-  },
-  {
-    key: "general.showStatusBar",
-    category: "general",
-    scope: "application",
-    implemented: true
-  },
-  {
-    key: "appearance.uiTheme",
-    category: "appearance",
-    scope: "application",
-    implemented: false
-  },
-  {
-    key: "appearance.uiFontFamily",
-    category: "appearance",
-    scope: "application",
-    implemented: false
-  },
-  {
-    key: "appearance.uiFontSize",
-    category: "appearance",
-    scope: "application",
-    implemented: false
-  },
-  {
-    key: "editor.fontFamily",
-    category: "editor",
-    scope: "applicationProjectOverride",
-    implemented: false
-  },
-  {
-    key: "editor.fontSize",
-    category: "editor",
-    scope: "applicationProjectOverride",
-    implemented: false
-  },
-  {
-    key: "editor.fontWeight",
-    category: "editor",
-    scope: "applicationProjectOverride",
-    implemented: false
-  },
-  {
-    key: "editor.lineHeight",
-    category: "editor",
-    scope: "applicationProjectOverride",
-    implemented: false
-  },
-  {
-    key: "editor.letterSpacing",
-    category: "editor",
-    scope: "applicationProjectOverride",
-    implemented: false
-  },
-  {
-    key: "editor.wordWrap",
-    category: "editor",
-    scope: "applicationProjectOverride",
-    implemented: false
-  },
-  {
-    key: "editor.caretWidth",
-    category: "editor",
-    scope: "applicationProjectOverride",
-    implemented: false
-  },
-  {
-    key: "editor.caretStyle",
-    category: "editor",
-    scope: "applicationProjectOverride",
-    implemented: false
-  },
-  {
-    key: "editor.caretBlink",
-    category: "editor",
-    scope: "applicationProjectOverride",
-    implemented: false
-  },
-  {
-    key: "preview.renderer",
-    category: "preview",
-    scope: "applicationProjectOverride",
-    implemented: true
-  },
-  {
-    key: "preview.fontFamily",
-    category: "preview",
-    scope: "applicationProjectOverride",
-    implemented: false
-  },
-  {
-    key: "preview.fontSize",
-    category: "preview",
-    scope: "applicationProjectOverride",
-    implemented: false
-  },
-  {
-    key: "preview.writingDirection",
-    category: "preview",
-    scope: "applicationProjectOverride",
-    implemented: false
-  },
-  {
-    key: "project.manuscriptDirectory",
-    category: "project",
-    scope: "project",
-    implemented: false
-  },
-  {
-    key: "project.glossaryDirectory",
-    category: "project",
-    scope: "project",
-    implemented: false
-  },
-  {
-    key: "project.assetsDirectory",
-    category: "project",
-    scope: "project",
-    implemented: false
-  }
-] as const satisfies readonly SettingsCatalogEntry[];
 
 export function createDefaultApplicationSettings(): ApplicationSettings {
   return {

@@ -858,10 +858,7 @@ describe("Settings Catalog Foundation (#150)", () => {
         const source = readFileSync(path, "utf8");
 
         // Checks for an actual catalog-helper call site, not a bare key
-        // substring — src/shared/settings.ts's pre-existing (unrelated,
-        // pre-ADR-0006) SettingsCatalogKey union already lists the literal
-        // string "editor.fontFamily" as metadata-only scaffolding, which
-        // would false-positive a plain substring check.
+        // substring, so metadata-only references do not false-positive.
         expect(source).not.toMatch(/CatalogValue\("editor\.fontFamily"/);
         expect(source).not.toMatch(/CatalogDefaultValue\("editor\.fontFamily"/);
       }
