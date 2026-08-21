@@ -5,7 +5,8 @@ import {
   defaultApplicationSettings,
   defaultPreviewRenderer,
   isPreviewRendererId,
-  resolveEffectiveSettings
+  resolveEffectiveSettings,
+  type ApplicationSettings
 } from "../../src/shared/settings";
 import { getCatalogDefaultValue } from "../../src/shared/settingsCatalog";
 
@@ -51,5 +52,54 @@ describe("existing implementation alignment: preview.renderer (#150)", () => {
         preview: { renderer: "markdown" }
       }).preview.renderer
     ).toBe("markdown");
+  });
+});
+
+describe("workbench.fontFamily wiring (#173)", () => {
+  it("builtInDefaultSettings.workbench.fontFamily derives from the catalog default", () => {
+    expect(builtInDefaultSettings.workbench.fontFamily).toBe(
+      getCatalogDefaultValue("workbench.fontFamily")
+    );
+  });
+
+  it("defaultApplicationSettings / createDefaultApplicationSettings leave workbench.fontFamily unset (sparse baseline, #173 D-7)", () => {
+    expect(defaultApplicationSettings.workbench).toEqual({});
+    expect(createDefaultApplicationSettings().workbench).toEqual({});
+  });
+
+  it("resolveEffectiveSettings falls through to the catalog default when applicationSettings.workbench.fontFamily is absent", () => {
+    expect(
+      resolveEffectiveSettings(defaultApplicationSettings, undefined).workbench
+        .fontFamily
+    ).toBe(getCatalogDefaultValue("workbench.fontFamily"));
+  });
+
+  it("resolveEffectiveSettings passes through a valid non-default applicationSettings.workbench.fontFamily override", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: { fontFamily: "Fira Code" }
+    };
+
+    expect(
+      resolveEffectiveSettings(applicationSettings, undefined).workbench
+        .fontFamily
+    ).toBe("Fira Code");
+    expect(applicationSettings.workbench.fontFamily).not.toBe(
+      getCatalogDefaultValue("workbench.fontFamily")
+    );
+  });
+
+  it("workbench.fontFamily has no project-scope fallthrough — projectSettings does not carry a workbench key at all", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: { fontFamily: "Fira Code" }
+    };
+
+    // ProjectSettings is typed without a `workbench` field (#173 does not
+    // enable a project override), so the effective value can only ever come
+    // from application scope or the catalog default here.
+    expect(
+      resolveEffectiveSettings(applicationSettings, {}).workbench.fontFamily
+    ).toBe("Fira Code");
   });
 });

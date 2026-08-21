@@ -56,6 +56,7 @@ import {
   registerApplicationCommands
 } from "./applicationCommands";
 import { subscribeApplicationMenuCommands } from "./applicationMenuBridge";
+import { applyWorkbenchFontFamily } from "./workbenchFontFamily";
 import { CommandPalette } from "./CommandPalette";
 import {
   createCommandPaletteCommandTitles,
@@ -502,6 +503,9 @@ export function App(): JSX.Element {
     () => resolveEffectiveSettings(settings, project?.config?.settings),
     [settings, project?.config?.settings]
   );
+  useEffect(() => {
+    applyWorkbenchFontFamily(effectiveSettings.workbench.fontFamily);
+  }, [effectiveSettings.workbench.fontFamily]);
   const isDirty = isCurrentEditorDirty(currentEditor);
   const isSavingGlossaryEntry =
     currentEditor.kind === "glossaryEntry" &&
