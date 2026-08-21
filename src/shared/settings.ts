@@ -89,6 +89,13 @@ export interface EffectiveSettings {
 
 // The settings catalog is the only source of truth for this default —
 // derived from it rather than duplicating the literal "markdown" here.
+//
+// Compatibility wrapper: kept public as the preview renderer default even
+// though no production module currently imports it directly (only
+// builtInDefaultSettings below, in this same module, consumes it) —
+// existing preview settings consumers that need the built-in default go
+// through builtInDefaultSettings/defaultApplicationSettings, which are
+// seeded from this constant.
 export const defaultPreviewRenderer: PreviewRendererId =
   getCatalogDefaultValue("preview.renderer");
 
