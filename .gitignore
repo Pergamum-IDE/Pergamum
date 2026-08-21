@@ -6,4 +6,6 @@ npm-debug.log*
 *.local
 out/
 .claude/
-diff.txt
+review-notes/
+ExpDiff.ps1
+

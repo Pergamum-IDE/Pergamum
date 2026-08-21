@@ -893,13 +893,9 @@ describe("Settings Catalog Foundation (#150)", () => {
   });
 
   describe("existing implementation alignment: preview.renderer consumer replacement (#150)", () => {
-    it("settingsStore.ts and projectConfigStore.ts no longer reference the removed isPreviewRendererId guard and call the catalog helpers instead", () => {
+    it("settingsStore.ts (application settings, unchanged by #170) still calls the catalog default/validate helper instead of a hand-rolled guard", () => {
       const settingsStoreSource = readFileSync(
         "src/main/settingsStore.ts",
-        "utf8"
-      );
-      const projectConfigStoreSource = readFileSync(
-        "src/main/projectConfigStore.ts",
         "utf8"
       );
 
@@ -909,11 +905,25 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(
         settingsStoreSource.match(/resolveCatalogValue\("preview\.renderer"/g)
       ).toHaveLength(3);
+    });
 
-      expect(projectConfigStoreSource).not.toContain("isPreviewRendererId");
-      expect(projectConfigStoreSource).toContain(
-        'resolveCatalogValue("preview.renderer"'
+    // #170 (ADR-0006 S-23 alignment) deliberately moves projectConfigStore.ts
+    // off resolveCatalogValue for preview.renderer: resolveCatalogValue
+    // substitutes the catalog default for an invalid/missing value, which is
+    // exactly the reject-entry-to-default shortcut the project read path
+    // must not take. projectConfigStore.ts now uses the catalog-backed
+    // isPreviewRendererId guard (src/shared/settings.ts, itself delegating to
+    // validateCatalogValue) purely to validate, and omits the entry entirely
+    // on rejection so the existing Project > Application > Default
+    // resolution chain (resolveEffectiveSettings) does the fallthrough.
+    it("projectConfigStore.ts validates preview.renderer through the catalog-backed isPreviewRendererId guard and does not resolve a catalog default for a rejected/missing value", () => {
+      const projectConfigStoreSource = readFileSync(
+        "src/main/projectConfigStore.ts",
+        "utf8"
       );
+
+      expect(projectConfigStoreSource).toContain("isPreviewRendererId");
+      expect(projectConfigStoreSource).not.toContain("resolveCatalogValue");
     });
 
     it("src/shared/settings.ts's isPreviewRendererId/defaultPreviewRenderer delegate to the catalog rather than duplicating validation/default logic", () => {

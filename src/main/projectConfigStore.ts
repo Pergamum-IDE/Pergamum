@@ -1,8 +1,11 @@
 import { promises as fs } from "node:fs";
 import path from "node:path";
 import type { PergamumProjectConfig } from "../shared/api";
-import type { ProjectPreviewSettings, ProjectSettings } from "../shared/settings";
-import { resolveCatalogValue } from "../shared/settingsCatalog";
+import {
+  isPreviewRendererId,
+  type ProjectPreviewSettings,
+  type ProjectSettings
+} from "../shared/settings";
 
 export const projectConfigFileName = "pergamum.json";
 
@@ -26,127 +29,56 @@ function invalidProjectConfig(message: string): Error {
   return new Error(`Invalid ${projectConfigFileName}: ${message}`);
 }
 
-function assertNoApplicationOnlySetting(
-  settings: Record<string, unknown>,
-  key: string
-): void {
-  if (key in settings) {
-    throw invalidProjectConfig(
-      `settings.${key} is application-only and cannot be set by a project.`
-    );
-  }
-}
-
-function assertObjectCategory(
-  settings: Record<string, unknown>,
-  category: string
-): Record<string, unknown> | null {
-  const value = settings[category];
-
-  if (value === undefined) {
-    return null;
-  }
-
-  if (!isConfigObject(value)) {
-    throw invalidProjectConfig(`settings.${category} must be a JSON object.`);
-  }
-
-  return value;
-}
-
-function assertNoApplicationOnlyCategorySetting(
-  categorySettings: Record<string, unknown>,
-  category: string,
-  key: string
-): void {
-  if (key in categorySettings) {
-    throw invalidProjectConfig(
-      `settings.${category}.${key} is application-only and cannot be set by a project.`
-    );
-  }
-}
-
-// Project config parsing is strict for an explicitly present "preview"
-// section: once a project declares settings.preview, renderer is required
-// and must be a catalog-valid value, or the whole project config is
-// rejected. Catalog validation (validateCatalogValue/resolveCatalogValue)
-// is the source of what values are allowed; this function does not fall
-// back to a default for a present-but-invalid or present-but-missing
-// renderer. Tolerant defaulting for an absent value belongs to the settings
-// resolution/read path, not here.
+// ADR-0006 S-23: a settings-subtree structural problem or a rejected known
+// setting value must not fail project open. Only project identity/config
+// outside the "settings" subtree (handled by parseProjectConfig below) and
+// malformed JSON (handled by readProjectConfig below) still throw.
+//
+// A rejected/absent entry is represented purely by omission from the parsed
+// project settings result — there is no rejected-entry result type
+// (ADR-0006 S-22 diagnostics are out of scope for this read path) and no
+// direct substitution of the catalog default here (that belongs to
+// resolveEffectiveSettings's existing Project > Application > Default
+// fallthrough, not to this parse step). Returning `undefined` rather than
+// `{}` for "nothing accepted" keeps the parsed result limited to accepted
+// entries only, per #170.
 function parseProjectPreviewSettings(
   settings: Record<string, unknown>
 ): ProjectPreviewSettings | undefined {
-  const preview = assertObjectCategory(settings, "preview");
+  const preview = settings.preview;
 
-  if (!preview) {
+  if (preview === undefined) {
     return undefined;
   }
 
-  if (preview.renderer === undefined) {
-    throw invalidProjectConfig('settings.preview.renderer must be "markdown".');
+  if (!isConfigObject(preview)) {
+    return undefined;
   }
 
-  const resolution = resolveCatalogValue("preview.renderer", preview.renderer);
-
-  if (!resolution.ok) {
-    throw invalidProjectConfig('settings.preview.renderer must be "markdown".');
+  if (!isPreviewRendererId(preview.renderer)) {
+    return undefined;
   }
 
-  return {
-    renderer: resolution.value
-  };
+  return { renderer: preview.renderer };
 }
 
-function validateApplicationOnlyProjectSettings(
-  settings: Record<string, unknown>
-): void {
-  assertNoApplicationOnlySetting(settings, "language");
-  assertNoApplicationOnlySetting(settings, "showStatusBar");
-  assertNoApplicationOnlySetting(settings, "recentProjects");
-
-  const general = assertObjectCategory(settings, "general");
-
-  if (general) {
-    assertNoApplicationOnlyCategorySetting(general, "general", "language");
-    assertNoApplicationOnlyCategorySetting(general, "general", "showStatusBar");
-  }
-
-  const appearance = assertObjectCategory(settings, "appearance");
-
-  if (appearance) {
-    assertNoApplicationOnlyCategorySetting(
-      appearance,
-      "appearance",
-      "uiTheme"
-    );
-    assertNoApplicationOnlyCategorySetting(
-      appearance,
-      "appearance",
-      "uiFontFamily"
-    );
-    assertNoApplicationOnlyCategorySetting(
-      appearance,
-      "appearance",
-      "uiFontSize"
-    );
-  }
-}
-
+// Application-only keys placed under a project's "settings" are scope
+// violations (ADR-0006 S-22): rejected as project overrides, but not a
+// reason to fail project open. ProjectSettings only ever extracts "preview",
+// so these keys are never read into the parsed result regardless of this
+// list — parseProjectSettings simply does not throw for their presence.
 function parseProjectSettings(value: unknown): ProjectSettings | undefined {
   if (value === undefined) {
     return undefined;
   }
 
   if (!isConfigObject(value)) {
-    throw invalidProjectConfig('"settings" must be a JSON object.');
+    return undefined;
   }
-
-  validateApplicationOnlyProjectSettings(value);
 
   const preview = parseProjectPreviewSettings(value);
 
-  return preview ? { preview } : {};
+  return preview ? { preview } : undefined;
 }
 
 function parseProjectConfig(value: unknown): PergamumProjectConfig {
