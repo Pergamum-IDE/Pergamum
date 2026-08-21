@@ -60,7 +60,7 @@ describe("toolbar command wiring", () => {
     );
   });
 
-  it("logs command.ignored with disabled_command from the registry's onCommandIgnored handler", () => {
+  it("logs command.ignored with a registry-supplied reason and disabled_command fallback", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
     const handlerIndex = source.indexOf("registry.setOnCommandIgnored(");
     const returnRegistryIndex = source.indexOf("return registry;");
@@ -75,7 +75,7 @@ describe("toolbar command wiring", () => {
     expect(handlerBlock).toContain('level: "debug"');
     expect(handlerBlock).toContain("source: event.source");
     expect(handlerBlock).toContain('result: "ignored"');
-    expect(handlerBlock).toContain('reason: "disabled_command"');
+    expect(handlerBlock).toContain('reason: event.reason ?? "disabled_command"');
     expect(source).not.toContain('event: "command.succeeded"');
   });
 

@@ -190,6 +190,7 @@ export const debugLogReasons = [
   "manual_clear",
   "unsupported_surface",
   "disabled_command",
+  "app_modal_open",
   "unsupported_editor",
   "glossary_not_dirty",
   "glossary_already_saving",

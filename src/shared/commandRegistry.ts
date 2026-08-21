@@ -4,7 +4,10 @@ import {
   type CommandContext,
   type CommandEnablementExpression
 } from "./commandEnablement";
-import type { DebugLogCommandExecutionSource } from "./debugLog";
+import type {
+  DebugLogCommandExecutionSource,
+  DebugLogReason
+} from "./debugLog";
 
 declare const commandIdBrand: unique symbol;
 
@@ -71,7 +74,12 @@ export interface CommandExecutionOptions {
 export interface CommandExecutionLogEvent {
   readonly commandId: string;
   readonly source: DebugLogCommandExecutionSource;
+  readonly reason?: DebugLogReason;
 }
+
+export type CommandExecutionBlocker = (
+  event: CommandExecutionLogEvent
+) => DebugLogReason | null;
 
 /**
  * Combined enablement: legacy `Command.isEnabled` (imperative, argument-aware)
@@ -125,11 +133,13 @@ export class UnknownCommandIdError extends Error {
 
 export class CommandDisabledError extends Error {
   readonly commandId: string;
+  readonly reason: DebugLogReason;
 
-  constructor(commandId: string) {
+  constructor(commandId: string, reason: DebugLogReason = "disabled_command") {
     super(`Command is disabled: ${commandId}`);
     this.name = "CommandDisabledError";
     this.commandId = commandId;
+    this.reason = reason;
   }
 }
 
@@ -156,6 +166,7 @@ export function defineCommandId<
 export class CommandRegistry {
   private readonly commands = new Map<string, RegisteredCommand>();
   private contextProvider: (() => CommandContext) | null = null;
+  private commandExecutionBlocker: CommandExecutionBlocker | null = null;
   private onCommandIgnored: ((event: CommandExecutionLogEvent) => void) | null =
     null;
   private onCommandInvoked: ((event: CommandExecutionLogEvent) => void) | null =
@@ -184,6 +195,17 @@ export class CommandRegistry {
    */
   setCommandContextProvider(provider: () => CommandContext): void {
     this.contextProvider = provider;
+  }
+
+  /**
+   * Injects a UI-independent execution blocker for application-level modal
+   * state. This keeps modal command suppression at the shared registry
+   * boundary instead of scattering one-off shortcut checks across renderers.
+   */
+  setCommandExecutionBlocker(
+    blocker: CommandExecutionBlocker | null
+  ): void {
+    this.commandExecutionBlocker = blocker;
   }
 
   /**
@@ -255,6 +277,15 @@ export class CommandRegistry {
       commandId: String(commandId),
       source: options.source
     };
+    const blockReason = this.commandExecutionBlocker?.(event) ?? null;
+
+    if (blockReason) {
+      this.emitCommandExecutionLog(this.onCommandIgnored, {
+        ...event,
+        reason: blockReason
+      });
+      throw new CommandDisabledError(commandId, blockReason);
+    }
 
     if (!isCommandEnabled(command, liveContext, args)) {
       this.emitCommandExecutionLog(this.onCommandIgnored, event);

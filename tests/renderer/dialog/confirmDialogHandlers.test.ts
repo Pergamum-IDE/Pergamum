@@ -58,6 +58,15 @@ describe("handleConfirmDialogKeyDown (#182 D-15)", () => {
     expect(handled).toBe(false);
   });
 
+  it("Space does not resolve anything (left to native focused button activation) and returns false", () => {
+    const onResult = vi.fn();
+
+    const handled = handleConfirmDialogKeyDown({ key: " " }, onResult);
+
+    expect(onResult).not.toHaveBeenCalled();
+    expect(handled).toBe(false);
+  });
+
   it("Tab does not resolve anything (handled separately by the focus trap) and returns false", () => {
     const onResult = vi.fn();
 

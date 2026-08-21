@@ -70,8 +70,9 @@ describe("debug log catalog", () => {
     );
   });
 
-  it("includes disabled_command in the reason catalog", () => {
+  it("includes command ignored reason catalog values", () => {
     expect(debugLogReasons).toContain("disabled_command");
+    expect(debugLogReasons).toContain("app_modal_open");
   });
 
   it("includes command.blocked as its own event, distinct from command.ignored", () => {

@@ -528,3 +528,20 @@ describe("ConfirmDialog button accelerators (#184 follow-up)", () => {
     }
   });
 });
+
+describe("ConfirmDialog shortcut scope (#190)", () => {
+  it("does not implement one-off Ctrl/Cmd shortcut suppression inside the dialog component", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync("src/renderer/dialog/ConfirmDialog.tsx", "utf8");
+    const handlers = readFileSync(
+      "src/renderer/dialog/confirmDialogHandlers.ts",
+      "utf8"
+    );
+    const dialogSources = `${source}\n${handlers}`;
+
+    expect(dialogSources).not.toContain("ctrlKey");
+    expect(dialogSources).not.toContain("metaKey");
+    expect(dialogSources).not.toContain("editor.document.save");
+    expect(dialogSources).not.toContain("workbench.commandPalette.open");
+  });
+});

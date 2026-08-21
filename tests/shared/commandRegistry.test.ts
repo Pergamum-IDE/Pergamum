@@ -9,6 +9,10 @@ import {
   defineCommandId
 } from "../../src/shared/commandRegistry";
 import { InvalidCommandEnablementExpressionError } from "../../src/shared/commandEnablement";
+import {
+  commandPaletteCommandIds,
+  editorCommandIds
+} from "../../src/shared/commandIds";
 
 const executionOptions = { source: "commandPalette" } as const;
 
@@ -528,6 +532,92 @@ describe("CommandRegistry", () => {
       commandId,
       source: "commandPalette"
     });
+  });
+
+  it("blocks background editor and workbench command execution while an app modal dialog is open", async () => {
+    const registry = new CommandRegistry();
+    const saveDocument = vi.fn();
+    const closeEditor = vi.fn();
+    const openCommandPalette = vi.fn();
+    const onCommandIgnored = vi.fn();
+    let appModalOpen = true;
+
+    registry.register({
+      id: editorCommandIds.saveDocument,
+      title: "Save",
+      execute: saveDocument
+    });
+    registry.register({
+      id: editorCommandIds.close,
+      title: "Close editor",
+      execute: closeEditor
+    });
+    registry.register({
+      id: commandPaletteCommandIds.open,
+      title: "Open Command Palette",
+      execute: openCommandPalette
+    });
+    registry.setCommandExecutionBlocker(() =>
+      appModalOpen ? "app_modal_open" : null
+    );
+    registry.setOnCommandIgnored(onCommandIgnored);
+
+    await expect(
+      registry.execute(editorCommandIds.saveDocument, {
+        source: "applicationMenu"
+      })
+    ).rejects.toMatchObject({
+      commandId: editorCommandIds.saveDocument,
+      reason: "app_modal_open"
+    });
+    await expect(
+      registry.execute(editorCommandIds.close, { source: "documentTabBar" })
+    ).rejects.toMatchObject({
+      commandId: editorCommandIds.close,
+      reason: "app_modal_open"
+    });
+    await expect(
+      registry.execute(commandPaletteCommandIds.open, {
+        source: "commandPalette"
+      })
+    ).rejects.toMatchObject({
+      commandId: commandPaletteCommandIds.open,
+      reason: "app_modal_open"
+    });
+
+    expect(saveDocument).not.toHaveBeenCalled();
+    expect(closeEditor).not.toHaveBeenCalled();
+    expect(openCommandPalette).not.toHaveBeenCalled();
+    expect(onCommandIgnored).toHaveBeenNthCalledWith(1, {
+      commandId: editorCommandIds.saveDocument,
+      source: "applicationMenu",
+      reason: "app_modal_open"
+    });
+    expect(onCommandIgnored).toHaveBeenNthCalledWith(2, {
+      commandId: editorCommandIds.close,
+      source: "documentTabBar",
+      reason: "app_modal_open"
+    });
+    expect(onCommandIgnored).toHaveBeenNthCalledWith(3, {
+      commandId: commandPaletteCommandIds.open,
+      source: "commandPalette",
+      reason: "app_modal_open"
+    });
+
+    appModalOpen = false;
+
+    await registry.execute(editorCommandIds.saveDocument, {
+      source: "applicationMenu"
+    });
+    await registry.execute(editorCommandIds.close, { source: "documentTabBar" });
+    await registry.execute(commandPaletteCommandIds.open, {
+      source: "commandPalette"
+    });
+
+    expect(saveDocument).toHaveBeenCalledTimes(1);
+    expect(closeEditor).toHaveBeenCalledTimes(1);
+    expect(openCommandPalette).toHaveBeenCalledTimes(1);
+    expect(onCommandIgnored).toHaveBeenCalledTimes(3);
   });
 
   it("subjects direct execute() routes to Command.isEnabled too, not only when", async () => {
