@@ -11,6 +11,28 @@
   --workspace-sidebar-active-background: #dce8f5;
   --workspace-sidebar-active-foreground: #0f2438;
   --workspace-sidebar-focus-ring: #7aa7d9;
+  --app-dialog-backdrop: rgba(15, 23, 32, 0.45);
+  --app-dialog-background: #ffffff;
+  --app-dialog-border: #d3dae2;
+  --app-dialog-foreground: #25313d;
+  --app-dialog-header-background: #eef3f8;
+  --app-dialog-header-foreground: #16222c;
+  --app-dialog-title-font-weight: 700;
+  --app-dialog-icon-info: #2563a8;
+  --app-dialog-icon-warning: #8a4c0f;
+  --app-dialog-icon-error: #a32929;
+  --app-dialog-icon-question: #52616f;
+  --app-dialog-destructive-header-background: #f6dede;
+  --app-dialog-destructive-header-foreground: #7a1f1f;
+  --app-dialog-button-background: #eef3f8;
+  --app-dialog-button-foreground: #16222c;
+  --app-dialog-button-border: #d3dae2;
+  --app-dialog-confirm-background: #2563a8;
+  --app-dialog-confirm-foreground: #ffffff;
+  --app-dialog-destructive-confirm-background: #a32929;
+  --app-dialog-destructive-confirm-foreground: #ffffff;
+  --app-dialog-copy-button-foreground: #52616f;
+  --app-dialog-copy-failure-foreground: #a32929;
   font-family:
     Inter, ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
     sans-serif;
@@ -1893,4 +1915,155 @@ button:active {
     border-left: 0;
     border-top: 1px solid #d3dae2;
   }
+}
+
+/* Application modal dialog (#182) */
+
+.appDialogBackdrop {
+  position: fixed;
+  inset: 0;
+  background: var(--app-dialog-backdrop);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+
+.appDialog {
+  display: flex;
+  flex-direction: column;
+  min-width: 320px;
+  max-width: 480px;
+  background: var(--app-dialog-background);
+  color: var(--app-dialog-foreground);
+  border: 1px solid var(--app-dialog-border);
+  border-radius: 8px;
+  overflow: hidden;
+  box-shadow: 0 8px 24px rgba(15, 23, 32, 0.28);
+}
+
+.appDialogHeader {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  padding: 12px 16px;
+  background: var(--app-dialog-header-background);
+  color: var(--app-dialog-header-foreground);
+}
+
+.appDialog-destructive .appDialogHeader {
+  background: var(--app-dialog-destructive-header-background);
+  color: var(--app-dialog-destructive-header-foreground);
+}
+
+.appDialogTitle {
+  margin: 0;
+  font-size: 1rem;
+  font-weight: var(--app-dialog-title-font-weight);
+}
+
+.appDialogIcon {
+  width: 20px;
+  height: 20px;
+  flex-shrink: 0;
+}
+
+.appDialogIcon svg {
+  width: 100%;
+  height: 100%;
+}
+
+.appDialogIcon-info {
+  color: var(--app-dialog-icon-info);
+}
+
+.appDialogIcon-warning {
+  color: var(--app-dialog-icon-warning);
+}
+
+.appDialogIcon-error {
+  color: var(--app-dialog-icon-error);
+}
+
+.appDialogIcon-question {
+  color: var(--app-dialog-icon-question);
+}
+
+.appDialogBody {
+  padding: 16px;
+}
+
+.appDialogMessage {
+  margin: 0;
+  white-space: pre-wrap;
+}
+
+.appDialogFooter {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 12px 16px;
+  border-top: 1px solid var(--app-dialog-border);
+}
+
+.appDialogFooterCopy {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-width: 0;
+}
+
+.appDialogCopyButton {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  width: 28px;
+  height: 28px;
+  padding: 4px;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 4px;
+  color: var(--app-dialog-copy-button-foreground);
+  cursor: pointer;
+}
+
+.appDialogCopyButton:hover {
+  border-color: var(--app-dialog-border);
+}
+
+.appDialogCopyButton svg {
+  width: 16px;
+  height: 16px;
+}
+
+.appDialogCopyFailure {
+  color: var(--app-dialog-copy-failure-foreground);
+  font-size: 0.8rem;
+}
+
+.appDialogActions {
+  display: flex;
+  gap: 8px;
+  flex-shrink: 0;
+}
+
+.appDialogButton {
+  padding: 6px 14px;
+  border-radius: 4px;
+  border: 1px solid var(--app-dialog-button-border);
+  background: var(--app-dialog-button-background);
+  color: var(--app-dialog-button-foreground);
+  cursor: pointer;
+}
+
+.appDialogButton-confirm {
+  background: var(--app-dialog-confirm-background);
+  color: var(--app-dialog-confirm-foreground);
+  border-color: transparent;
+}
+
+.appDialog-destructive .appDialogButton-confirm {
+  background: var(--app-dialog-destructive-confirm-background);
+  color: var(--app-dialog-destructive-confirm-foreground);
 }
