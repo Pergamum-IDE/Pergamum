@@ -393,7 +393,7 @@ async function handlePopupEditMenu(
 
   return popupEditContextMenu({
     request,
-    language: settings.language,
+    language: settings.workbench.language,
     webContents: event.sender,
     window: BrowserWindow.fromWebContents(event.sender),
     debugLogger

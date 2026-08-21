@@ -63,8 +63,10 @@ describe("workbench.fontFamily wiring (#173)", () => {
   });
 
   it("defaultApplicationSettings / createDefaultApplicationSettings leave workbench.fontFamily unset (sparse baseline, #173 D-7)", () => {
-    expect(defaultApplicationSettings.workbench).toEqual({});
-    expect(createDefaultApplicationSettings().workbench).toEqual({});
+    expect(defaultApplicationSettings.workbench.fontFamily).toBeUndefined();
+    expect(
+      createDefaultApplicationSettings().workbench.fontFamily
+    ).toBeUndefined();
   });
 
   it("resolveEffectiveSettings falls through to the catalog default when applicationSettings.workbench.fontFamily is absent", () => {
@@ -77,7 +79,7 @@ describe("workbench.fontFamily wiring (#173)", () => {
   it("resolveEffectiveSettings passes through a valid non-default applicationSettings.workbench.fontFamily override", () => {
     const applicationSettings: ApplicationSettings = {
       ...defaultApplicationSettings,
-      workbench: { fontFamily: "Fira Code" }
+      workbench: { ...defaultApplicationSettings.workbench, fontFamily: "Fira Code" }
     };
 
     expect(
@@ -92,7 +94,7 @@ describe("workbench.fontFamily wiring (#173)", () => {
   it("workbench.fontFamily has no project-scope fallthrough — projectSettings does not carry a workbench key at all", () => {
     const applicationSettings: ApplicationSettings = {
       ...defaultApplicationSettings,
-      workbench: { fontFamily: "Fira Code" }
+      workbench: { ...defaultApplicationSettings.workbench, fontFamily: "Fira Code" }
     };
 
     // ProjectSettings is typed without a `workbench` field (#173 does not
@@ -101,5 +103,79 @@ describe("workbench.fontFamily wiring (#173)", () => {
     expect(
       resolveEffectiveSettings(applicationSettings, {}).workbench.fontFamily
     ).toBe("Fira Code");
+  });
+});
+
+describe("workbench.language / workbench.statusBar.visible wiring (#174)", () => {
+  it("builtInDefaultSettings.workbench.language derives from the catalog default", () => {
+    expect(builtInDefaultSettings.workbench.language).toBe(
+      getCatalogDefaultValue("workbench.language")
+    );
+  });
+
+  it("builtInDefaultSettings.workbench.statusBar.visible derives from the catalog default", () => {
+    expect(builtInDefaultSettings.workbench.statusBar.visible).toBe(
+      getCatalogDefaultValue("workbench.statusBar.visible")
+    );
+  });
+
+  it("defaultApplicationSettings / createDefaultApplicationSettings carry a concrete workbench.language and workbench.statusBar.visible (not sparse, unlike fontFamily)", () => {
+    const languageDefault = getCatalogDefaultValue("workbench.language");
+    const statusBarVisibleDefault = getCatalogDefaultValue(
+      "workbench.statusBar.visible"
+    );
+
+    expect(defaultApplicationSettings.workbench.language).toBe(languageDefault);
+    expect(defaultApplicationSettings.workbench.statusBar.visible).toBe(
+      statusBarVisibleDefault
+    );
+    expect(createDefaultApplicationSettings().workbench.language).toBe(
+      languageDefault
+    );
+    expect(
+      createDefaultApplicationSettings().workbench.statusBar.visible
+    ).toBe(statusBarVisibleDefault);
+  });
+
+  it("resolveEffectiveSettings passes applicationSettings.workbench.language straight through", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: { ...defaultApplicationSettings.workbench, language: "en" }
+    };
+
+    expect(
+      resolveEffectiveSettings(applicationSettings, undefined).workbench
+        .language
+    ).toBe("en");
+  });
+
+  it("resolveEffectiveSettings passes applicationSettings.workbench.statusBar.visible straight through", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        statusBar: { visible: false }
+      }
+    };
+
+    expect(
+      resolveEffectiveSettings(applicationSettings, undefined).workbench
+        .statusBar.visible
+    ).toBe(false);
+  });
+
+  it("workbench.language / workbench.statusBar.visible have no project-scope fallthrough — projectSettings does not carry a workbench key at all", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        language: "en",
+        statusBar: { visible: false }
+      }
+    };
+    const effective = resolveEffectiveSettings(applicationSettings, {});
+
+    expect(effective.workbench.language).toBe("en");
+    expect(effective.workbench.statusBar.visible).toBe(false);
   });
 });

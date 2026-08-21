@@ -325,5 +325,7 @@ export async function installApplicationMenu(
 ): Promise<void> {
   const settings = await loadSettings();
 
-  Menu.setApplicationMenu(createApplicationMenu(settings.language, options));
+  Menu.setApplicationMenu(
+    createApplicationMenu(settings.workbench.language, options)
+  );
 }

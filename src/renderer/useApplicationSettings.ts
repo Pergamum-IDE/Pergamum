@@ -54,7 +54,7 @@ export function useApplicationSettings(): UseApplicationSettingsResult {
         }
 
         setSettings(loadedSettings);
-        setDisplayLanguage(loadedSettings.language);
+        setDisplayLanguage(loadedSettings.workbench.language);
         setError(null);
       })
       .catch((loadError: unknown) => {
