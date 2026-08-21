@@ -22,10 +22,19 @@ export interface ApplicationPreviewSettings {
   renderer: PreviewRendererId;
 }
 
+// Optional, like ProjectPreviewSettings.renderer: absence on disk is
+// distinct from an explicit value, so the write path can preserve sparse
+// settings.json storage (#173 D-7) instead of eagerly writing back the
+// catalog default.
+export interface ApplicationWorkbenchSettings {
+  fontFamily?: string;
+}
+
 export interface ApplicationSettings {
   showStatusBar: boolean;
   language: Language;
   preview: ApplicationPreviewSettings;
+  workbench: ApplicationWorkbenchSettings;
   recentProjects: RecentProject[];
 }
 
@@ -46,10 +55,15 @@ export interface EffectivePreviewSettings {
   renderer: PreviewRendererId;
 }
 
+export interface EffectiveWorkbenchSettings {
+  fontFamily: string;
+}
+
 export interface EffectiveSettings {
   showStatusBar: boolean;
   language: Language;
   preview: EffectivePreviewSettings;
+  workbench: EffectiveWorkbenchSettings;
 }
 
 // The settings catalog is the only source of truth for this default —
@@ -69,15 +83,23 @@ export const builtInDefaultSettings: EffectiveSettings = {
   language: defaultLanguage,
   preview: {
     renderer: defaultPreviewRenderer
+  },
+  workbench: {
+    fontFamily: getCatalogDefaultValue("workbench.fontFamily")
   }
 };
 
+// workbench is intentionally {} (no explicit fontFamily) here, not
+// builtInDefaultSettings.workbench — this is the "nothing on disk yet"
+// baseline (#173 D-7), and resolveEffectiveSettings below is what falls
+// through to the catalog default when fontFamily is absent.
 export const defaultApplicationSettings: ApplicationSettings = {
   showStatusBar: builtInDefaultSettings.showStatusBar,
   language: builtInDefaultSettings.language,
   preview: {
     renderer: builtInDefaultSettings.preview.renderer
   },
+  workbench: {},
   recentProjects: []
 };
 
@@ -88,6 +110,7 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
     preview: {
       renderer: defaultApplicationSettings.preview.renderer
     },
+    workbench: {},
     recentProjects: []
   };
 }
@@ -112,6 +135,13 @@ export function resolveEffectiveSettings(
         projectSettings?.preview?.renderer ??
         applicationSettings.preview.renderer ??
         builtInDefaultSettings.preview.renderer
+    },
+    // workbench.fontFamily is applicationOnly (#173): Application > Default
+    // only, no project scope in the chain.
+    workbench: {
+      fontFamily:
+        applicationSettings.workbench.fontFamily ??
+        builtInDefaultSettings.workbench.fontFamily
     }
   };
 }

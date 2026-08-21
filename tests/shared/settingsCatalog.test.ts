@@ -934,4 +934,83 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
     });
   });
+
+  describe("workbench.fontFamily wiring (#173) vs. editor.fontFamily / workbench.colorTheme / files.newFile.* remaining metadata-only", () => {
+    it("settingsStore.ts and src/renderer/workbenchFontFamily.ts call catalog helpers with workbench.fontFamily (wired consumer)", () => {
+      const settingsStoreSource = readFileSync(
+        "src/main/settingsStore.ts",
+        "utf8"
+      );
+      const rendererSource = readFileSync(
+        "src/renderer/workbenchFontFamily.ts",
+        "utf8"
+      );
+
+      expect(settingsStoreSource).toMatch(/CatalogValue\("workbench\.fontFamily"/);
+      expect(rendererSource).toMatch(/CatalogValue\("workbench\.fontFamily"/);
+      expect(rendererSource).toMatch(
+        /CatalogDefaultValue\("workbench\.fontFamily"/
+      );
+    });
+
+    it("styles.css consumes --pergamum-workbench-font-family for UI chrome, but editor/preview body font rules are unchanged", () => {
+      const stylesSource = readFileSync("src/renderer/styles.css", "utf8");
+
+      expect(stylesSource).toContain("--pergamum-workbench-font-family");
+      // Regression guard for #173 D-1: the editor body (.cm-scroller) and
+      // preview code blocks keep their pre-#173 hardcoded monospace stacks,
+      // not the workbench custom property.
+      expect(stylesSource).toContain(
+        '.editorHost .cm-scroller {\n  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;'
+      );
+      expect(stylesSource).toContain(
+        '.preview code {\n  border-radius: 4px;\n  background: #eef3f8;\n  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;'
+      );
+    });
+
+    it("editor.fontFamily, workbench.colorTheme, and files.newFile.* remain unwired — no store/renderer file calls a catalog helper with them", () => {
+      expect(Object.keys(settingsCatalog)).toEqual(
+        expect.arrayContaining([
+          "editor.fontFamily",
+          "workbench.colorTheme",
+          "files.newFile.lineEnding",
+          "files.newFile.encoding"
+        ])
+      );
+
+      for (const path of [
+        "src/main/settingsStore.ts",
+        "src/main/projectConfigStore.ts",
+        "src/shared/settings.ts",
+        "src/renderer/workbenchFontFamily.ts"
+      ]) {
+        const source = readFileSync(path, "utf8");
+
+        expect(source).not.toMatch(/CatalogValue\("editor\.fontFamily"/);
+        expect(source).not.toMatch(/CatalogDefaultValue\("editor\.fontFamily"/);
+        expect(source).not.toMatch(/CatalogValue\("workbench\.colorTheme"/);
+        expect(source).not.toMatch(
+          /CatalogDefaultValue\("workbench\.colorTheme"/
+        );
+        expect(source).not.toMatch(
+          /CatalogValue\("files\.newFile\.lineEnding"/
+        );
+        expect(source).not.toMatch(
+          /CatalogValue\("files\.newFile\.encoding"/
+        );
+      }
+    });
+
+    it("appearance.uiTheme alias runtime wiring is not added — resolvePrimarySettingKey is not called from settingsStore.ts/projectConfigStore.ts/settings.ts", () => {
+      for (const path of [
+        "src/main/settingsStore.ts",
+        "src/main/projectConfigStore.ts",
+        "src/shared/settings.ts"
+      ]) {
+        const source = readFileSync(path, "utf8");
+
+        expect(source).not.toContain("resolvePrimarySettingKey");
+      }
+    });
+  });
 });

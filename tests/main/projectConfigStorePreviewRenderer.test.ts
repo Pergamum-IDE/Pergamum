@@ -244,3 +244,50 @@ describe("projectConfigStore preview.renderer read-path hardening (#170, ADR-000
     );
   });
 });
+
+describe("projectConfigStore: pergamum.json settings.workbench.fontFamily has no effect (#173)", () => {
+  beforeEach(() => {
+    fsMock.readFile.mockReset();
+  });
+
+  it("does not read settings.workbench.fontFamily from pergamum.json — ProjectSettings is not typed with a workbench field", async () => {
+    fsMock.readFile.mockResolvedValue(
+      JSON.stringify({
+        name: "My Project",
+        settings: {
+          preview: { renderer: "markdown" },
+          workbench: { fontFamily: "Fira Code" }
+        }
+      })
+    );
+
+    const config = await readProjectConfig("C:\\fake-project");
+
+    expect(config?.settings?.preview?.renderer).toBe("markdown");
+    expect(
+      (config?.settings as Record<string, unknown>).workbench
+    ).toBeUndefined();
+  });
+
+  it("workbench.fontFamily is applicationOnly, so it never affects resolveEffectiveSettings via a project override — an application-scope value passes through unchanged regardless of pergamum.json content", async () => {
+    fsMock.readFile.mockResolvedValue(
+      JSON.stringify({
+        name: "My Project",
+        settings: { workbench: { fontFamily: "Fira Code" } }
+      })
+    );
+    const projectConfig = await readProjectConfig("C:\\fake-project");
+
+    const applicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: { fontFamily: "Cascadia Code" }
+    };
+
+    const effective = resolveEffectiveSettings(
+      applicationSettings,
+      projectConfig?.settings
+    );
+
+    expect(effective.workbench.fontFamily).toBe("Cascadia Code");
+  });
+});
