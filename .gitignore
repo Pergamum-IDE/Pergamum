@@ -7,5 +7,5 @@ npm-debug.log*
 out/
 .claude/
 review-notes/
-ExpDiff.ps1
+*.ps1
 
