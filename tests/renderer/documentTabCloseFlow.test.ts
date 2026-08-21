@@ -56,7 +56,8 @@ describe("buildDirtyCloseChoiceDialogOptions (#192 dogfood)", () => {
       {
         id: dirtyCloseChoiceIds.discardAndClose,
         label: "Discard Changes and Close",
-        role: "destructive"
+        role: "destructive",
+        icon: { kind: "alertTriangle" }
       },
       {
         id: dirtyCloseChoiceIds.cancel,
@@ -67,6 +68,27 @@ describe("buildDirtyCloseChoiceDialogOptions (#192 dogfood)", () => {
     expect(options.primaryChoiceId).toBe(dirtyCloseChoiceIds.saveAndClose);
     expect(options.cancelChoiceId).toBe(dirtyCloseChoiceIds.cancel);
     expect(options.initialFocusChoiceId).toBe(dirtyCloseChoiceIds.cancel);
+  });
+
+  it("adds a supplemental alert-triangle icon only to the dirty-close discard choice", () => {
+    const options = buildDirtyCloseChoiceDialogOptions(translateEn);
+    const saveChoice = options.choices.find(
+      (choice) => choice.id === dirtyCloseChoiceIds.saveAndClose
+    );
+    const discardChoice = options.choices.find(
+      (choice) => choice.id === dirtyCloseChoiceIds.discardAndClose
+    );
+    const cancelChoice = options.choices.find(
+      (choice) => choice.id === dirtyCloseChoiceIds.cancel
+    );
+    const source = readFileSync("src/renderer/documentTabCloseFlow.ts", "utf8");
+
+    expect(saveChoice?.icon).toBeUndefined();
+    expect(discardChoice?.icon).toEqual({ kind: "alertTriangle" });
+    expect(cancelChoice?.icon).toBeUndefined();
+    expect(source).not.toContain(".svg?raw");
+    expect(source).not.toContain("alertTriangleIcon");
+    expect(source).not.toContain("feather-alert-triangle");
   });
 
   it("uses stable choice IDs, not labels", () => {

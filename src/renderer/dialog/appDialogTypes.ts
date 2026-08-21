@@ -57,10 +57,17 @@ export type AppDialogChoiceRole =
   | "destructive"
   | "cancel";
 
+export type AppDialogChoiceIconKind = "alertTriangle";
+
+export interface AppDialogChoiceIcon {
+  readonly kind: AppDialogChoiceIconKind;
+}
+
 export interface AppDialogChoice {
   readonly id: AppDialogChoiceId;
   readonly label: string;
   readonly role: AppDialogChoiceRole;
+  readonly icon?: AppDialogChoiceIcon;
 }
 
 export type AppChoiceDialogResult =

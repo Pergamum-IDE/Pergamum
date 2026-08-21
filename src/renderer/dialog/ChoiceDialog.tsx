@@ -24,7 +24,11 @@ import {
   performClipboardCopy,
   type ClipboardAdapter
 } from "./clipboardAdapter";
-import { dialogCopyButtonIconSvg, dialogIconSvgByKind } from "./dialogIcons";
+import {
+  dialogChoiceIconSvgByKind,
+  dialogCopyButtonIconSvg,
+  dialogIconSvgByKind
+} from "./dialogIcons";
 
 export interface ChoiceDialogProps {
   options: AppChoiceDialogOptions;
@@ -92,6 +96,15 @@ export function ChoiceDialog({
   const hasDestructiveChoice = options.choices.some(
     (choice) => choice.role === "destructive"
   );
+  const dialogClasses = ["appDialog", "appDialog-choice"];
+
+  if (hasDestructiveChoice) {
+    dialogClasses.push("appDialog-choice-hasDestructive");
+  }
+
+  if (options.icon?.kind === "warning") {
+    dialogClasses.push("appDialog-warning");
+  }
 
   useEffect(() => {
     return () => {
@@ -165,11 +178,7 @@ export function ChoiceDialog({
     >
       <div
         ref={dialogRef}
-        className={
-          hasDestructiveChoice
-            ? "appDialog appDialog-choice appDialog-destructive"
-            : "appDialog appDialog-choice"
-        }
+        className={dialogClasses.join(" ")}
         role={hasDestructiveChoice ? "alertdialog" : "dialog"}
         aria-modal="true"
         aria-labelledby={titleId}
@@ -230,7 +239,16 @@ export function ChoiceDialog({
                 autoFocus={choice.id === initialFocusChoiceId}
                 onClick={() => onResult(choiceDialogChosenResult(choice.id))}
               >
-                {choice.label}
+                {choice.icon ? (
+                  <span
+                    className={`appDialogButtonIcon appDialogButtonIcon-${choice.icon.kind}`}
+                    aria-hidden="true"
+                    dangerouslySetInnerHTML={{
+                      __html: dialogChoiceIconSvgByKind[choice.icon.kind]
+                    }}
+                  />
+                ) : null}
+                <span className="appDialogButtonLabel">{choice.label}</span>
               </button>
             ))}
           </div>

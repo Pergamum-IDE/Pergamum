@@ -59,7 +59,8 @@ export function buildDirtyCloseChoiceDialogOptions(
       {
         id: dirtyCloseChoiceIds.discardAndClose,
         label: translate("dialog.dirtyClose.discardAndClose"),
-        role: "destructive"
+        role: "destructive",
+        icon: { kind: "alertTriangle" }
       },
       {
         id: dirtyCloseChoiceIds.cancel,

@@ -486,6 +486,21 @@ describe("ConfirmDialog accessibility (#182 D-18)", () => {
 
     expect(markup).toContain("appDialog-destructive");
   });
+
+  it("keeps destructive confirm styling scoped to the binary confirm class contract", async () => {
+    const { readFileSync } = await import("node:fs");
+    const markup = renderDialog({
+      options: baseOptions({ tone: "destructive", confirmLabel: "削除" })
+    });
+    const styles = readFileSync("src/renderer/styles.css", "utf8");
+
+    expect(markup).toContain("appDialog-destructive");
+    expect(markup).toContain("appDialogButton-confirm");
+    expect(styles).toContain(".appDialog-destructive .appDialogButton-confirm");
+    expect(styles).toContain(
+      ".appDialog-destructive .appDialogButton-confirm:hover"
+    );
+  });
 });
 
 describe("ConfirmDialog backdrop (#182 D-17)", () => {

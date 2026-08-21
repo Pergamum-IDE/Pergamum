@@ -53,15 +53,37 @@ function renderDialog(
 }
 
 function buttonTag(markup: string, choiceId: string): string {
+  const button = buttonMarkup(markup, choiceId);
+  const buttonEnd = button.indexOf(">");
+
+  return button.slice(0, buttonEnd);
+}
+
+function buttonMarkup(markup: string, choiceId: string): string {
   const marker = `data-choice-id="${choiceId}"`;
   const markerIndex = markup.indexOf(marker);
 
   expect(markerIndex).toBeGreaterThan(-1);
 
   const buttonStart = markup.lastIndexOf("<button", markerIndex);
-  const buttonEnd = markup.indexOf(">", markerIndex);
+  const buttonEnd = markup.indexOf("</button>", markerIndex);
 
-  return markup.slice(buttonStart, buttonEnd);
+  expect(buttonStart).toBeGreaterThan(-1);
+  expect(buttonEnd).toBeGreaterThan(markerIndex);
+
+  return markup.slice(buttonStart, buttonEnd + "</button>".length);
+}
+
+function cssRuleBlock(styles: string, selector: string): string {
+  const start = styles.indexOf(`${selector} {`);
+
+  expect(start).toBeGreaterThan(-1);
+
+  const end = styles.indexOf("}", start);
+
+  expect(end).toBeGreaterThan(start);
+
+  return styles.slice(start, end + 1);
 }
 
 describe("ChoiceDialog structure (#192)", () => {
@@ -91,6 +113,173 @@ describe("ChoiceDialog structure (#192)", () => {
     expect(markup).toContain('data-choice-id="stable-save-id"');
     expect(markup).toContain(">Localized Save<");
     expect(markup).not.toContain('data-choice-id="Localized Save"');
+  });
+
+  it("does not mark the dialog container as confirm-destructive when a destructive choice is present", () => {
+    const markup = renderDialog();
+    const primaryButton = buttonTag(markup, "save");
+
+    expect(markup).toContain("appDialog-choice-hasDestructive");
+    expect(markup).toContain("appDialog-warning");
+    expect(markup).toContain('role="alertdialog"');
+    expect(markup).not.toContain("appDialog-destructive");
+    expect(primaryButton).toContain("appDialogButton-choice-primary");
+    expect(primaryButton).toContain("appDialogButton-confirm");
+    expect(primaryButton).not.toContain("appDialogButton-choice-destructive");
+  });
+
+  it("uses a warning-specific header tone class for warning choice dialogs", () => {
+    const markup = renderDialog();
+    const styles = readFileSync("src/renderer/styles.css", "utf8");
+    const warningHeaderCss = cssRuleBlock(
+      styles,
+      ".appDialog-warning .appDialogHeader"
+    );
+
+    expect(markup).toContain("appDialog-warning");
+    expect(markup).toContain("appDialogIcon-warning");
+    expect(warningHeaderCss).toContain(
+      "background: var(--app-dialog-warning-header-background)"
+    );
+    expect(warningHeaderCss).toContain(
+      "color: var(--app-dialog-warning-header-foreground)"
+    );
+    expect(styles).toContain(
+      "--app-dialog-warning-header-background: #f7e4e8;"
+    );
+    expect(styles).not.toContain(
+      "--app-dialog-warning-header-background: #eef3f8;"
+    );
+    expect(styles).not.toContain(
+      "--app-dialog-warning-header-foreground: #2563a8;"
+    );
+  });
+
+  it("does not apply the warning tone class to non-warning choice dialogs", () => {
+    const markup = renderDialog({
+      options: baseOptions({ icon: { kind: "info", tooltip: "情報" } })
+    });
+
+    expect(markup).not.toContain("appDialog-warning");
+    expect(markup).toContain("appDialogIcon-info");
+  });
+
+  it("applies the choice-destructive button class only to destructive choices", () => {
+    const markup = renderDialog();
+
+    expect(buttonTag(markup, "save")).not.toContain(
+      "appDialogButton-choice-destructive"
+    );
+    expect(buttonTag(markup, "discard")).toContain(
+      "appDialogButton-choice-destructive"
+    );
+    expect(buttonTag(markup, "cancel")).not.toContain(
+      "appDialogButton-choice-destructive"
+    );
+  });
+
+  it("does not automatically add icons to destructive-role choices", () => {
+    const markup = renderDialog();
+
+    expect(buttonMarkup(markup, "discard")).not.toContain(
+      "appDialogButtonIcon"
+    );
+    expect(markup).not.toContain("feather-alert-triangle");
+  });
+
+  it("renders an explicit choice icon as a decorative leading icon", () => {
+    const markup = renderDialog({
+      options: baseOptions({
+        choices: [
+          { id: "save", label: "保存", role: "primary" },
+          {
+            id: "discard",
+            label: "保存しない",
+            role: "destructive",
+            icon: { kind: "alertTriangle" }
+          },
+          { id: "cancel", label: "キャンセル", role: "cancel" }
+        ]
+      })
+    });
+    const saveButton = buttonMarkup(markup, "save");
+    const discardButton = buttonMarkup(markup, "discard");
+    const cancelButton = buttonMarkup(markup, "cancel");
+
+    expect(discardButton).toContain(
+      "appDialogButtonIcon appDialogButtonIcon-alertTriangle"
+    );
+    expect(discardButton).toContain('aria-hidden="true"');
+    expect(discardButton).toContain("feather-alert-triangle");
+    expect(discardButton).toContain(">保存しない<");
+    expect(discardButton).not.toContain("aria-label");
+    expect(saveButton).not.toContain("appDialogButtonIcon");
+    expect(cancelButton).not.toContain("appDialogButtonIcon");
+  });
+
+  it("uses dialogIcons as the known registry for choice icon SVG rendering", () => {
+    const source = readFileSync("src/renderer/dialog/ChoiceDialog.tsx", "utf8");
+
+    expect(source).toContain("dialogChoiceIconSvgByKind[choice.icon.kind]");
+    expect(source).not.toContain("alertTriangleIconRaw");
+  });
+
+  it("keeps choice destructive styling on the destructive choice button class, not the primary button", () => {
+    const styles = readFileSync("src/renderer/styles.css", "utf8");
+
+    expect(styles).toContain(".appDialogButton-choice-destructive");
+    expect(styles).not.toContain(
+      ".appDialog-choice-hasDestructive .appDialogButton-confirm"
+    );
+  });
+
+  it("keeps app dialog button hover colors the same as each normal dialog button tone", () => {
+    const styles = readFileSync("src/renderer/styles.css", "utf8");
+    const neutralHoverCss = cssRuleBlock(styles, ".appDialogButton:hover");
+    const primaryHoverCss = cssRuleBlock(
+      styles,
+      ".appDialogButton-confirm:hover"
+    );
+    const destructiveHoverCss = cssRuleBlock(
+      styles,
+      ".appDialogButton-choice-destructive:hover"
+    );
+    const disabledLookingTokens = /not-allowed|opacity|disabled|muted/i;
+
+    expect(neutralHoverCss).toContain(
+      "background: var(--app-dialog-button-background)"
+    );
+    expect(neutralHoverCss).toContain(
+      "color: var(--app-dialog-button-foreground)"
+    );
+    expect(primaryHoverCss).toContain(
+      "background: var(--app-dialog-confirm-background)"
+    );
+    expect(primaryHoverCss).toContain(
+      "color: var(--app-dialog-confirm-foreground)"
+    );
+    expect(destructiveHoverCss).toContain(
+      "background: var(--app-dialog-destructive-confirm-background)"
+    );
+    expect(destructiveHoverCss).toContain(
+      "color: var(--app-dialog-destructive-confirm-foreground)"
+    );
+
+    for (const hoverCss of [
+      neutralHoverCss,
+      primaryHoverCss,
+      destructiveHoverCss
+    ]) {
+      expect(hoverCss).not.toMatch(disabledLookingTokens);
+    }
+  });
+
+  it("keeps explicit focus-visible styling for app dialog buttons", () => {
+    const styles = readFileSync("src/renderer/styles.css", "utf8");
+    const focusCss = cssRuleBlock(styles, ".appDialogButton:focus-visible");
+
+    expect(focusCss).toContain("outline:");
+    expect(focusCss).toContain("outline-offset:");
   });
 
   it("renders HTML-like message text as text, not markup", () => {
