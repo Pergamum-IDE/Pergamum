@@ -21,6 +21,10 @@ const projectDocumentId: EditorId = createProjectDocumentEditorId(
   "chapter-01.md",
   projectContext
 );
+const secondProjectDocumentId: EditorId = createProjectDocumentEditorId(
+  "chapter-02.md",
+  projectContext
+);
 const externalFileId: EditorId = createEditorIdForPath(
   "C:\\Outside\\notes.md",
   null
@@ -30,17 +34,47 @@ const glossaryEntryId: EditorId = createGlossaryEntryEditorId(
   projectContext
 );
 
-function renderTabBar(tabs: DocumentTab[], translate: Translate = realTranslateEn): string {
+function renderTabBar(
+  tabs: DocumentTab[],
+  overrides: {
+    activeDocumentId?: EditorId;
+    translate?: Translate;
+    onCloseDocument?: (documentId: EditorId) => void;
+  } = {}
+): string {
   return renderToStaticMarkup(
     React.createElement(DocumentTabBar, {
       tabs,
-      activeDocumentId: tabs[0]?.id ?? projectDocumentId,
-      translate,
+      activeDocumentId: overrides.activeDocumentId ?? tabs[0]?.id ?? projectDocumentId,
+      translate: overrides.translate ?? realTranslateEn,
       onSelectDocument: noop,
+      onCloseDocument: overrides.onCloseDocument ?? noop,
       isUtilityWindowOpen: false,
       onToggleUtilityWindow: noop
     })
   );
+}
+
+function tabMarkup(markup: string, occurrence = 0): string {
+  const starts: number[] = [];
+  let cursor = 0;
+
+  for (;;) {
+    const index = markup.indexOf('role="tab"', cursor);
+
+    if (index === -1) {
+      break;
+    }
+
+    starts.push(index);
+    cursor = index + 1;
+  }
+
+  const start = starts[occurrence];
+  const end =
+    occurrence + 1 < starts.length ? starts[occurrence + 1] : markup.length;
+
+  return markup.slice(start, end);
 }
 
 describe("DocumentTabBar", () => {
@@ -115,7 +149,7 @@ describe("DocumentTabBar", () => {
           isExternalMarkdownFile: true
         }
       ],
-      realTranslateJa
+      { translate: realTranslateJa }
     );
 
     expect(markup).toContain(
@@ -153,7 +187,7 @@ describe("DocumentTabBar", () => {
     expect(iconOpenTag).toContain('role="img"');
   });
 
-  it("exposes the external-file warning on the tab button's own title attribute, combined with the file name, since nested-element tooltips are inconsistent across browsers", () => {
+  it("exposes the external-file warning on the tab's own title attribute, combined with the file name, since nested-element tooltips are inconsistent across browsers", () => {
     const markup = renderTabBar([
       {
         id: externalFileId,
@@ -177,16 +211,349 @@ describe("DocumentTabBar", () => {
         isExternalMarkdownFile: false
       }
     ]);
+    const tab = tabMarkup(markup);
+    const tabTagEnd = tab.indexOf(">");
+    const tabOpenTag = tab.slice(0, tabTagEnd);
 
-    const tabButtonStart = markup.indexOf("<button");
-    const tabButtonTagEnd = markup.indexOf(">", tabButtonStart);
-    const tabButtonOpenTag = markup.slice(tabButtonStart, tabButtonTagEnd);
-
-    expect(tabButtonOpenTag).toContain('title="chapter-01.md"');
-    expect(tabButtonOpenTag).not.toContain("outside the project");
+    expect(tabOpenTag).toContain('title="chapter-01.md"');
+    expect(tabOpenTag).not.toContain("outside the project");
   });
 
-  it("still shows the dirty indicator alongside the warning icon when both apply", () => {
+  it("the external warning icon remains on the left side, independent of the right trailing slot's dirty indicator (#184)", () => {
+    const markup = renderTabBar(
+      [
+        {
+          id: externalFileId,
+          title: "notes.md",
+          isDirty: true,
+          isExternalMarkdownFile: true
+        },
+        {
+          id: projectDocumentId,
+          title: "chapter-01.md",
+          isDirty: false,
+          isExternalMarkdownFile: false
+        }
+      ],
+      { activeDocumentId: projectDocumentId }
+    );
+    const tab = tabMarkup(markup, 0);
+    const externalIconIndex = tab.indexOf("documentTabExternalIcon");
+    const titleIndex = tab.indexOf("documentTabTitle");
+    const trailingIndex = tab.indexOf("documentTabTrailing");
+
+    expect(externalIconIndex).toBeGreaterThan(-1);
+    expect(externalIconIndex).toBeLessThan(titleIndex);
+    expect(titleIndex).toBeLessThan(trailingIndex);
+    expect(tab).toContain("documentTabDirtyIndicator");
+  });
+});
+
+describe("DocumentTabBar tab element (#184)", () => {
+  it("renders each tab as a non-button element with role=tab (a nested close <button> would be invalid inside a <button>)", () => {
+    const markup = renderTabBar([
+      {
+        id: projectDocumentId,
+        title: "chapter-01.md",
+        isDirty: false,
+        isExternalMarkdownFile: false
+      }
+    ]);
+    const tab = tabMarkup(markup);
+    const tabTagName = tab.slice(1, tab.indexOf(" "));
+
+    expect(tabTagName).not.toBe("button");
+  });
+
+  it("keeps each tab keyboard-reachable via tabIndex", () => {
+    const markup = renderTabBar([
+      {
+        id: projectDocumentId,
+        title: "chapter-01.md",
+        isDirty: false,
+        isExternalMarkdownFile: false
+      }
+    ]);
+    const tab = tabMarkup(markup);
+
+    expect(tab).toContain('tabindex="0"');
+  });
+});
+
+describe("DocumentTabBar trailing slot (#184)", () => {
+  function tabs(): DocumentTab[] {
+    return [
+      {
+        id: projectDocumentId,
+        title: "chapter-01.md",
+        isDirty: false,
+        isExternalMarkdownFile: false
+      },
+      {
+        id: secondProjectDocumentId,
+        title: "chapter-02.md",
+        isDirty: true,
+        isExternalMarkdownFile: false
+      }
+    ];
+  }
+
+  it("always renders the trailing slot container, even when empty", () => {
+    const markup = renderTabBar(
+      [
+        {
+          id: projectDocumentId,
+          title: "chapter-01.md",
+          isDirty: false,
+          isExternalMarkdownFile: false
+        }
+      ],
+      { activeDocumentId: secondProjectDocumentId }
+    );
+
+    expect(markup).toContain("documentTabTrailing");
+  });
+
+  it("shows a close button, not the dirty indicator, on the active tab even when it is dirty", () => {
+    const markup = renderTabBar(tabs(), {
+      activeDocumentId: secondProjectDocumentId
+    });
+    const activeTab = tabMarkup(markup, 1);
+
+    expect(activeTab).toContain("documentTabCloseButton");
+    expect(activeTab).not.toContain("documentTabDirtyIndicator");
+  });
+
+  it("shows the dirty indicator, not a close button, on an inactive dirty tab", () => {
+    const markup = renderTabBar(tabs(), {
+      activeDocumentId: projectDocumentId
+    });
+    const inactiveDirtyTab = tabMarkup(markup, 1);
+
+    expect(inactiveDirtyTab).toContain("documentTabDirtyIndicator");
+    expect(inactiveDirtyTab).not.toContain("documentTabCloseButton");
+  });
+
+  it("shows neither a close button nor a dirty indicator on an inactive clean tab", () => {
+    const markup = renderTabBar(tabs(), {
+      activeDocumentId: secondProjectDocumentId
+    });
+    const inactiveCleanTab = tabMarkup(markup, 0);
+
+    expect(inactiveCleanTab).not.toContain("documentTabCloseButton");
+    expect(inactiveCleanTab).not.toContain("documentTabDirtyIndicator");
+  });
+
+  it("never renders a close button and a dirty indicator on the same tab", () => {
+    const markup = renderTabBar(tabs(), {
+      activeDocumentId: secondProjectDocumentId
+    });
+
+    for (let index = 0; index < tabs().length; index += 1) {
+      const tab = tabMarkup(markup, index);
+      const hasClose = tab.includes("documentTabCloseButton");
+      const hasDirty = tab.includes("documentTabDirtyIndicator");
+
+      expect(hasClose && hasDirty).toBe(false);
+    }
+  });
+});
+
+describe("DocumentTabBar close button (#184)", () => {
+  it("gives the close button an accessible label and tooltip", () => {
+    const markup = renderTabBar([
+      {
+        id: projectDocumentId,
+        title: "chapter-01.md",
+        isDirty: false,
+        isExternalMarkdownFile: false
+      }
+    ]);
+
+    expect(markup).toContain('aria-label="Close tab"');
+    expect(markup).toContain('title="Close tab"');
+  });
+
+  it("gives the close button the exact Japanese label when translated", () => {
+    const markup = renderTabBar(
+      [
+        {
+          id: projectDocumentId,
+          title: "chapter-01.md",
+          isDirty: false,
+          isExternalMarkdownFile: false
+        }
+      ],
+      { translate: realTranslateJa }
+    );
+
+    expect(markup).toContain('aria-label="\u30BF\u30D6\u3092\u9589\u3058\u308B"');
+  });
+
+  it("renders the close button as a real <button> element, keyboard reachable when visible", () => {
+    const markup = renderTabBar([
+      {
+        id: projectDocumentId,
+        title: "chapter-01.md",
+        isDirty: false,
+        isExternalMarkdownFile: false
+      }
+    ]);
+    const closeButtonIndex = markup.indexOf("documentTabCloseButton");
+    const beforeButton = markup.slice(0, closeButtonIndex);
+    const tagStart = beforeButton.lastIndexOf("<");
+
+    expect(markup.slice(tagStart, tagStart + 7)).toBe("<button");
+  });
+
+  it("uses the close-x Feather icon", () => {
+    const markup = renderTabBar([
+      {
+        id: projectDocumentId,
+        title: "chapter-01.md",
+        isDirty: false,
+        isExternalMarkdownFile: false
+      }
+    ]);
+
+    expect(markup).toContain("feather-x");
+  });
+});
+
+describe("DocumentTabBar dirty indicator (#184)", () => {
+  it("gives the dirty indicator a tooltip and accessible label indicating unsaved changes", () => {
+    const markup = renderTabBar(
+      [
+        {
+          id: projectDocumentId,
+          title: "chapter-01.md",
+          isDirty: false,
+          isExternalMarkdownFile: false
+        },
+        {
+          id: secondProjectDocumentId,
+          title: "chapter-02.md",
+          isDirty: true,
+          isExternalMarkdownFile: false
+        }
+      ],
+      { activeDocumentId: projectDocumentId }
+    );
+    const inactiveDirtyTab = tabMarkup(markup, 1);
+
+    expect(inactiveDirtyTab).toContain('aria-label="Unsaved"');
+    expect(inactiveDirtyTab).toContain('title="Unsaved"');
+  });
+
+  it("is non-interactive — not a button, no click handler markup, no tabindex", () => {
+    const markup = renderTabBar(
+      [
+        {
+          id: projectDocumentId,
+          title: "chapter-01.md",
+          isDirty: false,
+          isExternalMarkdownFile: false
+        },
+        {
+          id: secondProjectDocumentId,
+          title: "chapter-02.md",
+          isDirty: true,
+          isExternalMarkdownFile: false
+        }
+      ],
+      { activeDocumentId: projectDocumentId }
+    );
+    const inactiveDirtyTab = tabMarkup(markup, 1);
+    const indicatorIndex = inactiveDirtyTab.indexOf("documentTabDirtyIndicator");
+    const beforeIndicator = inactiveDirtyTab.slice(0, indicatorIndex);
+    const tagStart = beforeIndicator.lastIndexOf("<");
+    const indicatorOpenTag = inactiveDirtyTab.slice(
+      tagStart,
+      inactiveDirtyTab.indexOf(">", tagStart)
+    );
+
+    expect(inactiveDirtyTab.slice(tagStart, tagStart + 5)).toBe("<span");
+    expect(indicatorOpenTag).not.toContain("tabindex");
+  });
+
+  it("uses the edit-2 Feather icon", () => {
+    const markup = renderTabBar(
+      [
+        {
+          id: projectDocumentId,
+          title: "chapter-01.md",
+          isDirty: false,
+          isExternalMarkdownFile: false
+        },
+        {
+          id: secondProjectDocumentId,
+          title: "chapter-02.md",
+          isDirty: true,
+          isExternalMarkdownFile: false
+        }
+      ],
+      { activeDocumentId: projectDocumentId }
+    );
+
+    expect(markup).toContain("feather-edit-2");
+  });
+});
+
+describe("DocumentTabBar tab title reflects unsaved state (#184 follow-up)", () => {
+  // The dirty indicator's own tooltip can't reliably be hovered to (the
+  // close button replaces it on hover), so the tab's own title/accessible
+  // name carries the unsaved state instead.
+  it("clean normal tab: plain file name, no unsaved suffix", () => {
+    const markup = renderTabBar([
+      {
+        id: projectDocumentId,
+        title: "chapter-01.md",
+        isDirty: false,
+        isExternalMarkdownFile: false
+      }
+    ]);
+    const tab = tabMarkup(markup);
+    const tabTagEnd = tab.indexOf(">");
+    const tabOpenTag = tab.slice(0, tabTagEnd);
+
+    expect(tabOpenTag).toContain('title="chapter-01.md"');
+  });
+
+  it("dirty normal tab: file name — Unsaved", () => {
+    const markup = renderTabBar([
+      {
+        id: projectDocumentId,
+        title: "chapter-01.md",
+        isDirty: true,
+        isExternalMarkdownFile: false
+      }
+    ]);
+    const tab = tabMarkup(markup);
+    const tabTagEnd = tab.indexOf(">");
+    const tabOpenTag = tab.slice(0, tabTagEnd);
+
+    expect(tabOpenTag).toContain('title="chapter-01.md — Unsaved"');
+  });
+
+  it("external clean tab: file name — external warning, no unsaved suffix", () => {
+    const markup = renderTabBar([
+      {
+        id: externalFileId,
+        title: "notes.md",
+        isDirty: false,
+        isExternalMarkdownFile: true
+      }
+    ]);
+    const tab = tabMarkup(markup);
+    const tabTagEnd = tab.indexOf(">");
+    const tabOpenTag = tab.slice(0, tabTagEnd);
+
+    expect(tabOpenTag).toContain(
+      'title="notes.md — This file is outside the project"'
+    );
+  });
+
+  it("external dirty tab: file name — external warning — Unsaved", () => {
     const markup = renderTabBar([
       {
         id: externalFileId,
@@ -195,8 +562,33 @@ describe("DocumentTabBar", () => {
         isExternalMarkdownFile: true
       }
     ]);
+    const tab = tabMarkup(markup);
+    const tabTagEnd = tab.indexOf(">");
+    const tabOpenTag = tab.slice(0, tabTagEnd);
 
-    expect(markup).toContain("documentTabExternalIcon");
-    expect(markup).toContain("documentTabDirtyIndicator");
+    expect(tabOpenTag).toContain(
+      'title="notes.md — This file is outside the project — Unsaved"'
+    );
+  });
+
+  it("dirty normal tab in Japanese: file name — 未保存", () => {
+    const markup = renderTabBar(
+      [
+        {
+          id: projectDocumentId,
+          title: "chapter-01.md",
+          isDirty: true,
+          isExternalMarkdownFile: false
+        }
+      ],
+      { translate: realTranslateJa }
+    );
+    const tab = tabMarkup(markup);
+    const tabTagEnd = tab.indexOf(">");
+    const tabOpenTag = tab.slice(0, tabTagEnd);
+
+    expect(tabOpenTag).toContain(
+      'title="chapter-01.md — 未保存"'
+    );
   });
 });

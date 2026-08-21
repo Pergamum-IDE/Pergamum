@@ -34,10 +34,17 @@ function allSourceText(): string {
  * trap, scoped to the dialog's own subtree while it is open — not a
  * document-level/global shortcut listener, and unrelated to the Markdown
  * editor's native-edit-command delegation this guard otherwise protects.
+ *
+ * DocumentTabBar.tsx (#184) is the same category of exception again: each
+ * tab's `onKeyDown` implements Enter/Space activation for its own
+ * `role="tab"` element (a `<div>`, not a native `<button>`, since a nested
+ * close `<button>` cannot live inside a `<button>`), scoped to that one
+ * tab — not a document-level/global shortcut listener.
  */
 const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
-  "ConfirmDialog.tsx"
+  "ConfirmDialog.tsx",
+  "DocumentTabBar.tsx"
 ]);
 
 function allSourceTextExcludingCommandPalette(): string {

@@ -285,6 +285,34 @@ export function openOrActivateEditor(
   };
 }
 
+/**
+ * Resolves which editor a close request targets (#184). An explicit
+ * `editorId` must refer to a currently open document — a stale/unrelated ID
+ * resolves to `null` rather than silently falling back to the active editor,
+ * so a close request never closes an editor other than the one asked for.
+ * Omitting `editorId` targets the active editor, which always exists by
+ * construction (`OpenDocumentsState` is never empty).
+ */
+export function resolveCloseTargetEditorId(
+  state: OpenDocumentsState,
+  editorId?: EditorId
+): EditorId | null {
+  if (!editorId) {
+    return state.activeDocumentId;
+  }
+
+  return hasOpenDocument(state, editorId) ? editorId : null;
+}
+
+export function isOpenDocumentDirty(
+  state: OpenDocumentsState,
+  editorId: EditorId
+): boolean {
+  const document = findOpenDocument(state, editorId);
+
+  return document ? isCurrentEditorDirty(document.editor) : false;
+}
+
 export function closeOpenEditor(
   state: OpenDocumentsState,
   editorId: EditorId

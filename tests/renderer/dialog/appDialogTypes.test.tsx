@@ -1,9 +1,19 @@
 import { describe, expect, it } from "vitest";
 import {
   AppDialogError,
+  confirmDialogDismissesOnBackdropClick,
   getDialogActionOrder,
   type AppConfirmDialogOptions
 } from "../../../src/renderer/dialog/appDialogTypes";
+
+function baseOptions(): AppConfirmDialogOptions {
+  return {
+    title: "Title",
+    message: { kind: "plainText", text: "Message" },
+    icon: null,
+    clipboardText: null
+  };
+}
 
 describe("getDialogActionOrder (#182 D-11)", () => {
   it('returns "confirmCancel" for windows', () => {
@@ -29,6 +39,30 @@ describe("AppDialogError (#182 D-14)", () => {
 
     expect(error.kind).toBe("dialogAlreadyOpen");
     expect(error).toBeInstanceOf(Error);
+  });
+});
+
+describe("confirmDialogDismissesOnBackdropClick (#184 follow-up)", () => {
+  it("defaults to true when dismissOnBackdropClick is omitted (existing call sites keep their current behavior)", () => {
+    expect(confirmDialogDismissesOnBackdropClick(baseOptions())).toBe(true);
+  });
+
+  it("is true when dismissOnBackdropClick is explicitly true", () => {
+    expect(
+      confirmDialogDismissesOnBackdropClick({
+        ...baseOptions(),
+        dismissOnBackdropClick: true
+      })
+    ).toBe(true);
+  });
+
+  it("is false when dismissOnBackdropClick is explicitly false", () => {
+    expect(
+      confirmDialogDismissesOnBackdropClick({
+        ...baseOptions(),
+        dismissOnBackdropClick: false
+      })
+    ).toBe(false);
   });
 });
 

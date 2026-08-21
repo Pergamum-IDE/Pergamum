@@ -77,7 +77,8 @@ describe("application menu", () => {
       applicationCommandIds.openProject,
       editorCommandIds.openMarkdownDocument,
       editorCommandIds.saveDocument,
-      applicationCommandIds.toggleRecentProjects
+      applicationCommandIds.toggleRecentProjects,
+      editorCommandIds.close
     ]);
   });
 
@@ -86,7 +87,8 @@ describe("application menu", () => {
       applicationCommandIds.openProject,
       editorCommandIds.openMarkdownDocument,
       editorCommandIds.saveDocument,
-      applicationCommandIds.toggleRecentProjects
+      applicationCommandIds.toggleRecentProjects,
+      editorCommandIds.close
     ]) {
       expect(applicationMenuCommandIds).toContain(commandId);
     }
@@ -295,6 +297,45 @@ describe("application menu", () => {
       APPLICATION_MENU_CHANNELS.command,
       commandPaletteCommandIds.open
     );
+  });
+
+  it("binds Ctrl+W to editor.close as a hidden item on Windows and Linux (#184)", () => {
+    for (const platform of ["win32", "linux"] as const) {
+      const fileItems = fileMenuItems(platform);
+      const closeItem = fileItems.find(
+        (candidate) => candidate.accelerator === "CommandOrControl+W"
+      );
+
+      expect(closeItem).toBeTruthy();
+      expect(closeItem?.visible).toBe(false);
+      expect(closeItem?.acceleratorWorksWhenHidden).toBe(true);
+
+      const { window, send } = menuWindowMock();
+
+      fileMenuItems(platform, { getMainWindow: () => window })
+        .find((candidate) => candidate.accelerator === "CommandOrControl+W")
+        ?.click?.({} as never, null as never, {} as never);
+
+      expect(send).toHaveBeenCalledWith(
+        APPLICATION_MENU_CHANNELS.command,
+        editorCommandIds.close
+      );
+    }
+  });
+
+  it("does not bind CommandOrControl+W on macOS — it would collide with the native role:close accelerator (#184)", () => {
+    const fileItems = fileMenuItems("darwin");
+
+    expect(
+      fileItems.some((item) => item.accelerator === "CommandOrControl+W")
+    ).toBe(false);
+    expect(fileItems.some((item) => item.role === "close")).toBe(true);
+  });
+
+  it("does not bind Ctrl+F4 anywhere in the menu", () => {
+    const source = readFileSync("src/main/menu.ts", "utf8");
+
+    expect(source).not.toContain("F4");
   });
 });
 

@@ -1,4 +1,5 @@
 import { defineCommandId } from "./commandRegistry";
+import type { EditorId } from "./editorId";
 
 export const applicationCommandIds = {
   openProject: defineCommandId("workspace.project.open"),
@@ -12,6 +13,9 @@ export const commandPaletteCommandIds = {
 export const editorCommandIds = {
   openMarkdownDocument: defineCommandId("editor.document.markdown.open"),
   saveDocument: defineCommandId("editor.document.save"),
+  close: defineCommandId<readonly [{ editorId?: EditorId }?], void>(
+    "editor.close"
+  ),
   cutSelection: defineCommandId("editor.selection.cut"),
   copySelection: defineCommandId("editor.selection.copy"),
   pasteSelection: defineCommandId("editor.selection.paste"),
@@ -41,6 +45,7 @@ export const applicationMenuCommandIds = [
   applicationCommandIds.openProject,
   editorCommandIds.openMarkdownDocument,
   editorCommandIds.saveDocument,
+  editorCommandIds.close,
   applicationCommandIds.toggleRecentProjects,
   commandPaletteCommandIds.open
 ] as const;

@@ -7,6 +7,7 @@ import {
 } from "react";
 import type { Translate } from "../../shared/i18n";
 import {
+  confirmDialogDismissesOnBackdropClick,
   confirmDialogTone,
   type AppConfirmDialogOptions,
   type AppConfirmDialogResult,
@@ -182,7 +183,12 @@ export function ConfirmDialog({
   return (
     <div
       className="appDialogBackdrop"
-      onClick={() => handleConfirmDialogBackdropClick(onResult)}
+      onClick={() =>
+        handleConfirmDialogBackdropClick(
+          onResult,
+          confirmDialogDismissesOnBackdropClick(options)
+        )
+      }
     >
       <div
         ref={dialogRef}

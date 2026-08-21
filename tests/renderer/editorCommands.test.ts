@@ -11,16 +11,24 @@ import {
   registerEditorCommands,
   saveDocumentCommandWhen
 } from "../../src/renderer/editorCommands";
+import {
+  createProjectDocumentEditorId,
+  type EditorId
+} from "../../src/shared/editorId";
 
 const titles = {
   openMarkdownDocument: "Open Markdown file",
   saveDocument: "Save current editor",
+  closeEditor: "Close current editor",
   cutSelection: "Cut",
   copySelection: "Copy",
   pasteSelection: "Paste",
   selectAllSelection: "Select All"
 };
 const executionOptions = { source: "toolbar" } as const;
+const someEditorId: EditorId = createProjectDocumentEditorId("chapter-01.md", {
+  rootPath: "C:\\Novel"
+});
 
 function registerEditorCommandSet(
   registry: CommandRegistry,
@@ -28,6 +36,8 @@ function registerEditorCommandSet(
     openMarkdownDocument: () => void | Promise<void>;
     saveCurrentDocument: () => void | Promise<void>;
     canSaveCurrentDocument: () => boolean;
+    closeEditor: (editorId?: EditorId) => void | Promise<void>;
+    canCloseEditor: (editorId?: EditorId) => boolean;
     delegateNativeEditCommand: (
       commandId: (typeof editCommandIds)[number]
     ) => void | Promise<void>;
@@ -42,6 +52,8 @@ function registerEditorCommandSet(
       openMarkdownDocument: () => undefined,
       saveCurrentDocument: () => undefined,
       canSaveCurrentDocument: () => true,
+      closeEditor: () => undefined,
+      canCloseEditor: () => true,
       delegateNativeEditCommand: () => undefined,
       canDelegateNativeEditCommand: () => true,
       ...overrides
@@ -67,6 +79,7 @@ describe("editor commands", () => {
     expect(registry.list().map((command) => command.id)).toEqual([
       "editor.document.markdown.open",
       "editor.document.save",
+      "editor.close",
       "editor.selection.cut",
       "editor.selection.copy",
       "editor.selection.paste",
@@ -218,11 +231,67 @@ describe("editor commands", () => {
     expect(createEditorCommandTitles(translate)).toEqual({
       openMarkdownDocument: "translated:command.editor.document.markdown.open",
       saveDocument: "translated:command.editor.document.save",
+      closeEditor: "translated:command.editor.document.close",
       cutSelection: "translated:command.editor.selection.cut",
       copySelection: "translated:command.editor.selection.copy",
       pasteSelection: "translated:command.editor.selection.paste",
       selectAllSelection: "translated:command.editor.selection.selectAll"
     });
+  });
+
+  it("editor.close forwards an explicit editorId to the controller (#184)", async () => {
+    const registry = new CommandRegistry();
+    const closeEditor = vi.fn();
+
+    registerEditorCommandSet(registry, { closeEditor });
+
+    await registry.execute(editorCommandIds.close, executionOptions, {
+      editorId: someEditorId
+    });
+
+    expect(closeEditor).toHaveBeenCalledWith(someEditorId);
+    expect(closeEditor).toHaveBeenCalledTimes(1);
+  });
+
+  it("editor.close without editorId (and without any args, e.g. from Ctrl+W) passes undefined so the controller defaults to the active editor (#184)", async () => {
+    const registry = new CommandRegistry();
+    const closeEditor = vi.fn();
+
+    registerEditorCommandSet(registry, { closeEditor });
+
+    await registry.execute(editorCommandIds.close, executionOptions);
+
+    expect(closeEditor).toHaveBeenCalledWith(undefined);
+    expect(closeEditor).toHaveBeenCalledTimes(1);
+  });
+
+  it("editor.close reports enablement from the controller's canCloseEditor, per-editorId", () => {
+    const registry = new CommandRegistry();
+    const canCloseEditor = vi.fn(
+      (editorId?: EditorId) => editorId === undefined
+    );
+
+    registerEditorCommandSet(registry, { canCloseEditor });
+
+    expect(
+      registry.isEnabled(editorCommandIds.close, { editorId: someEditorId })
+    ).toBe(false);
+    expect(registry.isEnabled(editorCommandIds.close)).toBe(true);
+  });
+
+  it("editor.close execution is blocked (command.ignored policy, via CommandDisabledError) when canCloseEditor reports no resolvable target", async () => {
+    const registry = new CommandRegistry();
+    const closeEditor = vi.fn();
+
+    registerEditorCommandSet(registry, {
+      closeEditor,
+      canCloseEditor: () => false
+    });
+
+    await expect(
+      registry.execute(editorCommandIds.close, executionOptions)
+    ).rejects.toBeInstanceOf(CommandDisabledError);
+    expect(closeEditor).not.toHaveBeenCalled();
   });
 
   it("does not introduce toolbar-prefixed Command IDs", () => {

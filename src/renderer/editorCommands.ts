@@ -6,6 +6,7 @@ import {
 } from "../shared/commandIds";
 import type { CommandEnablementExpression } from "../shared/commandEnablement";
 import type { Translate } from "../shared/i18n";
+import type { EditorId } from "../shared/editorId";
 
 export const saveDocumentCommandWhen: CommandEnablementExpression = {
   allOf: [{ key: "editor.hasDocument" }, { key: "editor.isDirty" }]
@@ -17,6 +18,8 @@ export interface EditorCommandController {
   openMarkdownDocument(): void | Promise<void>;
   saveCurrentDocument(): void | Promise<void>;
   canSaveCurrentDocument(): boolean;
+  closeEditor(editorId?: EditorId): void | Promise<void>;
+  canCloseEditor(editorId?: EditorId): boolean;
   delegateNativeEditCommand(commandId: EditCommandId): void | Promise<void>;
   canDelegateNativeEditCommand(commandId: EditCommandId): boolean;
 }
@@ -24,6 +27,7 @@ export interface EditorCommandController {
 export interface EditorCommandTitles {
   openMarkdownDocument: string;
   saveDocument: string;
+  closeEditor: string;
   cutSelection: string;
   copySelection: string;
   pasteSelection: string;
@@ -38,6 +42,7 @@ export function createEditorCommandTitles(
   return {
     openMarkdownDocument: translate("command.editor.document.markdown.open"),
     saveDocument: translate("command.editor.document.save"),
+    closeEditor: translate("command.editor.document.close"),
     cutSelection: translate("command.editor.selection.cut"),
     copySelection: translate("command.editor.selection.copy"),
     pasteSelection: translate("command.editor.selection.paste"),
@@ -81,6 +86,20 @@ export function createEditorCommands(
       isEnabled: () => controller.canSaveCurrentDocument(),
       when: saveDocumentCommandWhen
     },
+    {
+      id: editorCommandIds.close,
+      title: titles.closeEditor,
+      execute: (options?: { editorId?: EditorId }) =>
+        controller.closeEditor(options?.editorId),
+      isEnabled: (options?: { editorId?: EditorId }) =>
+        controller.canCloseEditor(options?.editorId)
+      // `close` takes an optional `{ editorId? }` arg, unlike the other
+      // zero-arg `EditorCommand`s in this array — cast the same way
+      // CommandRegistry itself stores heterogeneous commands (see
+      // `RegisteredCommand` in commandRegistry.ts). `registry.execute`
+      // still infers the real arg type from `editorCommandIds.close`
+      // itself, not from this array's element type, so this is safe.
+    } as unknown as EditorCommand,
     editCommand(editCommandIds[0], titles.cutSelection, controller),
     editCommand(editCommandIds[1], titles.copySelection, controller),
     editCommand(editCommandIds[2], titles.pasteSelection, controller),
