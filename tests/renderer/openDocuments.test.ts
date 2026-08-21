@@ -19,9 +19,11 @@ import {
   createInitialOpenDocumentsState,
   createOpenDocumentsStateWithDocument,
   documentTabs,
+  isOpenDocumentDirty,
   openOrActivateEditor,
   openOrActivateDocument,
   replaceOpenDocument,
+  resolveCloseTargetEditorId,
   updateActiveOpenDocument,
   updateActiveOpenEditor
 } from "../../src/renderer/openDocuments";
@@ -31,7 +33,8 @@ import {
   createProjectDocumentEditorId,
   createUntitledEditorId,
   editorIdEquals,
-  type ActiveProjectContext
+  type ActiveProjectContext,
+  type EditorId
 } from "../../src/shared/editorId";
 import type { PergamumProject, ProjectDocument } from "../../src/shared/api";
 import type { GlossaryEntry } from "../../src/shared/glossary";
@@ -602,5 +605,85 @@ describe("OpenDocumentsState", () => {
       editorIdEquals(nextState.activeDocumentId, createUntitledEditorId(6))
     ).toBe(true);
     expect(nextState.nextUntitledId).toBe(7);
+  });
+});
+
+describe("resolveCloseTargetEditorId (#184)", () => {
+  it("resolves to the active editor when no editorId is given", () => {
+    const state = createInitialOpenDocumentsState();
+
+    expect(
+      editorIdEquals(
+        resolveCloseTargetEditorId(state, undefined) as EditorId,
+        state.activeDocumentId
+      )
+    ).toBe(true);
+  });
+
+  it("resolves an explicit editorId that is open, even if it is not active", () => {
+    const projectDocument = createProjectDocument(
+      firstProjectDocument,
+      "content"
+    );
+    let state = createOpenDocumentsStateWithDocument(
+      projectDocument,
+      projectContext
+    );
+    state = openOrActivateDocument(
+      state,
+      createProjectDocument(secondProjectDocument, "content"),
+      projectContext
+    );
+    const firstEditorId = createProjectDocumentEditorId(
+      firstProjectDocument.relativePath,
+      projectContext
+    );
+
+    expect(editorIdEquals(state.activeDocumentId, firstEditorId)).toBe(false);
+    expect(
+      editorIdEquals(
+        resolveCloseTargetEditorId(state, firstEditorId) as EditorId,
+        firstEditorId
+      )
+    ).toBe(true);
+  });
+
+  it("resolves to null for an explicit editorId that is not open (never falls back to the active editor)", () => {
+    const state = createInitialOpenDocumentsState();
+    const unrelatedEditorId = createProjectDocumentEditorId(
+      "not-open.md",
+      projectContext
+    );
+
+    expect(resolveCloseTargetEditorId(state, unrelatedEditorId)).toBeNull();
+  });
+});
+
+describe("isOpenDocumentDirty (#184)", () => {
+  it("is false for a clean document", () => {
+    const state = createInitialOpenDocumentsState();
+
+    expect(isOpenDocumentDirty(state, state.activeDocumentId)).toBe(false);
+  });
+
+  it("is true once the document's content has changed", () => {
+    const initialState = createInitialOpenDocumentsState();
+    const dirtyState = updateActiveOpenDocument(initialState, (document) =>
+      updateCurrentDocumentContent(document, "changed")
+    );
+
+    expect(isOpenDocumentDirty(dirtyState, dirtyState.activeDocumentId)).toBe(
+      true
+    );
+  });
+
+  it("is false for an editorId that is not open", () => {
+    const state = createInitialOpenDocumentsState();
+    const unrelatedEditorId = createProjectDocumentEditorId(
+      "not-open.md",
+      projectContext
+    );
+
+    expect(isOpenDocumentDirty(state, unrelatedEditorId)).toBe(false);
   });
 });

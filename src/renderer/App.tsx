@@ -84,6 +84,18 @@ import {
   type CurrentEditor
 } from "./currentEditor";
 import { DocumentTabBar } from "./DocumentTabBar";
+import { ConfirmDialog } from "./dialog/ConfirmDialog";
+import { navigatorClipboardAdapter } from "./dialog/clipboardAdapter";
+import {
+  DialogController,
+  type DialogControllerPendingRequest
+} from "./dialog/dialogController";
+import {
+  getDialogActionOrder,
+  type AppConfirmDialogOptions,
+  type AppConfirmDialogResult
+} from "./dialog/appDialogTypes";
+import { runEditorCloseFlow } from "./documentTabCloseFlow";
 import {
   durationSincePerformanceMark,
   logRendererDebugEvent,
@@ -181,6 +193,7 @@ import {
   isOnlyInitialUntitledDocument,
   openOrActivateEditor,
   replaceOpenDocument,
+  resolveCloseTargetEditorId,
   updateActiveOpenDocument,
   updateActiveOpenEditor,
   updateOpenEditor,
@@ -275,6 +288,50 @@ export function App(): JSX.Element {
   const [project, setProject] = useState<PergamumProject | null>(null);
   const [openDocumentsState, setOpenDocumentsState] =
     useState<OpenDocumentsState>(createInitialOpenDocumentsState);
+  /**
+   * Inlines what `DialogProvider`/`useDialog` (#182) do internally rather
+   * than mounting that provider: it needs a `translate` bound to
+   * `displayLanguage`, which only exists once `useApplicationSettings()`
+   * below has run, so `App` itself can't be a descendant of its own
+   * provider. `DialogController` + `ConfirmDialog` are the reusable pieces
+   * this actually needs (#184).
+   */
+  const dialogControllerRef = useRef<DialogController | null>(null);
+
+  if (!dialogControllerRef.current) {
+    dialogControllerRef.current = new DialogController();
+  }
+
+  const dialogController = dialogControllerRef.current;
+  const dialogOpenerRef = useRef<Element | null>(null);
+  const [pendingDialogRequest, setPendingDialogRequest] =
+    useState<DialogControllerPendingRequest | null>(() =>
+      dialogController.getPendingRequest()
+    );
+
+  useEffect(
+    () =>
+      dialogController.subscribe(() =>
+        setPendingDialogRequest(dialogController.getPendingRequest())
+      ),
+    [dialogController]
+  );
+  useEffect(() => () => dialogController.dispose(), [dialogController]);
+
+  const dialogActionOrder = useMemo(
+    () => getDialogActionOrder(window.pergamum.platform),
+    []
+  );
+
+  function confirmDialog(
+    options: AppConfirmDialogOptions
+  ): Promise<AppConfirmDialogResult> {
+    if (typeof document !== "undefined") {
+      dialogOpenerRef.current = document.activeElement;
+    }
+
+    return dialogController.confirm(options);
+  }
   const [sidebarMode, setSidebarMode] = useState(defaultSidebarMode);
   const [layout, setLayout] = useState<WorkbenchLayoutState>(
     createInitialWorkbenchLayoutState
@@ -332,6 +389,12 @@ export function App(): JSX.Element {
   );
   const saveCurrentDocumentCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
+  );
+  const closeEditorCommandRef = useRef<
+    (editorId?: EditorId) => Promise<void>
+  >(() => Promise.resolve());
+  const canCloseEditorCommandRef = useRef<(editorId?: EditorId) => boolean>(
+    () => true
   );
   const nativeEditCommandContextRef =
     useRef<NativeEditCommandContext | null>(null);
@@ -563,6 +626,9 @@ export function App(): JSX.Element {
         openMarkdownDocument: () => openMarkdownDocumentCommandRef.current(),
         saveCurrentDocument: () => saveCurrentDocumentCommandRef.current(),
         canSaveCurrentDocument: () => canSaveCurrentDocumentCommandRef.current(),
+        closeEditor: (editorId) => closeEditorCommandRef.current(editorId),
+        canCloseEditor: (editorId) =>
+          canCloseEditorCommandRef.current(editorId),
         delegateNativeEditCommand: (commandId) =>
           delegateNativeEditCommand(commandId),
         canDelegateNativeEditCommand: () => true
@@ -1038,6 +1104,24 @@ export function App(): JSX.Element {
 
   function activateDocument(documentId: EditorId): void {
     openEditorFromUi(documentId);
+  }
+
+  function canCloseEditorNow(editorId?: EditorId): boolean {
+    return resolveCloseTargetEditorId(openDocumentsState, editorId) !== null;
+  }
+
+  async function closeEditorWithConfirmation(
+    editorId?: EditorId
+  ): Promise<void> {
+    await runEditorCloseFlow(editorId, {
+      state: openDocumentsState,
+      translate,
+      confirmDialog,
+      onClose: (targetId) => {
+        editorNavigation.invalidateEditor(targetId);
+        setOpenDocumentsState((state) => closeOpenEditor(state, targetId));
+      }
+    });
   }
 
   function handleActivityBarModeClick(mode: SidebarMode): void {
@@ -2388,6 +2472,8 @@ export function App(): JSX.Element {
   openProjectCommandRef.current = openProject;
   openMarkdownDocumentCommandRef.current = openFile;
   saveCurrentDocumentCommandRef.current = saveFile;
+  closeEditorCommandRef.current = closeEditorWithConfirmation;
+  canCloseEditorCommandRef.current = canCloseEditorNow;
   toggleRecentProjectsCommandRef.current = () => {
     setIsRecentProjectsOpen((isOpen) => !isOpen);
   };
@@ -2658,6 +2744,13 @@ export function App(): JSX.Element {
                   activeDocumentId={openDocumentsState.activeDocumentId}
                   translate={translate}
                   onSelectDocument={activateDocument}
+                  onCloseDocument={(documentId) =>
+                    executeUiCommand(
+                      editorCommandIds.close,
+                      { source: "documentTabBar" },
+                      { editorId: documentId }
+                    )
+                  }
                   isUtilityWindowOpen={layout.utilityWindow.open}
                   onToggleUtilityWindow={() =>
                     executeUiCommand(utilityWindowCommandIds.toggle, {
@@ -2846,6 +2939,17 @@ export function App(): JSX.Element {
           }}
           onClose={() => setIsCommandPaletteOpen(false)}
           lineJumpEditorSnapshot={lineJumpEditorSnapshot}
+        />
+      ) : null}
+
+      {pendingDialogRequest ? (
+        <ConfirmDialog
+          options={pendingDialogRequest.options}
+          actionOrder={dialogActionOrder}
+          translate={translate}
+          clipboardAdapter={navigatorClipboardAdapter}
+          opener={dialogOpenerRef.current}
+          onResult={(result) => dialogController.resolve(result)}
         />
       ) : null}
     </main>

@@ -1,13 +1,22 @@
 import type { AppConfirmDialogResult } from "./appDialogTypes";
 
 /**
- * Backdrop click behavior is explicit (#182 D-17): it resolves `"cancel"`.
+ * Backdrop click behavior is explicit (#182 D-17): by default it resolves
+ * `"cancel"`. `dismissOnBackdropClick: false` (#184 follow-up) disables
+ * this entirely — the click does nothing, so an accidental backdrop click
+ * can't dismiss a dialog where that would be confusing (e.g. the dirty-close
+ * confirmation). `Escape` and the Cancel button are unaffected either way.
  * Extracted as a standalone function so it can be unit tested without
  * dispatching a real DOM click event.
  */
 export function handleConfirmDialogBackdropClick(
-  onResult: (result: AppConfirmDialogResult) => void
+  onResult: (result: AppConfirmDialogResult) => void,
+  dismissOnBackdropClick: boolean
 ): void {
+  if (!dismissOnBackdropClick) {
+    return;
+  }
+
   onResult("cancel");
 }
 

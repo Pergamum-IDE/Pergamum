@@ -457,3 +457,33 @@ describe("ConfirmDialog backdrop (#182 D-17)", () => {
     );
   });
 });
+
+describe("ConfirmDialog backdrop dismissal wiring (#184 follow-up, source check)", () => {
+  it("resolves the backdrop click handler's dismiss flag from confirmDialogDismissesOnBackdropClick(options), not a hardcoded value", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync("src/renderer/dialog/ConfirmDialog.tsx", "utf8");
+
+    expect(source).toContain("confirmDialogDismissesOnBackdropClick(options)");
+  });
+});
+
+describe("ConfirmDialog button accelerators (#184 follow-up)", () => {
+  it("does not wire accessKey (or any other per-button accelerator) onto dialog buttons (source check)", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync("src/renderer/dialog/ConfirmDialog.tsx", "utf8");
+
+    expect(source).not.toContain("accessKey");
+  });
+
+  it("does not add mnemonic markers such as (&S) to the dirty-close dialog's translated button labels", () => {
+    const mnemonicPattern = /\(&[A-Za-z]\)/;
+
+    for (const translate of [translateEn, translateJa]) {
+      expect(translate("dialog.dirtyClose.discardAndClose")).not.toMatch(
+        mnemonicPattern
+      );
+      expect(translate("common.cancel")).not.toMatch(mnemonicPattern);
+      expect(translate("common.ok")).not.toMatch(mnemonicPattern);
+    }
+  });
+});

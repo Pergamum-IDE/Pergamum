@@ -486,6 +486,7 @@ export const knownDebugLogCommandIds = [
   applicationCommandIds.openProject,
   editorCommandIds.openMarkdownDocument,
   editorCommandIds.saveDocument,
+  editorCommandIds.close,
   applicationCommandIds.toggleRecentProjects,
   commandPaletteCommandIds.open,
   ...editCommandIds,

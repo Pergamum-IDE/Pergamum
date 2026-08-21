@@ -92,6 +92,32 @@ function macApplicationMenu(language: Language): MenuItemConstructorOptions {
   };
 }
 
+/**
+ * Hidden, non-mac-only accelerator for `editor.close` (#184). macOS already
+ * binds `Cmd+W` to the native `role: "close"` item below (Electron assigns
+ * that role's platform-default accelerator automatically), so binding
+ * `CommandOrControl+W` there too would collide with it — Mac-specific
+ * shortcut design for that collision is explicitly out of scope for #184,
+ * so this item is Windows/Linux only for now.
+ */
+function editorCloseWindowsLinuxMenuItem(
+  options: ApplicationMenuOptions
+): MenuItemConstructorOptions {
+  return {
+    label: "Close Tab (Ctrl+W)",
+    accelerator: "CommandOrControl+W",
+    visible: false,
+    acceleratorWorksWhenHidden: true,
+    click: () => {
+      sendApplicationMenuCommand(
+        options.getMainWindow,
+        editorCommandIds.close,
+        options.debugLogger
+      );
+    }
+  };
+}
+
 function fileMenu(
   language: Language,
   platform: NodeJS.Platform,
@@ -139,6 +165,7 @@ function fileMenu(
           ]
         : [
             ...commandItems,
+            editorCloseWindowsLinuxMenuItem(options),
             { type: "separator" },
             roleItem("quit", language, "menu.quit", { appName })
           ]

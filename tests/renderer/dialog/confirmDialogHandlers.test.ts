@@ -4,14 +4,22 @@ import {
   handleConfirmDialogKeyDown
 } from "../../../src/renderer/dialog/confirmDialogHandlers";
 
-describe("handleConfirmDialogBackdropClick (#182 D-17)", () => {
-  it('resolves "cancel"', () => {
+describe("handleConfirmDialogBackdropClick (#182 D-17 / #184 follow-up)", () => {
+  it('resolves "cancel" when dismissOnBackdropClick is true', () => {
     const onResult = vi.fn();
 
-    handleConfirmDialogBackdropClick(onResult);
+    handleConfirmDialogBackdropClick(onResult, true);
 
     expect(onResult).toHaveBeenCalledWith("cancel");
     expect(onResult).toHaveBeenCalledTimes(1);
+  });
+
+  it("does not call onResult when dismissOnBackdropClick is false", () => {
+    const onResult = vi.fn();
+
+    handleConfirmDialogBackdropClick(onResult, false);
+
+    expect(onResult).not.toHaveBeenCalled();
   });
 });
 

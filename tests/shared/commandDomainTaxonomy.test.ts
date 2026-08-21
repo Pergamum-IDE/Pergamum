@@ -53,12 +53,15 @@ function buildCoreCommandRegistry(): CommandRegistry {
       openMarkdownDocument: () => undefined,
       saveCurrentDocument: () => undefined,
       canSaveCurrentDocument: () => true,
+      closeEditor: () => undefined,
+      canCloseEditor: () => true,
       delegateNativeEditCommand: () => undefined,
       canDelegateNativeEditCommand: () => true
     },
     {
       openMarkdownDocument: "Open Markdown File",
       saveDocument: "Save",
+      closeEditor: "Close current editor",
       cutSelection: "Cut",
       copySelection: "Copy",
       pasteSelection: "Paste",
