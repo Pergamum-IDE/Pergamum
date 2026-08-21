@@ -73,11 +73,13 @@ export class AppDialogError extends Error {
 export type AppDialogActionOrder = "confirmCancel" | "cancelConfirm";
 
 /**
- * Windows/Linux users expect the affirmative action on the left; macOS-style
- * convention places it on the right. `macos` is resolved the same as
- * `other` today but is kept as its own `AppPlatform` value (not collapsed
- * into `other`) so future macOS-specific handling doesn't require widening
- * this closed set again.
+ * DOM/action order follows platform convention: Windows/Linux order the
+ * affirmative action before cancel, while macOS-style convention orders
+ * cancel before confirm. Visual placement is resolved by CSS and the
+ * effective writing direction, so RTL support must not reverse this array in
+ * JS. `macos` is resolved the same as `other` today but is kept as its own
+ * `AppPlatform` value (not collapsed into `other`) so future macOS-specific
+ * handling doesn't require widening this closed set again.
  */
 export function getDialogActionOrder(
   platform: AppPlatform

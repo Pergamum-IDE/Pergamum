@@ -2043,9 +2043,9 @@ button:active {
 .appDialogFooter {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 12px;
-  padding: 12px 16px;
+  padding-block: 12px;
+  padding-inline: 16px;
   border-top: 1px solid var(--app-dialog-border);
 }
 
@@ -2054,6 +2054,7 @@ button:active {
   align-items: center;
   gap: 8px;
   min-width: 0;
+  text-align: start;
 }
 
 .appDialogCopyButton {
@@ -2087,11 +2088,13 @@ button:active {
 .appDialogActions {
   display: flex;
   gap: 8px;
+  margin-inline-start: auto;
   flex-shrink: 0;
 }
 
 .appDialogButton {
-  padding: 6px 14px;
+  padding-block: 6px;
+  padding-inline: 14px;
   border-radius: 4px;
   border: 1px solid var(--app-dialog-button-border);
   background: var(--app-dialog-button-background);
