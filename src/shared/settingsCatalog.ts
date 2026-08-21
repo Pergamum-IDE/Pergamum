@@ -138,6 +138,16 @@ export type SettingCatalogEntry =
   | BooleanSettingEntry;
 
 // ---------------------------------------------------------------------------
+// Cross-module type imports
+// ---------------------------------------------------------------------------
+
+// #174: workbench.language's enumValues/defaultValue are catalog-owned
+// literals, but they must stay in lockstep with the pre-existing Language
+// type/defaultLanguage constant (src/shared/i18n) rather than drift as a
+// second, independently-maintained source of truth.
+import { defaultLanguage, type Language } from "./i18n";
+
+// ---------------------------------------------------------------------------
 // Key pattern / area validation (ADR-0006 S-10)
 // ---------------------------------------------------------------------------
 
@@ -462,6 +472,30 @@ export const settingsCatalog = defineSettingsCatalog({
       "appearance.uiTheme is accepted as a deprecated read alias for workbench.colorTheme."
     ]
   }),
+  // #174: moved from the legacy top-level ApplicationSettings.language field
+  // under the ADR-0006 catalog. No deprecated alias for the old top-level
+  // key — #174 does not preserve or migrate legacy top-level `language`.
+  "workbench.language": defineEnumSetting({
+    key: "workbench.language",
+    scope: "applicationOnly",
+    enumValues: ["ja", "en"],
+    defaultValue: defaultLanguage,
+    labelKey: "settings.workbench.language.label",
+    descriptionKey: "settings.workbench.language.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  // #174: moved from the legacy top-level ApplicationSettings.showStatusBar
+  // field. No deprecated alias for the old top-level key.
+  "workbench.statusBar.visible": defineBooleanSetting({
+    key: "workbench.statusBar.visible",
+    scope: "applicationOnly",
+    defaultValue: true,
+    labelKey: "settings.workbench.statusBar.visible.label",
+    descriptionKey: "settings.workbench.statusBar.visible.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
   "editor.fontFamily": defineStringSetting({
     key: "editor.fontFamily",
     scope: "applicationWithProjectOverride",
@@ -522,6 +556,21 @@ export type SettingValueOf<K extends SettingKey> =
         : (typeof settingsCatalog)[K] extends BooleanSettingEntry
           ? boolean
           : never;
+
+// #174: compile-time guard that workbench.language's catalog enum values
+// stay exactly in sync with the pre-existing Language type — if either side
+// changes without the other, this line fails to type-check instead of
+// silently drifting.
+type AssertExact<A, B> = [A] extends [B]
+  ? [B] extends [A]
+    ? true
+    : never
+  : never;
+const _workbenchLanguageMatchesLanguageType: AssertExact<
+  SettingValueOf<"workbench.language">,
+  Language
+> = true;
+void _workbenchLanguageMatchesLanguageType;
 
 // ---------------------------------------------------------------------------
 // Resolution result type

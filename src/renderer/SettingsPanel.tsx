@@ -33,12 +33,14 @@ export function SettingsPanel({
       <label className="settingsToggle">
         <input
           type="checkbox"
-          checked={settings.showStatusBar}
+          checked={settings.workbench.statusBar.visible}
           disabled={isLoading}
           onChange={(event) =>
             onChangeSettings({
-              showStatusBar: event.target.checked,
-              language: settings.language
+              workbench: {
+                ...settings.workbench,
+                statusBar: { visible: event.target.checked }
+              }
             })
           }
         />
@@ -48,12 +50,14 @@ export function SettingsPanel({
         <span>{translate("settings.language")}</span>
         <select
           className="settingsSelect"
-          value={settings.language}
+          value={settings.workbench.language}
           disabled={isLoading}
           onChange={(event) =>
             onChangeSettings({
-              showStatusBar: settings.showStatusBar,
-              language: event.target.value as Language
+              workbench: {
+                ...settings.workbench,
+                language: event.target.value as Language
+              }
             })
           }
         >

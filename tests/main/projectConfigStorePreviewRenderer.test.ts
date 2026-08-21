@@ -280,7 +280,10 @@ describe("projectConfigStore: pergamum.json settings.workbench.fontFamily has no
 
     const applicationSettings = {
       ...defaultApplicationSettings,
-      workbench: { fontFamily: "Cascadia Code" }
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        fontFamily: "Cascadia Code"
+      }
     };
 
     const effective = resolveEffectiveSettings(

@@ -2817,7 +2817,7 @@ export function App(): JSX.Element {
         </section>
       </section>
 
-      {effectiveSettings.showStatusBar ? (
+      {effectiveSettings.workbench.statusBar.visible ? (
         <footer className="statusBar">
           {translate(status.key, status.values)}
         </footer>

@@ -1,5 +1,6 @@
 import { readFileSync } from "node:fs";
 import { describe, expect, expectTypeOf, it } from "vitest";
+import { supportedLanguages } from "../../src/shared/i18n";
 import {
   defineBooleanSetting,
   defineEnumSetting,
@@ -618,16 +619,25 @@ describe("Settings Catalog Foundation (#150)", () => {
       });
     });
 
-    it("does not add these fixture-only types to the production catalog", () => {
+    it("does not add the fixture-only number type to the production catalog (boolean is now used in production by #174's workbench.statusBar.visible)", () => {
       const productionTypes = new Set(
         getCatalogEntries().map((entry) => entry.type)
       );
 
-      expect(productionTypes.has("boolean")).toBe(false);
       expect(productionTypes.has("number")).toBe(false);
       expect(
         getCatalogEntries().some((entry) => entry.key === "workbench.fontSize")
       ).toBe(false);
+    });
+
+    it("workbench.statusBar.visible (#174) is the only production catalog entry of type boolean", () => {
+      const booleanEntries = getCatalogEntries().filter(
+        (entry) => entry.type === "boolean"
+      );
+
+      expect(booleanEntries.map((entry) => entry.key)).toEqual([
+        "workbench.statusBar.visible"
+      ]);
     });
   });
 
@@ -725,6 +735,12 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getCatalogEntry("preview.renderer").scope).toBe(
         "applicationWithProjectOverride"
       );
+      expect(getCatalogEntry("workbench.language").scope).toBe(
+        "applicationOnly"
+      );
+      expect(getCatalogEntry("workbench.statusBar.visible").scope).toBe(
+        "applicationOnly"
+      );
     });
 
     it("represents all three ADR-0006 S-11 scope values", () => {
@@ -786,7 +802,7 @@ describe("Settings Catalog Foundation (#150)", () => {
   });
 
   describe("initial catalog entries", () => {
-    it("registers exactly the six #150 entries", () => {
+    it("registers exactly the six #150 entries plus the two #174 entries", () => {
       expect(Object.keys(settingsCatalog).sort()).toEqual(
         [
           "editor.fontFamily",
@@ -794,7 +810,9 @@ describe("Settings Catalog Foundation (#150)", () => {
           "files.newFile.lineEnding",
           "preview.renderer",
           "workbench.colorTheme",
-          "workbench.fontFamily"
+          "workbench.fontFamily",
+          "workbench.language",
+          "workbench.statusBar.visible"
         ].sort()
       );
     });
@@ -831,6 +849,91 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(keys).not.toContain("editor.lineHeight");
       expect(keys).not.toContain("editor.wordWrap");
       expect(keys).not.toContain("workbench.fontSize");
+    });
+  });
+
+  describe("workbench.language / workbench.statusBar.visible (#174)", () => {
+    it("contains workbench.language", () => {
+      expect(Object.keys(settingsCatalog)).toContain("workbench.language");
+    });
+
+    it("contains workbench.statusBar.visible", () => {
+      expect(Object.keys(settingsCatalog)).toContain(
+        "workbench.statusBar.visible"
+      );
+    });
+
+    it("workbench.language is applicationOnly", () => {
+      expect(getCatalogEntry("workbench.language").scope).toBe(
+        "applicationOnly"
+      );
+    });
+
+    it("workbench.statusBar.visible is applicationOnly", () => {
+      expect(getCatalogEntry("workbench.statusBar.visible").scope).toBe(
+        "applicationOnly"
+      );
+    });
+
+    it("workbench.language's default matches the current built-in default language", () => {
+      expect(getCatalogDefaultValue("workbench.language")).toBe("ja");
+    });
+
+    it("workbench.statusBar.visible's default matches the current built-in status bar visibility default (true)", () => {
+      expect(getCatalogDefaultValue("workbench.statusBar.visible")).toBe(
+        true
+      );
+    });
+
+    it("workbench.language's enum values are exactly the existing Language type's members — no mismatch between the catalog and src/shared/i18n", () => {
+      expect(
+        [...getCatalogEntry("workbench.language").enumValues].sort()
+      ).toEqual([...supportedLanguages].sort());
+    });
+
+    it("workbench.language is an enum entry and workbench.statusBar.visible is a boolean entry", () => {
+      expect(getCatalogEntry("workbench.language").type).toBe("enum");
+      expect(getCatalogEntry("workbench.statusBar.visible").type).toBe(
+        "boolean"
+      );
+    });
+
+    it("validates workbench.language against ja/en and rejects anything else", () => {
+      expect(validateCatalogValue("workbench.language", "ja")).toEqual({
+        ok: true
+      });
+      expect(validateCatalogValue("workbench.language", "en")).toEqual({
+        ok: true
+      });
+      expect(validateCatalogValue("workbench.language", "fr")).toEqual({
+        ok: false,
+        failure: "enumValue"
+      });
+      expect(validateCatalogValue("workbench.language", 1)).toEqual({
+        ok: false,
+        failure: "typeMismatch"
+      });
+    });
+
+    it("validates workbench.statusBar.visible as a boolean", () => {
+      expect(
+        validateCatalogValue("workbench.statusBar.visible", true)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("workbench.statusBar.visible", false)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("workbench.statusBar.visible", "true")
+      ).toEqual({ ok: false, failure: "typeMismatch" });
+    });
+
+    it("declares no deprecated aliases for either key — legacy top-level language/showStatusBar are not preserved as aliases", () => {
+      expect(getCatalogEntry("workbench.language").deprecatedAliases).toEqual(
+        []
+      );
+      expect(
+        getCatalogEntry("workbench.statusBar.visible").deprecatedAliases
+      ).toEqual([]);
     });
   });
 

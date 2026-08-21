@@ -3,12 +3,10 @@ import { promises as fs } from "node:fs";
 import path from "node:path";
 import {
   createDefaultApplicationSettings,
-  defaultApplicationSettings,
   type ApplicationSettings,
   type RecentProject,
   type SaveApplicationSettingsRequest
 } from "../shared/settings";
-import { isLanguage } from "../shared/i18n";
 import {
   resolveCatalogValue,
   validateCatalogValue
@@ -90,25 +88,48 @@ function readPreviewSettings(value: unknown): ApplicationSettings["preview"] {
   };
 }
 
-// Unlike readPreviewSettings above, this validates-and-omits rather than
-// resolving to the catalog default (#173 D-7): a missing or rejected
-// fontFamily stays absent from ApplicationSettings so the write path can
-// preserve sparse settings.json storage instead of writing "system-ui"
-// back. The catalog default is applied later, in
+// Like readPreviewSettings above: default and validation both come from the
+// catalog, so a missing or invalid on-disk workbench.statusBar.visible
+// falls back to the catalog default rather than failing startup.
+function readWorkbenchStatusBarSettings(
+  value: unknown
+): ApplicationSettings["workbench"]["statusBar"] {
+  const visible = isObject(value) ? value.visible : undefined;
+
+  return {
+    visible: resolveCatalogValue("workbench.statusBar.visible", visible).value
+  };
+}
+
+// #174: reads the legacy top-level `language` / `showStatusBar` keys are
+// intentionally never consulted here — only the nested workbench.language /
+// workbench.statusBar.visible keys are read, matching the write path below.
+//
+// language/statusBar.visible resolve through the catalog like
+// readPreviewSettings (missing/invalid -> catalog default). fontFamily
+// keeps the validate-and-omit behavior from #173 D-7 below it: a missing or
+// rejected fontFamily stays absent from ApplicationSettings so the write
+// path can preserve sparse settings.json storage instead of writing
+// "system-ui" back. The catalog default for fontFamily is applied later, in
 // resolveEffectiveSettings — not baked in here.
 function readWorkbenchSettings(value: unknown): ApplicationSettings["workbench"] {
-  if (!isObject(value)) {
-    return {};
-  }
+  const workbenchValue = isObject(value) ? value : undefined;
+
+  const language = resolveCatalogValue(
+    "workbench.language",
+    workbenchValue?.language
+  ).value;
+  const statusBar = readWorkbenchStatusBarSettings(workbenchValue?.statusBar);
 
   if (
-    typeof value.fontFamily !== "string" ||
-    !validateCatalogValue("workbench.fontFamily", value.fontFamily).ok
+    workbenchValue === undefined ||
+    typeof workbenchValue.fontFamily !== "string" ||
+    !validateCatalogValue("workbench.fontFamily", workbenchValue.fontFamily).ok
   ) {
-    return {};
+    return { language, statusBar };
   }
 
-  return { fontFamily: value.fontFamily };
+  return { language, statusBar, fontFamily: workbenchValue.fontFamily };
 }
 
 function readSettingsValue(value: unknown): ApplicationSettings {
@@ -117,13 +138,6 @@ function readSettingsValue(value: unknown): ApplicationSettings {
   }
 
   return {
-    showStatusBar:
-      typeof value.showStatusBar === "boolean"
-        ? value.showStatusBar
-        : defaultApplicationSettings.showStatusBar,
-    language: isLanguage(value.language)
-      ? value.language
-      : defaultApplicationSettings.language,
     preview: readPreviewSettings(value.preview),
     workbench: readWorkbenchSettings(value.workbench),
     recentProjects: readRecentProjects(value.recentProjects)
@@ -181,19 +195,12 @@ export function parseSaveApplicationSettingsRequest(
 
   const keys = Object.keys(value);
 
-  if (
-    keys.length !== 2 ||
-    !keys.includes("showStatusBar") ||
-    !keys.includes("language") ||
-    typeof value.showStatusBar !== "boolean" ||
-    !isLanguage(value.language)
-  ) {
+  if (keys.length !== 1 || !keys.includes("workbench")) {
     throw new Error("Invalid application settings.");
   }
 
   return {
-    showStatusBar: value.showStatusBar,
-    language: value.language
+    workbench: parseWorkbenchSettingsForWrite(value.workbench)
   };
 }
 
@@ -226,9 +233,35 @@ function parsePreviewSettingsForWrite(
 }
 
 // Same validate-and-reject-the-whole-write style as parsePreviewSettingsForWrite:
-// an invalid fontFamily rejects the save request rather than silently
-// dropping just that field (#173 D-9). An absent fontFamily key (an empty
-// workbench object) is valid and preserves sparse storage (#173 D-7).
+// an invalid language/statusBar.visible/fontFamily rejects the save request
+// rather than silently dropping just that field (#173 D-9). An absent
+// fontFamily key is valid and preserves sparse storage (#173 D-7); language
+// and statusBar are required (#174 — neither is sparse).
+function parseWorkbenchStatusBarSettingsForWrite(
+  value: unknown
+): ApplicationSettings["workbench"]["statusBar"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (keys.length !== 1 || !keys.includes("visible")) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const resolution = resolveCatalogValue(
+    "workbench.statusBar.visible",
+    value.visible
+  );
+
+  if (!resolution.ok) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return { visible: resolution.value };
+}
+
 function parseWorkbenchSettingsForWrite(
   value: unknown
 ): ApplicationSettings["workbench"] {
@@ -237,21 +270,44 @@ function parseWorkbenchSettingsForWrite(
   }
 
   const keys = Object.keys(value);
+  const hasFontFamily = keys.includes("fontFamily");
+  const expectedKeyCount = hasFontFamily ? 3 : 2;
 
-  if (keys.length === 0) {
-    return {};
+  if (
+    keys.length !== expectedKeyCount ||
+    !keys.includes("language") ||
+    !keys.includes("statusBar")
+  ) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const languageResolution = resolveCatalogValue(
+    "workbench.language",
+    value.language
+  );
+
+  if (!languageResolution.ok) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const statusBar = parseWorkbenchStatusBarSettingsForWrite(value.statusBar);
+
+  if (!hasFontFamily) {
+    return { language: languageResolution.value, statusBar };
   }
 
   if (
-    keys.length !== 1 ||
-    !keys.includes("fontFamily") ||
     typeof value.fontFamily !== "string" ||
     !validateCatalogValue("workbench.fontFamily", value.fontFamily).ok
   ) {
     throw new Error("Invalid application settings.");
   }
 
-  return { fontFamily: value.fontFamily };
+  return {
+    language: languageResolution.value,
+    statusBar,
+    fontFamily: value.fontFamily
+  };
 }
 
 function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
@@ -262,21 +318,15 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
   const keys = Object.keys(value);
 
   if (
-    keys.length !== 5 ||
-    !keys.includes("showStatusBar") ||
-    !keys.includes("language") ||
+    keys.length !== 3 ||
     !keys.includes("preview") ||
     !keys.includes("workbench") ||
-    !keys.includes("recentProjects") ||
-    typeof value.showStatusBar !== "boolean" ||
-    !isLanguage(value.language)
+    !keys.includes("recentProjects")
   ) {
     throw new Error("Invalid application settings.");
   }
 
   return {
-    showStatusBar: value.showStatusBar,
-    language: value.language,
     preview: parsePreviewSettingsForWrite(value.preview),
     workbench: parseWorkbenchSettingsForWrite(value.workbench),
     recentProjects: parseRecentProjectsForSave(value.recentProjects)
@@ -328,8 +378,7 @@ export async function saveApplicationSettings(
 
   return saveSettings({
     ...settings,
-    showStatusBar: settingsRequest.showStatusBar,
-    language: settingsRequest.language
+    workbench: settingsRequest.workbench
   });
 }
 

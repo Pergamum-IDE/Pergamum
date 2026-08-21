@@ -31,8 +31,6 @@ const catalogDefault = getCatalogDefaultValue("workbench.fontFamily");
 
 function onDiskSettings(overrides: Record<string, unknown>): string {
   return JSON.stringify({
-    showStatusBar: true,
-    language: "ja",
     preview: { renderer: "markdown" },
     recentProjects: [],
     ...overrides
@@ -149,7 +147,11 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
     ];
     const written = JSON.parse(writtenContent);
 
-    expect(written.workbench).toEqual({ fontFamily: "Fira Code" });
+    expect(written.workbench).toEqual({
+      language: "ja",
+      statusBar: { visible: true },
+      fontFamily: "Fira Code"
+    });
   });
 
   it("does not write back the catalog default when workbench.fontFamily was never set on disk (no default write-back, #173 D-7)", async () => {
@@ -164,7 +166,10 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
     ];
     const written = JSON.parse(writtenContent);
 
-    expect(written.workbench).toEqual({});
+    expect(written.workbench).toEqual({
+      language: "ja",
+      statusBar: { visible: true }
+    });
     expect(JSON.stringify(written)).not.toContain(catalogDefault);
   });
 
@@ -182,15 +187,20 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
     ];
     const written = JSON.parse(writtenContent);
 
-    expect(written.workbench).toEqual({});
+    expect(written.workbench).toEqual({
+      language: "ja",
+      statusBar: { visible: true }
+    });
     expect(JSON.stringify(written)).not.toContain("color: red");
   });
 
   it("rejects a save request carrying an invalid workbench.fontFamily with 'Invalid application settings.' and never writes settings.json", () => {
     const invalidSaveRequest = {
-      showStatusBar: true,
-      language: "ja",
-      workbench: { fontFamily: 'Fira Code"; color: red' }
+      workbench: {
+        language: "ja",
+        statusBar: { visible: true },
+        fontFamily: 'Fira Code"; color: red'
+      }
     };
 
     expect(() =>

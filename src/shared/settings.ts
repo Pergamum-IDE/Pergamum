@@ -1,4 +1,4 @@
-import { defaultLanguage, type Language } from "./i18n";
+import type { Language } from "./i18n";
 import {
   getCatalogDefaultValue,
   validateCatalogValue
@@ -22,25 +22,38 @@ export interface ApplicationPreviewSettings {
   renderer: PreviewRendererId;
 }
 
-// Optional, like ProjectPreviewSettings.renderer: absence on disk is
-// distinct from an explicit value, so the write path can preserve sparse
-// settings.json storage (#173 D-7) instead of eagerly writing back the
-// catalog default.
+export interface WorkbenchStatusBarSettings {
+  visible: boolean;
+}
+
+// #174: language and statusBar.visible moved here from legacy top-level
+// ApplicationSettings.language / .showStatusBar — both applicationOnly
+// catalog entries, always resolved to a concrete value at read time (not
+// sparse). fontFamily stays optional, like ProjectPreviewSettings.renderer:
+// absence on disk is distinct from an explicit value, so the write path can
+// preserve sparse settings.json storage (#173 D-7) instead of eagerly
+// writing back the catalog default.
 export interface ApplicationWorkbenchSettings {
+  language: Language;
+  statusBar: WorkbenchStatusBarSettings;
   fontFamily?: string;
 }
 
 export interface ApplicationSettings {
-  showStatusBar: boolean;
-  language: Language;
   preview: ApplicationPreviewSettings;
   workbench: ApplicationWorkbenchSettings;
   recentProjects: RecentProject[];
 }
 
+// #174: nested under workbench, matching ApplicationWorkbenchSettings.
+// fontFamily stays optional here too — omitting it from a save request
+// preserves the existing sparse value (#173 D-7); it does not reset it.
 export interface SaveApplicationSettingsRequest {
-  showStatusBar: boolean;
-  language: Language;
+  workbench: {
+    language: Language;
+    statusBar: WorkbenchStatusBarSettings;
+    fontFamily?: string;
+  };
 }
 
 export interface ProjectPreviewSettings {
@@ -56,12 +69,12 @@ export interface EffectivePreviewSettings {
 }
 
 export interface EffectiveWorkbenchSettings {
+  language: Language;
+  statusBar: WorkbenchStatusBarSettings;
   fontFamily: string;
 }
 
 export interface EffectiveSettings {
-  showStatusBar: boolean;
-  language: Language;
   preview: EffectivePreviewSettings;
   workbench: EffectiveWorkbenchSettings;
 }
@@ -79,38 +92,49 @@ export const defaultPreviewRenderer: PreviewRendererId =
   getCatalogDefaultValue("preview.renderer");
 
 export const builtInDefaultSettings: EffectiveSettings = {
-  showStatusBar: true,
-  language: defaultLanguage,
   preview: {
     renderer: defaultPreviewRenderer
   },
   workbench: {
+    language: getCatalogDefaultValue("workbench.language"),
+    statusBar: {
+      visible: getCatalogDefaultValue("workbench.statusBar.visible")
+    },
     fontFamily: getCatalogDefaultValue("workbench.fontFamily")
   }
 };
 
-// workbench is intentionally {} (no explicit fontFamily) here, not
-// builtInDefaultSettings.workbench — this is the "nothing on disk yet"
-// baseline (#173 D-7), and resolveEffectiveSettings below is what falls
-// through to the catalog default when fontFamily is absent.
+// workbench.fontFamily is intentionally omitted here, not
+// builtInDefaultSettings.workbench.fontFamily — this is the "nothing on
+// disk yet" baseline (#173 D-7), and resolveEffectiveSettings below is what
+// falls through to the catalog default when fontFamily is absent.
+// workbench.language / workbench.statusBar.visible are NOT sparse (#174):
+// unlike fontFamily, they always carry a concrete value, mirroring the
+// legacy top-level language/showStatusBar fields they replace.
 export const defaultApplicationSettings: ApplicationSettings = {
-  showStatusBar: builtInDefaultSettings.showStatusBar,
-  language: builtInDefaultSettings.language,
   preview: {
     renderer: builtInDefaultSettings.preview.renderer
   },
-  workbench: {},
+  workbench: {
+    language: builtInDefaultSettings.workbench.language,
+    statusBar: {
+      visible: builtInDefaultSettings.workbench.statusBar.visible
+    }
+  },
   recentProjects: []
 };
 
 export function createDefaultApplicationSettings(): ApplicationSettings {
   return {
-    showStatusBar: defaultApplicationSettings.showStatusBar,
-    language: defaultApplicationSettings.language,
     preview: {
       renderer: defaultApplicationSettings.preview.renderer
     },
-    workbench: {},
+    workbench: {
+      language: defaultApplicationSettings.workbench.language,
+      statusBar: {
+        visible: defaultApplicationSettings.workbench.statusBar.visible
+      }
+    },
     recentProjects: []
   };
 }
@@ -128,17 +152,21 @@ export function resolveEffectiveSettings(
   projectSettings: ProjectSettings | null | undefined
 ): EffectiveSettings {
   return {
-    showStatusBar: applicationSettings.showStatusBar,
-    language: applicationSettings.language,
     preview: {
       renderer:
         projectSettings?.preview?.renderer ??
         applicationSettings.preview.renderer ??
         builtInDefaultSettings.preview.renderer
     },
-    // workbench.fontFamily is applicationOnly (#173): Application > Default
-    // only, no project scope in the chain.
+    // The whole workbench area is applicationOnly (#173, #174): Application
+    // > Default only, no project scope in the chain. language and
+    // statusBar.visible pass straight through (never sparse); fontFamily
+    // still falls through to the catalog default when absent.
     workbench: {
+      language: applicationSettings.workbench.language,
+      statusBar: {
+        visible: applicationSettings.workbench.statusBar.visible
+      },
       fontFamily:
         applicationSettings.workbench.fontFamily ??
         builtInDefaultSettings.workbench.fontFamily
