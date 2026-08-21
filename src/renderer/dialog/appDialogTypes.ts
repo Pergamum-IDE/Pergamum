@@ -46,21 +46,62 @@ export type AppConfirmDialogTone = "default" | "destructive";
 export type AppConfirmDialogResult = "confirm" | "cancel";
 
 // ---------------------------------------------------------------------------
+// Choice dialog (#192)
+// ---------------------------------------------------------------------------
+
+export type AppDialogChoiceId = string;
+
+export type AppDialogChoiceRole =
+  | "primary"
+  | "neutral"
+  | "destructive"
+  | "cancel";
+
+export interface AppDialogChoice {
+  readonly id: AppDialogChoiceId;
+  readonly label: string;
+  readonly role: AppDialogChoiceRole;
+}
+
+export type AppChoiceDialogResult =
+  | { readonly kind: "chosen"; readonly id: AppDialogChoiceId }
+  | { readonly kind: "dismissed" };
+
+export type AppChoiceDialogActionOrderPolicy = "platform" | "caller";
+
+export interface AppChoiceDialogOptions {
+  readonly title: string;
+  readonly message: AppDialogMessage;
+  readonly icon: AppDialogIcon;
+  readonly choices: readonly AppDialogChoice[];
+  readonly primaryChoiceId?: AppDialogChoiceId;
+  readonly cancelChoiceId?: AppDialogChoiceId;
+  readonly initialFocusChoiceId?: AppDialogChoiceId;
+  readonly actionOrderPolicy?: AppChoiceDialogActionOrderPolicy;
+  readonly dismissOnBackdropClick?: boolean;
+  readonly clipboardText?: string | null;
+}
+
+// ---------------------------------------------------------------------------
 // Errors (#182 D-14)
 // ---------------------------------------------------------------------------
 
-export type AppDialogErrorKind = "dialogAlreadyOpen";
+export type AppDialogErrorKind =
+  | "dialogAlreadyOpen"
+  | "invalidChoiceDialogOptions"
+  | "invalidDialogResult";
 
 /**
- * A concurrent confirm request is a programming/control-flow error, not a
+ * A concurrent app dialog request is a programming/control-flow error, not a
  * user decision — it must reject with this typed error rather than resolve
- * `"cancel"` (D-14), so the two cases stay distinguishable at call sites.
+ * as cancel/dismissed (D-14 / #192), so the two cases stay distinguishable at
+ * call sites.
  */
 export class AppDialogError extends Error {
   readonly kind: AppDialogErrorKind;
 
-  constructor(kind: AppDialogErrorKind) {
-    super(`Application dialog error: ${kind}`);
+  constructor(kind: AppDialogErrorKind, message?: string) {
+    super(message ?? `Application dialog error: ${kind}`);
     this.name = "AppDialogError";
     this.kind = kind;
   }
@@ -142,4 +183,135 @@ export function confirmDialogDismissesOnBackdropClick(
   options: AppConfirmDialogOptions
 ): boolean {
   return options.dismissOnBackdropClick ?? true;
+}
+
+export function choiceDialogDismissesOnBackdropClick(
+  options: AppChoiceDialogOptions
+): boolean {
+  return options.dismissOnBackdropClick === true;
+}
+
+function invalidChoiceDialogOptions(message: string): AppDialogError {
+  return new AppDialogError("invalidChoiceDialogOptions", message);
+}
+
+export function validateChoiceDialogOptions(
+  options: AppChoiceDialogOptions
+): void {
+  if (options.choices.length === 0) {
+    throw invalidChoiceDialogOptions("Choice dialog requires at least one choice.");
+  }
+
+  const ids = new Set<AppDialogChoiceId>();
+
+  for (const choice of options.choices) {
+    if (ids.has(choice.id)) {
+      throw invalidChoiceDialogOptions(
+        `Choice dialog has a duplicate choice id: ${choice.id}`
+      );
+    }
+
+    ids.add(choice.id);
+  }
+
+  for (const choiceId of [
+    options.primaryChoiceId,
+    options.cancelChoiceId,
+    options.initialFocusChoiceId
+  ]) {
+    if (choiceId !== undefined && !ids.has(choiceId)) {
+      throw invalidChoiceDialogOptions(
+        `Choice dialog references an unknown choice id: ${choiceId}`
+      );
+    }
+  }
+
+  if (
+    options.primaryChoiceId !== undefined &&
+    options.cancelChoiceId !== undefined &&
+    options.primaryChoiceId === options.cancelChoiceId
+  ) {
+    throw invalidChoiceDialogOptions(
+      `Choice dialog primaryChoiceId and cancelChoiceId must be distinct: ${options.primaryChoiceId}`
+    );
+  }
+}
+
+export function resolvePrimaryChoiceId(
+  options: AppChoiceDialogOptions
+): AppDialogChoiceId | null {
+  return (
+    options.primaryChoiceId ??
+    options.choices.find((choice) => choice.role === "primary")?.id ??
+    null
+  );
+}
+
+export function resolveCancelChoiceId(
+  options: AppChoiceDialogOptions
+): AppDialogChoiceId | null {
+  return (
+    options.cancelChoiceId ??
+    options.choices.find((choice) => choice.role === "cancel")?.id ??
+    null
+  );
+}
+
+/**
+ * Safe initial-focus fallback (#192): explicit initial focus, explicit cancel
+ * choice, first cancel-role choice, first non-destructive choice, then the
+ * first choice. This keeps destructive choices out of default focus unless
+ * the caller explicitly asks for one.
+ */
+export function resolveInitialFocusChoiceId(
+  options: AppChoiceDialogOptions
+): AppDialogChoiceId {
+  return (
+    options.initialFocusChoiceId ??
+    options.cancelChoiceId ??
+    options.choices.find((choice) => choice.role === "cancel")?.id ??
+    options.choices.find((choice) => choice.role !== "destructive")?.id ??
+    options.choices[0].id
+  );
+}
+
+export function resolveChoiceDialogActionOrderPolicy(
+  options: AppChoiceDialogOptions
+): AppChoiceDialogActionOrderPolicy {
+  return options.actionOrderPolicy ?? "platform";
+}
+
+export function resolveChoiceDialogActionOrder(
+  options: AppChoiceDialogOptions,
+  platform: AppPlatform
+): readonly AppDialogChoice[] {
+  if (resolveChoiceDialogActionOrderPolicy(options) === "caller") {
+    return [...options.choices];
+  }
+
+  const primaryChoiceId = resolvePrimaryChoiceId(options);
+  const cancelChoiceId = resolveCancelChoiceId(options);
+  const primaryChoice = primaryChoiceId
+    ? options.choices.find((choice) => choice.id === primaryChoiceId)
+    : undefined;
+  const cancelChoice = cancelChoiceId
+    ? options.choices.find((choice) => choice.id === cancelChoiceId)
+    : undefined;
+  const middleChoices = options.choices.filter(
+    (choice) => choice.id !== primaryChoiceId && choice.id !== cancelChoiceId
+  );
+
+  if (platform === "windows" || platform === "linux") {
+    return [
+      ...(primaryChoice ? [primaryChoice] : []),
+      ...middleChoices,
+      ...(cancelChoice ? [cancelChoice] : [])
+    ];
+  }
+
+  return [
+    ...middleChoices,
+    ...(cancelChoice ? [cancelChoice] : []),
+    ...(primaryChoice ? [primaryChoice] : [])
+  ];
 }

@@ -35,6 +35,10 @@ function allSourceText(): string {
  * document-level/global shortcut listener, and unrelated to the Markdown
  * editor's native-edit-command delegation this guard otherwise protects.
  *
+ * ChoiceDialog.tsx (#192) is the same dialog-local exception: Escape
+ * resolves dismissed and Tab stays inside the modal focus trap; it does not
+ * implement app/global shortcut suppression.
+ *
  * DocumentTabBar.tsx (#184) is the same category of exception again: each
  * tab's `onKeyDown` implements Enter/Space activation for its own
  * `role="tab"` element (a `<div>`, not a native `<button>`, since a nested
@@ -43,6 +47,7 @@ function allSourceText(): string {
  */
 const onKeyDownExemptFileNames = new Set([
   "CommandPalette.tsx",
+  "ChoiceDialog.tsx",
   "ConfirmDialog.tsx",
   "DocumentTabBar.tsx"
 ]);

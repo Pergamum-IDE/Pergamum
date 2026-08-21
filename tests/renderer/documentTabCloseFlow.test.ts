@@ -1,3 +1,4 @@
+import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import {
   buildDirtyCloseConfirmDialogOptions,
@@ -60,6 +61,15 @@ describe("buildDirtyCloseConfirmDialogOptions (#184)", () => {
     const options = buildDirtyCloseConfirmDialogOptions(translateEn);
 
     expect(options.dismissOnBackdropClick).toBe(false);
+  });
+
+  it("continues to build binary confirm options, not choice dialog options", () => {
+    const source = readFileSync("src/renderer/documentTabCloseFlow.ts", "utf8");
+
+    expect(source).toContain("AppConfirmDialogOptions");
+    expect(source).toContain("AppConfirmDialogResult");
+    expect(source).not.toContain("AppChoiceDialogOptions");
+    expect(source).not.toContain("AppChoiceDialogResult");
   });
 });
 

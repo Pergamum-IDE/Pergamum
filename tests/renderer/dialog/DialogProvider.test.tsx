@@ -1,4 +1,5 @@
 import React from "react";
+import { readFileSync } from "node:fs";
 import { renderToStaticMarkup } from "react-dom/server";
 import { describe, expect, it } from "vitest";
 import { t, type Translate } from "../../../src/shared/i18n";
@@ -34,5 +35,16 @@ describe("DialogProvider (#182)", () => {
 
     expect(markup).not.toContain("appDialogBackdrop");
     expect(markup).not.toContain('role="dialog"');
+  });
+
+  it("exposes choice as a separate dialog API and renders pending choice requests separately", () => {
+    const source = readFileSync("src/renderer/dialog/DialogProvider.tsx", "utf8");
+
+    expect(source).toContain(
+      "choice(options: AppChoiceDialogOptions): Promise<AppChoiceDialogResult>"
+    );
+    expect(source).toContain('pending?.kind === "confirm"');
+    expect(source).toContain('pending?.kind === "choice"');
+    expect(source).toContain("<ChoiceDialog");
   });
 });

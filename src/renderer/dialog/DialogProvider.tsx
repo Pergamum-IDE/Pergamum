@@ -7,12 +7,16 @@ import {
   useState,
   type ReactNode
 } from "react";
+import type { AppPlatform } from "../../shared/platform";
 import type { Translate } from "../../shared/i18n";
 import {
+  type AppChoiceDialogOptions,
+  type AppChoiceDialogResult,
   type AppConfirmDialogOptions,
   type AppConfirmDialogResult,
   type AppDialogActionOrder
 } from "./appDialogTypes";
+import { ChoiceDialog } from "./ChoiceDialog";
 import { ConfirmDialog } from "./ConfirmDialog";
 import {
   navigatorClipboardAdapter,
@@ -25,6 +29,7 @@ import {
 
 export interface DialogContextValue {
   confirm(options: AppConfirmDialogOptions): Promise<AppConfirmDialogResult>;
+  choice(options: AppChoiceDialogOptions): Promise<AppChoiceDialogResult>;
 }
 
 const DialogContext = createContext<DialogContextValue | null>(null);
@@ -36,6 +41,7 @@ export interface DialogProviderProps {
    * dialog components themselves never read platform directly (D-11).
    */
   actionOrder: AppDialogActionOrder;
+  platform?: AppPlatform;
   translate: Translate;
   clipboardAdapter?: ClipboardAdapter;
   children: ReactNode;
@@ -43,6 +49,7 @@ export interface DialogProviderProps {
 
 export function DialogProvider({
   actionOrder,
+  platform = "other",
   translate,
   clipboardAdapter = navigatorClipboardAdapter,
   children
@@ -65,8 +72,8 @@ export function DialogProvider({
     [controller]
   );
 
-  // Host unmount (D-16): a pending confirm resolves "cancel" rather than
-  // hanging forever.
+  // Host unmount: a pending confirm resolves "cancel" (D-16), while a pending
+  // choice resolves dismissed (#192) rather than hanging forever.
   useEffect(() => () => controller.dispose(), [controller]);
 
   const contextValue = useMemo<DialogContextValue>(
@@ -77,6 +84,13 @@ export function DialogProvider({
         }
 
         return controller.confirm(options);
+      },
+      choice: (options) => {
+        if (typeof document !== "undefined") {
+          openerRef.current = document.activeElement;
+        }
+
+        return controller.choice(options);
       }
     }),
     [controller]
@@ -85,10 +99,20 @@ export function DialogProvider({
   return (
     <DialogContext.Provider value={contextValue}>
       {children}
-      {pending ? (
+      {pending?.kind === "confirm" ? (
         <ConfirmDialog
           options={pending.options}
           actionOrder={actionOrder}
+          translate={translate}
+          clipboardAdapter={clipboardAdapter}
+          opener={openerRef.current}
+          onResult={(result) => controller.resolve(result)}
+        />
+      ) : null}
+      {pending?.kind === "choice" ? (
+        <ChoiceDialog
+          options={pending.options}
+          platform={platform}
           translate={translate}
           clipboardAdapter={clipboardAdapter}
           opener={openerRef.current}

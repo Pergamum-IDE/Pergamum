@@ -2108,6 +2108,12 @@ button:active {
   border-color: transparent;
 }
 
+.appDialogButton-choice-destructive {
+  background: var(--app-dialog-destructive-confirm-background);
+  color: var(--app-dialog-destructive-confirm-foreground);
+  border-color: transparent;
+}
+
 .appDialog-destructive .appDialogButton-confirm {
   background: var(--app-dialog-destructive-confirm-background);
   color: var(--app-dialog-destructive-confirm-foreground);

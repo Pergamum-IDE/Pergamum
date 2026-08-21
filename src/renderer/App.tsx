@@ -84,6 +84,7 @@ import {
   type CurrentEditor
 } from "./currentEditor";
 import { DocumentTabBar } from "./DocumentTabBar";
+import { ChoiceDialog } from "./dialog/ChoiceDialog";
 import { ConfirmDialog } from "./dialog/ConfirmDialog";
 import { navigatorClipboardAdapter } from "./dialog/clipboardAdapter";
 import {
@@ -2959,10 +2960,20 @@ export function App(): JSX.Element {
         />
       ) : null}
 
-      {pendingDialogRequest ? (
+      {pendingDialogRequest?.kind === "confirm" ? (
         <ConfirmDialog
           options={pendingDialogRequest.options}
           actionOrder={dialogActionOrder}
+          translate={translate}
+          clipboardAdapter={navigatorClipboardAdapter}
+          opener={dialogOpenerRef.current}
+          onResult={(result) => dialogController.resolve(result)}
+        />
+      ) : null}
+      {pendingDialogRequest?.kind === "choice" ? (
+        <ChoiceDialog
+          options={pendingDialogRequest.options}
+          platform={window.pergamum.platform}
           translate={translate}
           clipboardAdapter={navigatorClipboardAdapter}
           opener={dialogOpenerRef.current}

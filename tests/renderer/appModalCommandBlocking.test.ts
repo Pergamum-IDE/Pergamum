@@ -1,5 +1,24 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { editorCommandIds } from "../../src/shared/commandIds";
+import { CommandRegistry } from "../../src/shared/commandRegistry";
+import { DialogController } from "../../src/renderer/dialog/dialogController";
+import type { AppChoiceDialogOptions } from "../../src/renderer/dialog/appDialogTypes";
+
+function choiceOptions(): AppChoiceDialogOptions {
+  return {
+    title: "Choice",
+    message: { kind: "plainText", text: "Choose one." },
+    icon: null,
+    choices: [
+      { id: "save", label: "Save", role: "primary" },
+      { id: "cancel", label: "Cancel", role: "cancel" }
+    ],
+    primaryChoiceId: "save",
+    cancelChoiceId: "cancel",
+    clipboardText: null
+  };
+}
 
 describe("app modal command blocking (#190)", () => {
   it("wires pending app modal state into the Command Registry execution blocker", () => {
@@ -56,5 +75,40 @@ describe("app modal command blocking (#190)", () => {
     );
     expect(executeUiCommandSource).not.toContain("dialogController");
     expect(executeUiCommandSource).not.toContain("pendingDialogRequest");
+  });
+
+  it("blocks registry-routed background commands while a choice dialog request is pending", async () => {
+    const controller = new DialogController();
+    const registry = new CommandRegistry();
+    const execute = vi.fn();
+
+    registry.register({
+      id: editorCommandIds.saveDocument,
+      title: "Save",
+      execute
+    });
+    registry.setCommandExecutionBlocker(() =>
+      controller.getPendingRequest() ? "app_modal_open" : null
+    );
+
+    const pendingChoice = controller.choice(choiceOptions());
+
+    await expect(
+      registry.execute(editorCommandIds.saveDocument, {
+        source: "applicationMenu"
+      })
+    ).rejects.toMatchObject({
+      commandId: editorCommandIds.saveDocument,
+      reason: "app_modal_open"
+    });
+    expect(execute).not.toHaveBeenCalled();
+
+    controller.resolve({ kind: "dismissed" });
+    await expect(pendingChoice).resolves.toEqual({ kind: "dismissed" });
+    await registry.execute(editorCommandIds.saveDocument, {
+      source: "applicationMenu"
+    });
+
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 });

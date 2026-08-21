@@ -1,7 +1,10 @@
 import { describe, expect, it, vi } from "vitest";
 import { AppDialogError } from "../../../src/renderer/dialog/appDialogTypes";
 import { DialogController } from "../../../src/renderer/dialog/dialogController";
-import type { AppConfirmDialogOptions } from "../../../src/renderer/dialog/appDialogTypes";
+import type {
+  AppChoiceDialogOptions,
+  AppConfirmDialogOptions
+} from "../../../src/renderer/dialog/appDialogTypes";
 
 function baseOptions(): AppConfirmDialogOptions {
   return {
@@ -9,6 +12,25 @@ function baseOptions(): AppConfirmDialogOptions {
     message: { kind: "plainText", text: "Message" },
     icon: null,
     clipboardText: null
+  };
+}
+
+function baseChoiceOptions(
+  overrides: Partial<AppChoiceDialogOptions> = {}
+): AppChoiceDialogOptions {
+  return {
+    title: "Choice",
+    message: { kind: "plainText", text: "Choose one." },
+    icon: null,
+    choices: [
+      { id: "save", label: "Save", role: "primary" },
+      { id: "discard", label: "Discard", role: "destructive" },
+      { id: "cancel", label: "Cancel", role: "cancel" }
+    ],
+    primaryChoiceId: "save",
+    cancelChoiceId: "cancel",
+    clipboardText: null,
+    ...overrides
   };
 }
 
@@ -26,7 +48,7 @@ describe("DialogController (#182 core state machine, DOM-free)", () => {
     controller.subscribe(onChange);
     void controller.confirm(baseOptions());
 
-    expect(controller.getPendingRequest()).not.toBeNull();
+    expect(controller.getPendingRequest()).toMatchObject({ kind: "confirm" });
     expect(onChange).toHaveBeenCalledTimes(1);
   });
 
@@ -37,6 +59,26 @@ describe("DialogController (#182 core state machine, DOM-free)", () => {
     controller.resolve("confirm");
 
     await expect(resultPromise).resolves.toBe("confirm");
+  });
+
+  it("resolve() keeps a pending confirm open and throws when given a choice result", async () => {
+    const controller = new DialogController();
+    const resultPromise = controller.confirm(baseOptions());
+    let thrown: unknown;
+
+    try {
+      controller.resolve({ kind: "dismissed" });
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(AppDialogError);
+    expect(thrown).toMatchObject({ kind: "invalidDialogResult" });
+    expect(controller.getPendingRequest()).toMatchObject({ kind: "confirm" });
+
+    controller.resolve("cancel");
+
+    await expect(resultPromise).resolves.toBe("cancel");
   });
 
   it("resolve() clears the pending request", () => {
@@ -115,6 +157,88 @@ describe("DialogController (#182 core state machine, DOM-free)", () => {
 
     await expect(pending).resolves.toBe("cancel");
     expect(controller.getPendingRequest()).toBeNull();
+  });
+
+  it("choice() sets a pending choice request and notifies subscribers", () => {
+    const controller = new DialogController();
+    const onChange = vi.fn();
+
+    controller.subscribe(onChange);
+    void controller.choice(baseChoiceOptions());
+
+    expect(controller.getPendingRequest()).toMatchObject({ kind: "choice" });
+    expect(onChange).toHaveBeenCalledTimes(1);
+  });
+
+  it("resolve() resolves the pending choice's promise with a chosen result", async () => {
+    const controller = new DialogController();
+    const resultPromise = controller.choice(baseChoiceOptions());
+
+    controller.resolve({ kind: "chosen", id: "save" });
+
+    await expect(resultPromise).resolves.toEqual({
+      kind: "chosen",
+      id: "save"
+    });
+  });
+
+  it("resolve() keeps a pending choice open and throws when given a confirm result", async () => {
+    const controller = new DialogController();
+    const resultPromise = controller.choice(baseChoiceOptions());
+    let thrown: unknown;
+
+    try {
+      controller.resolve("cancel");
+    } catch (error) {
+      thrown = error;
+    }
+
+    expect(thrown).toBeInstanceOf(AppDialogError);
+    expect(thrown).toMatchObject({ kind: "invalidDialogResult" });
+    expect(controller.getPendingRequest()).toMatchObject({ kind: "choice" });
+
+    controller.resolve({ kind: "dismissed" });
+
+    await expect(resultPromise).resolves.toEqual({ kind: "dismissed" });
+  });
+
+  it("dispose() resolves a pending choice as dismissed", async () => {
+    const controller = new DialogController();
+    const pending = controller.choice(baseChoiceOptions());
+
+    controller.dispose();
+
+    await expect(pending).resolves.toEqual({ kind: "dismissed" });
+    expect(controller.getPendingRequest()).toBeNull();
+  });
+
+  it("choice() rejects invalid options without setting a pending request", async () => {
+    const controller = new DialogController();
+
+    await expect(
+      controller.choice(baseChoiceOptions({ choices: [] }))
+    ).rejects.toMatchObject({ kind: "invalidChoiceDialogOptions" });
+    expect(controller.getPendingRequest()).toBeNull();
+  });
+
+  it("a concurrent choice() request rejects with AppDialogError(dialogAlreadyOpen)", async () => {
+    const controller = new DialogController();
+
+    void controller.choice(baseChoiceOptions());
+    const second = controller.choice(baseChoiceOptions());
+
+    await expect(second).rejects.toBeInstanceOf(AppDialogError);
+    await expect(second).rejects.toMatchObject({ kind: "dialogAlreadyOpen" });
+  });
+
+  it("a pending choice also blocks a concurrent confirm()", async () => {
+    const controller = new DialogController();
+
+    void controller.choice(baseChoiceOptions());
+
+    await expect(controller.confirm(baseOptions())).rejects.toMatchObject({
+      kind: "dialogAlreadyOpen"
+    });
   });
 
   it("dispose() with nothing pending does not throw", () => {
