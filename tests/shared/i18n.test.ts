@@ -61,6 +61,22 @@ describe("glossary entry deletion translations", () => {
   });
 });
 
+describe("dirty close choice dogfood translations (#192)", () => {
+  it("defines the save-and-close choice label for ja and en", () => {
+    expect(t("ja", "dialog.dirtyClose.saveAndClose")).toBe("保存して閉じる");
+    expect(t("en", "dialog.dirtyClose.saveAndClose")).toBe("Save and Close");
+  });
+
+  it("defines the temporary save-before-close status message", () => {
+    expect(t("ja", "status.saveBeforeCloseNotImplemented")).toBe(
+      "保存未実装"
+    );
+    expect(t("en", "status.saveBeforeCloseNotImplemented")).toBe(
+      "Save before close is not implemented"
+    );
+  });
+});
+
 describe("glossary form match boundary translations", () => {
   it("defines every advanced matching settings key for ja and en", () => {
     for (const key of matchBoundaryKeys) {

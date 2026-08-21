@@ -2,23 +2,9 @@ import { readFileSync } from "node:fs";
 import { describe, expect, it, vi } from "vitest";
 import { editorCommandIds } from "../../src/shared/commandIds";
 import { CommandRegistry } from "../../src/shared/commandRegistry";
+import { t, type Translate } from "../../src/shared/i18n";
+import { buildDirtyCloseChoiceDialogOptions } from "../../src/renderer/documentTabCloseFlow";
 import { DialogController } from "../../src/renderer/dialog/dialogController";
-import type { AppChoiceDialogOptions } from "../../src/renderer/dialog/appDialogTypes";
-
-function choiceOptions(): AppChoiceDialogOptions {
-  return {
-    title: "Choice",
-    message: { kind: "plainText", text: "Choose one." },
-    icon: null,
-    choices: [
-      { id: "save", label: "Save", role: "primary" },
-      { id: "cancel", label: "Cancel", role: "cancel" }
-    ],
-    primaryChoiceId: "save",
-    cancelChoiceId: "cancel",
-    clipboardText: null
-  };
-}
 
 describe("app modal command blocking (#190)", () => {
   it("wires pending app modal state into the Command Registry execution blocker", () => {
@@ -77,10 +63,11 @@ describe("app modal command blocking (#190)", () => {
     expect(executeUiCommandSource).not.toContain("pendingDialogRequest");
   });
 
-  it("blocks registry-routed background commands while a choice dialog request is pending", async () => {
+  it("blocks registry-routed background commands while the dirty-close choice dialog is pending", async () => {
     const controller = new DialogController();
     const registry = new CommandRegistry();
     const execute = vi.fn();
+    const translateEn: Translate = (key, values) => t("en", key, values);
 
     registry.register({
       id: editorCommandIds.saveDocument,
@@ -91,7 +78,9 @@ describe("app modal command blocking (#190)", () => {
       controller.getPendingRequest() ? "app_modal_open" : null
     );
 
-    const pendingChoice = controller.choice(choiceOptions());
+    const pendingChoice = controller.choice(
+      buildDirtyCloseChoiceDialogOptions(translateEn)
+    );
 
     await expect(
       registry.execute(editorCommandIds.saveDocument, {
