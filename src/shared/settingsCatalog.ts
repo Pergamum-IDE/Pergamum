@@ -20,6 +20,10 @@
 // Setting scope (ADR-0006 S-11)
 // ---------------------------------------------------------------------------
 
+// Intentional public scope vocabulary — kept public with no current
+// production consumer outside this module; it preserves the closed
+// ADR-0006 S-11 scope vocabulary at the runtime/type boundary (the source
+// SettingScope is derived from) rather than duplicating it as a bare type.
 export const settingScopes = [
   "applicationOnly",
   "projectOnly",
@@ -32,6 +36,9 @@ export type SettingScope = (typeof settingScopes)[number];
 // Setting area (ADR-0006 S-10 closed area set)
 // ---------------------------------------------------------------------------
 
+// Deferred public area vocabulary: the area value list depends on ADR-0006
+// area closed-set/UI grouping decisions that have not been made yet. Do not
+// change in this issue.
 export const settingAreas = [
   "workbench",
   "editor",
@@ -310,6 +317,10 @@ export interface DefineStringSettingInput<TKey extends string>
   allowedCharacters: AllowedCharacterPolicy;
 }
 
+// Intentional public catalog DSL helper (ADR-0006 S-9 typed string setting
+// metadata) — kept public as the authoring surface for string catalog
+// entries, not because of an external production consumer; only
+// settingsCatalog.ts's own catalog entries below currently call it.
 export function defineStringSetting<TKey extends string>(
   input: DefineStringSettingInput<TKey>
 ): StringSettingEntry<TKey> {
@@ -324,6 +335,10 @@ export interface DefineEnumSettingInput<
   defaultValue: TValues[number];
 }
 
+// Intentional public catalog DSL helper (ADR-0006 S-9 typed enum setting
+// metadata) — kept public as the authoring surface for enum catalog
+// entries, not because of an external production consumer; only
+// settingsCatalog.ts's own catalog entries below currently call it.
 export function defineEnumSetting<
   TKey extends string,
   const TValues extends readonly [string, ...string[]]
@@ -339,6 +354,10 @@ export interface DefineNumberSettingInput<TKey extends string>
   numericRange: SettingNumericRange;
 }
 
+// Intentional public catalog DSL helper (ADR-0006 S-9 numeric setting
+// metadata) — kept public as the authoring surface for numeric catalog
+// entries, even though no current production catalog entry is a number
+// setting yet and this helper has no current call site at all.
 export function defineNumberSetting<TKey extends string>(
   input: DefineNumberSettingInput<TKey>
 ): NumberSettingEntry<TKey> {
@@ -350,6 +369,10 @@ export interface DefineBooleanSettingInput<TKey extends string>
   defaultValue: boolean;
 }
 
+// Intentional public catalog DSL helper (ADR-0006 S-9 boolean setting
+// metadata) — kept public as the authoring surface for boolean catalog
+// entries, even though no current production catalog entry is a boolean
+// setting yet and this helper has no current call site at all.
 export function defineBooleanSetting<TKey extends string>(
   input: DefineBooleanSettingInput<TKey>
 ): BooleanSettingEntry<TKey> {
@@ -363,6 +386,11 @@ export function defineBooleanSetting<TKey extends string>(
  * vs. primary key, alias vs. alias). Per-entry checks (key pattern/area,
  * defaultValue self-validation) already happened in finalizeEntry above.
  */
+// Intentional public catalog DSL entry point (ADR-0006 S-9 typed catalog
+// definition) — kept public as the authoring surface that assembles
+// individual defineXSetting entries into the catalog, not because of an
+// external production consumer; only this module's own initial catalog
+// entries below currently call it.
 export function defineSettingsCatalog<
   const TEntries extends Record<string, SettingCatalogEntry>
 >(entries: TEntries): TEntries {
@@ -404,6 +432,11 @@ export function defineSettingsCatalog<
 // Initial catalog entries
 // ---------------------------------------------------------------------------
 
+// Intentional public catalog data (core ADR-0006 catalog source) — kept
+// public for future catalog readers, not because of a current external
+// production consumer; production code currently reads through the accessor
+// helpers below (getCatalogEntry, getCatalogDefaultValue, validateCatalogValue,
+// resolveCatalogValue) rather than importing this object directly.
 export const settingsCatalog = defineSettingsCatalog({
   "workbench.fontFamily": defineStringSetting({
     key: "workbench.fontFamily",
@@ -533,6 +566,11 @@ function isSettingKey(value: string): value is SettingKey {
  * `undefined` for an unknown key rather than throwing — an unknown key is a
  * normal, expected occurrence for on-disk input (ADR-0006 S-19/S-20) and
  * must not be silently resolved to a catalog default.
+ *
+ * Intentional public alias/deprecation resolution helper — kept public with
+ * no current production consumer; it is the intended entry point for
+ * deprecated-alias resolution (e.g. S-18's appearance.uiTheme ->
+ * workbench.colorTheme) once a settings reader wires alias-aware key lookup.
  */
 export function resolvePrimarySettingKey(
   keyOrAlias: string
@@ -544,20 +582,32 @@ export function resolvePrimarySettingKey(
   return deprecatedAliasIndex.get(keyOrAlias);
 }
 
+// Intentional catalog access boundary — kept public with no current
+// production consumer, distinct from indexing `settingsCatalog` directly,
+// for future Store/UI/wiring work.
 export function getCatalogEntry<K extends SettingKey>(
   key: K
 ): (typeof settingsCatalog)[K] {
   return settingsCatalog[key];
 }
 
+// Intentional catalog enumeration helper and access boundary — kept public
+// with no current production consumer, so future Store/UI/wiring call sites
+// can enumerate catalog entries without traversing the `settingsCatalog`
+// object directly.
 export function getCatalogEntries(): readonly SettingCatalogEntry[] {
   return Object.values(settingsCatalog);
 }
 
+// Deferred public area helper: area grouping depends on ADR-0006 area
+// closed-set/UI grouping decisions not yet made. Do not add consumers or
+// change behavior until that decision lands.
 export function getSettingArea<K extends SettingKey>(key: K): SettingArea {
   return key.slice(0, key.indexOf(".")) as SettingArea;
 }
 
+// Deferred public area helper: same area-grouping decision dependency as
+// getSettingArea above.
 export function getCatalogEntriesByArea(
   area: SettingArea
 ): readonly SettingCatalogEntry[] {
