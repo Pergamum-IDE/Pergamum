@@ -31,4 +31,18 @@ describe("workbench.statusBar.visible / workbench.language runtime wiring (#174)
 
     expect(settingsPanelSource).toContain("settings.languageRestartRequired");
   });
+
+  it("SettingsPanel renders language options from the i18n-owned supportedLanguages list (#186)", () => {
+    const settingsPanelSource = readFileSync(
+      "src/renderer/SettingsPanel.tsx",
+      "utf8"
+    );
+
+    expect(settingsPanelSource).toContain("supportedLanguages.map");
+    expect(settingsPanelSource).toContain(
+      "languageDefinitions[language].nativeName"
+    );
+    expect(settingsPanelSource).not.toContain('["ja", "en"]');
+    expect(settingsPanelSource).not.toContain("languageLabelKey");
+  });
 });

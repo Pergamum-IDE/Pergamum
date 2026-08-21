@@ -1,5 +1,9 @@
 import { describe, expect, it } from "vitest";
-import { t } from "../../src/shared/i18n";
+import {
+  languageDefinitions,
+  supportedLanguages,
+  t
+} from "../../src/shared/i18n";
 
 const matchBoundaryKeys = [
   "glossaryEditor.advancedMatchingSettings",
@@ -25,6 +29,24 @@ const disallowedBoundaryWords = [
   "left boundary",
   "right boundary"
 ];
+
+describe("supported UI languages (#186)", () => {
+  it("keeps selectable UI language values exactly ja and en", () => {
+    expect([...supportedLanguages]).toEqual(["ja", "en"]);
+  });
+
+  it("derives supportedLanguages from the language definition map", () => {
+    expect([...supportedLanguages]).toEqual(Object.keys(languageDefinitions));
+  });
+
+  it("defines stable native names for the settings language selector", () => {
+    expect(
+      supportedLanguages.map(
+        (language) => languageDefinitions[language].nativeName
+      )
+    ).toEqual(["日本語", "English"]);
+  });
+});
 
 describe("glossary entry deletion translations", () => {
   it("labels the delete button and its confirmation message for ja and en", () => {
@@ -97,7 +119,7 @@ describe("glossary form match boundary translations", () => {
 
   it("never exposes left/right boundary vocabulary in the new translation content", () => {
     for (const key of matchBoundaryKeys) {
-      for (const language of ["ja", "en"] as const) {
+      for (const language of supportedLanguages) {
         const value = t(language, key);
 
         for (const disallowedWord of disallowedBoundaryWords) {

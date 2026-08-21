@@ -885,10 +885,10 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
     });
 
-    it("workbench.language's enum values are exactly the existing Language type's members — no mismatch between the catalog and src/shared/i18n", () => {
-      expect(
-        [...getCatalogEntry("workbench.language").enumValues].sort()
-      ).toEqual([...supportedLanguages].sort());
+    it("workbench.language's enum values match the i18n-owned supported UI languages", () => {
+      expect([...getCatalogEntry("workbench.language").enumValues]).toEqual([
+        ...supportedLanguages
+      ]);
     });
 
     it("workbench.language is an enum entry and workbench.statusBar.visible is a boolean entry", () => {
