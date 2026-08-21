@@ -2,8 +2,9 @@ import type { Translate } from "../shared/i18n";
 import type { EditorId } from "../shared/editorId";
 import {
   AppDialogError,
-  type AppConfirmDialogOptions,
-  type AppConfirmDialogResult
+  type AppChoiceDialogOptions,
+  type AppChoiceDialogResult,
+  type AppDialogChoiceId
 } from "./dialog/appDialogTypes";
 import {
   isOpenDocumentDirty,
@@ -11,19 +12,34 @@ import {
   type OpenDocumentsState
 } from "./openDocuments";
 
+/** Stable choice IDs for the temporary #192 dirty-close dogfood dialog. */
+export const dirtyCloseChoiceIds = {
+  saveAndClose: "saveAndClose",
+  discardAndClose: "discardAndClose",
+  cancel: "cancel"
+} as const satisfies Record<string, AppDialogChoiceId>;
+
+export type DirtyCloseChoiceId =
+  (typeof dirtyCloseChoiceIds)[keyof typeof dirtyCloseChoiceIds];
+
+export interface DirtyCloseStatusMessage {
+  readonly key: "status.saveBeforeCloseNotImplemented";
+}
+
 /**
- * The #182 dirty-close confirmation dialog options (#184 D-10): a
- * two-choice destructive confirm, never `window.confirm()` or an Electron
- * native dialog. `icon.kind: "warning"` is passed as a kind, not an SVG file
- * name — `dialogIcons.ts` owns the actual icon mapping.
+ * The #192 dirty-close dogfood dialog options: a temporary three-choice
+ * application choice dialog, never `window.confirm()` or an Electron native
+ * dialog. `icon.kind: "warning"` is passed as a kind, not an SVG file name —
+ * `dialogIcons.ts` owns the actual icon mapping.
  *
  * `dismissOnBackdropClick: false` (#184 follow-up): this dialog asks
  * whether to discard unsaved manuscript changes, so an accidental backdrop
- * click must not dismiss it — only `Escape` or the Cancel button cancel.
+ * click must not dismiss it. `Escape` resolves dismissed and keeps the tab
+ * open; the explicit cancel button resolves a chosen cancel ID.
  */
-export function buildDirtyCloseConfirmDialogOptions(
+export function buildDirtyCloseChoiceDialogOptions(
   translate: Translate
-): AppConfirmDialogOptions {
+): AppChoiceDialogOptions {
   return {
     title: translate("dialog.dirtyClose.title"),
     message: {
@@ -34,10 +50,28 @@ export function buildDirtyCloseConfirmDialogOptions(
       kind: "warning",
       tooltip: translate("dialog.icon.warning")
     },
+    choices: [
+      {
+        id: dirtyCloseChoiceIds.saveAndClose,
+        label: translate("dialog.dirtyClose.saveAndClose"),
+        role: "primary"
+      },
+      {
+        id: dirtyCloseChoiceIds.discardAndClose,
+        label: translate("dialog.dirtyClose.discardAndClose"),
+        role: "destructive",
+        icon: { kind: "alertTriangle" }
+      },
+      {
+        id: dirtyCloseChoiceIds.cancel,
+        label: translate("common.cancel"),
+        role: "cancel"
+      }
+    ],
+    primaryChoiceId: dirtyCloseChoiceIds.saveAndClose,
+    cancelChoiceId: dirtyCloseChoiceIds.cancel,
+    initialFocusChoiceId: dirtyCloseChoiceIds.cancel,
     clipboardText: null,
-    tone: "destructive",
-    confirmLabel: translate("dialog.dirtyClose.discardAndClose"),
-    cancelLabel: translate("common.cancel"),
     dismissOnBackdropClick: false
   };
 }
@@ -45,20 +79,21 @@ export function buildDirtyCloseConfirmDialogOptions(
 export interface EditorCloseFlowDeps {
   state: OpenDocumentsState;
   translate: Translate;
-  confirmDialog: (
-    options: AppConfirmDialogOptions
-  ) => Promise<AppConfirmDialogResult>;
+  choiceDialog: (
+    options: AppChoiceDialogOptions
+  ) => Promise<AppChoiceDialogResult>;
+  onStatus: (status: DirtyCloseStatusMessage) => void;
   onClose: (editorId: EditorId) => void;
 }
 
 /**
  * Resolves the close target (#184: explicit `editorId`, or the active
- * editor when omitted) and, for a dirty target, awaits the dirty-close
- * confirmation before calling `onClose`. A concurrent close request that
- * lands while a confirmation is already open rejects with
+ * editor when omitted) and, for a dirty target, awaits the dirty-close choice
+ * dialog before calling `onClose`. A concurrent close request that lands
+ * while a dialog is already open rejects with
  * `AppDialogError("dialogAlreadyOpen")` (#182 D-14) — absorbed here as a
- * silent no-op: no additional close, no rethrow, the existing confirmation
- * stays open.
+ * silent no-op: no additional close, no rethrow, the existing dialog stays
+ * open.
  */
 export async function runEditorCloseFlow(
   editorId: EditorId | undefined,
@@ -71,11 +106,11 @@ export async function runEditorCloseFlow(
   }
 
   if (isOpenDocumentDirty(deps.state, targetId)) {
-    let result: AppConfirmDialogResult;
+    let result: AppChoiceDialogResult;
 
     try {
-      result = await deps.confirmDialog(
-        buildDirtyCloseConfirmDialogOptions(deps.translate)
+      result = await deps.choiceDialog(
+        buildDirtyCloseChoiceDialogOptions(deps.translate)
       );
     } catch (error) {
       if (error instanceof AppDialogError && error.kind === "dialogAlreadyOpen") {
@@ -85,8 +120,22 @@ export async function runEditorCloseFlow(
       throw error;
     }
 
-    if (result !== "confirm") {
+    if (result.kind === "dismissed") {
       return;
+    }
+
+    switch (result.id) {
+      case dirtyCloseChoiceIds.saveAndClose:
+        deps.onStatus({ key: "status.saveBeforeCloseNotImplemented" });
+        // TODO(save-before-close): Temporary dogfood placeholder.
+        // Replace this with real save-before-close behavior.
+        break;
+      case dirtyCloseChoiceIds.discardAndClose:
+        break;
+      case dirtyCloseChoiceIds.cancel:
+        return;
+      default:
+        return;
     }
   }
 

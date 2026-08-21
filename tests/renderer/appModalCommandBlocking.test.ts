@@ -1,5 +1,10 @@
 import { readFileSync } from "node:fs";
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
+import { editorCommandIds } from "../../src/shared/commandIds";
+import { CommandRegistry } from "../../src/shared/commandRegistry";
+import { t, type Translate } from "../../src/shared/i18n";
+import { buildDirtyCloseChoiceDialogOptions } from "../../src/renderer/documentTabCloseFlow";
+import { DialogController } from "../../src/renderer/dialog/dialogController";
 
 describe("app modal command blocking (#190)", () => {
   it("wires pending app modal state into the Command Registry execution blocker", () => {
@@ -56,5 +61,43 @@ describe("app modal command blocking (#190)", () => {
     );
     expect(executeUiCommandSource).not.toContain("dialogController");
     expect(executeUiCommandSource).not.toContain("pendingDialogRequest");
+  });
+
+  it("blocks registry-routed background commands while the dirty-close choice dialog is pending", async () => {
+    const controller = new DialogController();
+    const registry = new CommandRegistry();
+    const execute = vi.fn();
+    const translateEn: Translate = (key, values) => t("en", key, values);
+
+    registry.register({
+      id: editorCommandIds.saveDocument,
+      title: "Save",
+      execute
+    });
+    registry.setCommandExecutionBlocker(() =>
+      controller.getPendingRequest() ? "app_modal_open" : null
+    );
+
+    const pendingChoice = controller.choice(
+      buildDirtyCloseChoiceDialogOptions(translateEn)
+    );
+
+    await expect(
+      registry.execute(editorCommandIds.saveDocument, {
+        source: "applicationMenu"
+      })
+    ).rejects.toMatchObject({
+      commandId: editorCommandIds.saveDocument,
+      reason: "app_modal_open"
+    });
+    expect(execute).not.toHaveBeenCalled();
+
+    controller.resolve({ kind: "dismissed" });
+    await expect(pendingChoice).resolves.toEqual({ kind: "dismissed" });
+    await registry.execute(editorCommandIds.saveDocument, {
+      source: "applicationMenu"
+    });
+
+    expect(execute).toHaveBeenCalledTimes(1);
   });
 });

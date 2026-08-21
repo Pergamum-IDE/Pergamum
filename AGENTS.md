@@ -224,6 +224,18 @@ It selects a document through the application's existing document-state flow.
 
 Do not introduce a complex filesystem tree model before an Issue explicitly requires one.
 
+## GUI / Platform UI Guidelines
+
+GUIを実装・変更する場合は、対象プラットフォームのUI規約とアクセシビリティ上の期待を確認すること。
+
+特にダイアログ、ボタン配置、default action、cancel action、destructive action、Enter/Escapeの挙動、キーボードショートカット、アイコンの向き、RTL（Right-to-Left）/ writing direction の影響を受けるレイアウトでは、実装前にOS固有・言語方向固有の注意点をリストアップすること。
+
+macOSについては、必要に応じて Apple Human Interface Guidelines / AppKit の慣例を確認し、単純な左右反転や caller-provided order の流用で済ませないこと。
+
+RTL / writing direction に影響されるCSSでは、可能な限り `left` / `right` / `margin-left` / `margin-right` などの物理方向指定を避け、`inline` / `block` 系の logical properties を優先すること。
+
+OS固有のUI規約に従わない判断をする場合は、その理由をIssueまたはPR本文に明記すること。
+
 ## Renderer Direction
 
 Pergamum is expected to eventually support multiple rendering targets, including:

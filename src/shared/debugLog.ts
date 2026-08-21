@@ -526,6 +526,7 @@ export const knownDebugLogStatusKeys = [
   "status.projectOpenFailed",
   "status.recentProjectOpenFailed",
   "status.saveAsTargetAlreadyOpen",
+  "status.saveBeforeCloseNotImplemented",
   "status.saveCanceled",
   "status.saveFailed",
   "status.savedPath",

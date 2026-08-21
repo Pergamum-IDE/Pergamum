@@ -84,6 +84,7 @@ import {
   type CurrentEditor
 } from "./currentEditor";
 import { DocumentTabBar } from "./DocumentTabBar";
+import { ChoiceDialog } from "./dialog/ChoiceDialog";
 import { ConfirmDialog } from "./dialog/ConfirmDialog";
 import { navigatorClipboardAdapter } from "./dialog/clipboardAdapter";
 import {
@@ -92,8 +93,8 @@ import {
 } from "./dialog/dialogController";
 import {
   getDialogActionOrder,
-  type AppConfirmDialogOptions,
-  type AppConfirmDialogResult
+  type AppChoiceDialogOptions,
+  type AppChoiceDialogResult
 } from "./dialog/appDialogTypes";
 import { runEditorCloseFlow } from "./documentTabCloseFlow";
 import {
@@ -293,8 +294,8 @@ export function App(): JSX.Element {
    * than mounting that provider: it needs a `translate` bound to
    * `displayLanguage`, which only exists once `useApplicationSettings()`
    * below has run, so `App` itself can't be a descendant of its own
-   * provider. `DialogController` + `ConfirmDialog` are the reusable pieces
-   * this actually needs (#184).
+   * provider. `DialogController` + the concrete dialog components are the
+   * reusable pieces this actually needs.
    */
   const dialogControllerRef = useRef<DialogController | null>(null);
 
@@ -323,14 +324,14 @@ export function App(): JSX.Element {
     []
   );
 
-  function confirmDialog(
-    options: AppConfirmDialogOptions
-  ): Promise<AppConfirmDialogResult> {
+  function choiceDialog(
+    options: AppChoiceDialogOptions
+  ): Promise<AppChoiceDialogResult> {
     if (typeof document !== "undefined") {
       dialogOpenerRef.current = document.activeElement;
     }
 
-    return dialogController.confirm(options);
+    return dialogController.choice(options);
   }
   const [sidebarMode, setSidebarMode] = useState(defaultSidebarMode);
   const [layout, setLayout] = useState<WorkbenchLayoutState>(
@@ -1129,7 +1130,8 @@ export function App(): JSX.Element {
     await runEditorCloseFlow(editorId, {
       state: openDocumentsState,
       translate,
-      confirmDialog,
+      choiceDialog,
+      onStatus: (status) => setStatus(status),
       onClose: (targetId) => {
         editorNavigation.invalidateEditor(targetId);
         setOpenDocumentsState((state) => closeOpenEditor(state, targetId));
@@ -2959,10 +2961,20 @@ export function App(): JSX.Element {
         />
       ) : null}
 
-      {pendingDialogRequest ? (
+      {pendingDialogRequest?.kind === "confirm" ? (
         <ConfirmDialog
           options={pendingDialogRequest.options}
           actionOrder={dialogActionOrder}
+          translate={translate}
+          clipboardAdapter={navigatorClipboardAdapter}
+          opener={dialogOpenerRef.current}
+          onResult={(result) => dialogController.resolve(result)}
+        />
+      ) : null}
+      {pendingDialogRequest?.kind === "choice" ? (
+        <ChoiceDialog
+          options={pendingDialogRequest.options}
+          platform={window.pergamum.platform}
           translate={translate}
           clipboardAdapter={navigatorClipboardAdapter}
           opener={dialogOpenerRef.current}

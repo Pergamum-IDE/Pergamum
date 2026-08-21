@@ -17,6 +17,8 @@
   --app-dialog-foreground: #25313d;
   --app-dialog-header-background: #eef3f8;
   --app-dialog-header-foreground: #16222c;
+  --app-dialog-warning-header-background: #f7e4e8;
+  --app-dialog-warning-header-foreground: #25313d;
   --app-dialog-title-font-weight: 700;
   --app-dialog-icon-info: #2563a8;
   --app-dialog-icon-warning: #8a4c0f;
@@ -31,6 +33,7 @@
   --app-dialog-confirm-foreground: #ffffff;
   --app-dialog-destructive-confirm-background: #a32929;
   --app-dialog-destructive-confirm-foreground: #ffffff;
+  --app-dialog-focus-ring: #7aa7d9;
   --app-dialog-copy-button-foreground: #52616f;
   --app-dialog-copy-failure-foreground: #a32929;
   font-family:
@@ -1998,6 +2001,11 @@ button:active {
   color: var(--app-dialog-destructive-header-foreground);
 }
 
+.appDialog-warning .appDialogHeader {
+  background: var(--app-dialog-warning-header-background);
+  color: var(--app-dialog-warning-header-foreground);
+}
+
 .appDialogTitle {
   margin: 0;
   font-size: 1rem;
@@ -2092,6 +2100,36 @@ button:active {
   flex-shrink: 0;
 }
 
+.appDialog-choice .appDialogFooter {
+  flex-wrap: wrap;
+  align-items: flex-start;
+}
+
+.appDialog-choice .appDialogFooter-hasCopy .appDialogFooterCopy {
+  flex: 1 1 0;
+}
+
+.appDialog-choice .appDialogFooter-noCopy {
+  justify-content: center;
+}
+
+.appDialog-choice .appDialogFooter-noCopy .appDialogFooterCopy {
+  display: none;
+}
+
+.appDialog-choice .appDialogActions {
+  flex-direction: column;
+  align-items: stretch;
+  justify-content: flex-start;
+  margin-inline-start: 0;
+  min-width: min(280px, 100%);
+  max-width: 100%;
+}
+
+.appDialog-choice .appDialogFooter-hasCopy .appDialogActions {
+  margin-inline-start: auto;
+}
+
 .appDialogButton {
   padding-block: 6px;
   padding-inline: 14px;
@@ -2100,6 +2138,30 @@ button:active {
   background: var(--app-dialog-button-background);
   color: var(--app-dialog-button-foreground);
   cursor: pointer;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 6px;
+}
+
+.appDialog-choice .appDialogButton {
+  width: 100%;
+  height: auto;
+  min-height: 32px;
+  white-space: normal;
+  justify-content: center;
+  text-align: center;
+}
+
+.appDialogButton:hover {
+  background: var(--app-dialog-button-background);
+  color: var(--app-dialog-button-foreground);
+  border-color: var(--app-dialog-button-border);
+}
+
+.appDialogButton:focus-visible {
+  outline: 2px solid var(--app-dialog-focus-ring);
+  outline-offset: 2px;
 }
 
 .appDialogButton-confirm {
@@ -2108,7 +2170,51 @@ button:active {
   border-color: transparent;
 }
 
+.appDialogButton-confirm:hover {
+  background: var(--app-dialog-confirm-background);
+  color: var(--app-dialog-confirm-foreground);
+  border-color: transparent;
+}
+
+.appDialogButton-choice-destructive {
+  background: var(--app-dialog-destructive-confirm-background);
+  color: var(--app-dialog-destructive-confirm-foreground);
+  border-color: transparent;
+}
+
+.appDialogButton-choice-destructive:hover {
+  background: var(--app-dialog-destructive-confirm-background);
+  color: var(--app-dialog-destructive-confirm-foreground);
+  border-color: transparent;
+}
+
 .appDialog-destructive .appDialogButton-confirm {
   background: var(--app-dialog-destructive-confirm-background);
   color: var(--app-dialog-destructive-confirm-foreground);
+}
+
+.appDialog-destructive .appDialogButton-confirm:hover {
+  background: var(--app-dialog-destructive-confirm-background);
+  color: var(--app-dialog-destructive-confirm-foreground);
+  border-color: transparent;
+}
+
+.appDialogButtonIcon {
+  display: inline-flex;
+  width: 16px;
+  height: 16px;
+  flex-shrink: 0;
+  pointer-events: none;
+}
+
+.appDialogButtonIcon svg {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.appDialogButtonLabel {
+  min-width: 0;
+  text-align: center;
+  overflow-wrap: anywhere;
 }
