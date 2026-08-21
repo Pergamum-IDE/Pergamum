@@ -93,10 +93,15 @@ export function ChoiceDialog({
   const initialFocusChoiceId = resolveInitialFocusChoiceId(options);
   const clipboardText = options.clipboardText ?? null;
   const hasCopyButton = Boolean(clipboardText);
+  const hasCopyContent = hasCopyButton || copyFailed;
   const hasDestructiveChoice = options.choices.some(
     (choice) => choice.role === "destructive"
   );
   const dialogClasses = ["appDialog", "appDialog-choice"];
+  const footerClasses = [
+    "appDialogFooter",
+    hasCopyContent ? "appDialogFooter-hasCopy" : "appDialogFooter-noCopy"
+  ];
 
   if (hasDestructiveChoice) {
     dialogClasses.push("appDialog-choice-hasDestructive");
@@ -209,7 +214,7 @@ export function ChoiceDialog({
             {options.message.text}
           </p>
         </div>
-        <div className="appDialogFooter">
+        <div className={footerClasses.join(" ")}>
           <div className="appDialogFooterCopy">
             {hasCopyButton ? (
               <button

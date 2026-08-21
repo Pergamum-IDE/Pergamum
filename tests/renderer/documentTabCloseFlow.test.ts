@@ -159,10 +159,10 @@ describe("buildDirtyCloseChoiceDialogOptions (#192 dogfood)", () => {
     expect(saveBranchSource).not.toContain("saveCurrentDocument");
   });
 
-  it("orders buttons save / discard / cancel on Windows and Linux through the choice foundation", () => {
+  it("orders choices save / discard / cancel on every platform through the choice foundation", () => {
     const options = buildDirtyCloseChoiceDialogOptions(translateEn);
 
-    for (const platform of ["windows", "linux"] as const) {
+    for (const platform of ["windows", "linux", "macos", "other"] as const) {
       expect(
         resolveChoiceDialogActionOrder(options, platform).map(
           (choice) => choice.id
@@ -171,7 +171,7 @@ describe("buildDirtyCloseChoiceDialogOptions (#192 dogfood)", () => {
     }
   });
 
-  it("orders buttons discard / cancel / save on macOS and other through the choice foundation", () => {
+  it("does not use the old macOS/other horizontal order for dirty-close choices", () => {
     const options = buildDirtyCloseChoiceDialogOptions(translateEn);
 
     for (const platform of ["macos", "other"] as const) {
@@ -179,7 +179,7 @@ describe("buildDirtyCloseChoiceDialogOptions (#192 dogfood)", () => {
         resolveChoiceDialogActionOrder(options, platform).map(
           (choice) => choice.id
         )
-      ).toEqual(["discardAndClose", "cancel", "saveAndClose"]);
+      ).not.toEqual(["discardAndClose", "cancel", "saveAndClose"]);
     }
   });
 });

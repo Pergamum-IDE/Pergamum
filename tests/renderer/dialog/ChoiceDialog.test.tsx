@@ -86,10 +86,21 @@ function cssRuleBlock(styles: string, selector: string): string {
   return styles.slice(start, end + 1);
 }
 
+function choiceIndex(markup: string, choiceId: string): number {
+  const index = markup.indexOf(`data-choice-id="${choiceId}"`);
+
+  expect(index).toBeGreaterThan(-1);
+
+  return index;
+}
+
 describe("ChoiceDialog structure (#192)", () => {
   it("renders three or more choices", () => {
     const markup = renderDialog();
 
+    expect(markup).toContain("appDialog-choice");
+    expect(markup).toContain("appDialogFooter-noCopy");
+    expect(markup).not.toContain("appDialogFooter-hasCopy");
     expect(markup).toContain('data-choice-id="save"');
     expect(markup).toContain('data-choice-id="discard"');
     expect(markup).toContain('data-choice-id="cancel"');
@@ -282,6 +293,100 @@ describe("ChoiceDialog structure (#192)", () => {
     expect(focusCss).toContain("outline-offset:");
   });
 
+  it("does not give ChoiceDialog its own fixed inline size", () => {
+    const styles = readFileSync("src/renderer/styles.css", "utf8");
+    const baseDialogCss = cssRuleBlock(styles, ".appDialog");
+
+    expect(baseDialogCss).toContain("max-width: 480px");
+    expect(styles).not.toContain(".appDialog-choice {\n");
+    expect(styles).not.toContain("width: min(720px");
+    expect(styles).not.toContain("min-width: min(320px");
+    expect(styles).not.toContain("max-width: min(720px");
+    expect(styles).not.toMatch(
+      /\.appDialog-choice\s*\{[\s\S]*?\b(?:inline-size|min-inline-size|max-inline-size)\s*:/
+    );
+  });
+
+  it("wraps the ChoiceDialog footer while keeping the actions area as a right-side column", () => {
+    const styles = readFileSync("src/renderer/styles.css", "utf8");
+    const footerCss = cssRuleBlock(
+      styles,
+      ".appDialog-choice .appDialogFooter"
+    );
+    const hasCopyAreaCss = cssRuleBlock(
+      styles,
+      ".appDialog-choice .appDialogFooter-hasCopy .appDialogFooterCopy"
+    );
+    const noCopyFooterCss = cssRuleBlock(
+      styles,
+      ".appDialog-choice .appDialogFooter-noCopy"
+    );
+    const noCopyAreaCss = cssRuleBlock(
+      styles,
+      ".appDialog-choice .appDialogFooter-noCopy .appDialogFooterCopy"
+    );
+    const actionsCss = cssRuleBlock(
+      styles,
+      ".appDialog-choice .appDialogActions"
+    );
+    const hasCopyActionsCss = cssRuleBlock(
+      styles,
+      ".appDialog-choice .appDialogFooter-hasCopy .appDialogActions"
+    );
+
+    expect(footerCss).toContain("flex-wrap: wrap");
+    expect(footerCss).toContain("align-items: flex-start");
+    expect(hasCopyAreaCss).toContain("flex: 1 1 0");
+    expect(noCopyFooterCss).toContain("justify-content: center");
+    expect(noCopyAreaCss).toContain("display: none");
+    expect(actionsCss).toContain("flex-direction: column");
+    expect(actionsCss).toContain("align-items: stretch");
+    expect(actionsCss).toContain("justify-content: flex-start");
+    expect(actionsCss).toContain("margin-inline-start: 0");
+    expect(actionsCss).toContain("min-width: min(280px, 100%)");
+    expect(actionsCss).toContain("max-width: 100%");
+    expect(actionsCss).not.toMatch(/\b(?:left|right)\s*:/);
+    expect(hasCopyActionsCss).toContain("margin-inline-start: auto");
+  });
+
+  it("centers the ChoiceDialog actions column when there is no copy content", () => {
+    const markup = renderDialog();
+
+    expect(markup).toContain("appDialogFooter-noCopy");
+    expect(markup).not.toContain("appDialogFooter-hasCopy");
+    expect(markup).not.toContain("appDialogCopyButton");
+  });
+
+  it("keeps left copy area and inline-end actions when copy content is present", () => {
+    const markup = renderDialog({
+      options: baseOptions({ clipboardText: "diagnostic" })
+    });
+
+    expect(markup).toContain("appDialogFooter-hasCopy");
+    expect(markup).not.toContain("appDialogFooter-noCopy");
+    expect(markup).toContain("appDialogCopyButton");
+  });
+
+  it("lets ChoiceDialog buttons grow vertically and wrap long centered labels", () => {
+    const styles = readFileSync("src/renderer/styles.css", "utf8");
+    const buttonCss = cssRuleBlock(
+      styles,
+      ".appDialog-choice .appDialogButton"
+    );
+    const labelCss = cssRuleBlock(styles, ".appDialogButtonLabel");
+
+    expect(buttonCss).toContain("width: 100%");
+    expect(buttonCss).toContain("height: auto");
+    expect(buttonCss).toContain("min-height: 32px");
+    expect(buttonCss).toContain("white-space: normal");
+    expect(buttonCss).toContain("justify-content: center");
+    expect(buttonCss).toContain("text-align: center");
+    expect(buttonCss).not.toContain("overflow: hidden");
+    expect(labelCss).toContain("min-width: 0");
+    expect(labelCss).toContain("text-align: center");
+    expect(labelCss).toContain("overflow-wrap: anywhere");
+  });
+
   it("renders HTML-like message text as text, not markup", () => {
     const markup = renderDialog({
       options: baseOptions({
@@ -308,39 +413,48 @@ describe("ChoiceDialog structure (#192)", () => {
 });
 
 describe("ChoiceDialog action order (#192)", () => {
-  it("uses platform action order by default on Windows/Linux", () => {
-    const markup = renderDialog({ platform: "windows" });
+  it("uses semantic top-to-bottom order on every platform", () => {
+    for (const platform of ["windows", "linux", "macos", "other"] as const) {
+      const markup = renderDialog({ platform });
 
-    expect(markup.indexOf('data-choice-id="save"')).toBeLessThan(
-      markup.indexOf('data-choice-id="discard"')
-    );
-    expect(markup.indexOf('data-choice-id="discard"')).toBeLessThan(
-      markup.indexOf('data-choice-id="cancel"')
-    );
+      expect(choiceIndex(markup, "save")).toBeLessThan(
+        choiceIndex(markup, "discard")
+      );
+      expect(choiceIndex(markup, "discard")).toBeLessThan(
+        choiceIndex(markup, "cancel")
+      );
+    }
   });
 
-  it("uses macOS platform action order without simple reverse", () => {
+  it("does not preserve the old macOS horizontal order in the vertical choice list", () => {
     const markup = renderDialog({ platform: "macos" });
 
-    expect(markup.indexOf('data-choice-id="discard"')).toBeLessThan(
-      markup.indexOf('data-choice-id="cancel"')
+    expect(choiceIndex(markup, "discard")).toBeGreaterThan(
+      choiceIndex(markup, "save")
     );
-    expect(markup.indexOf('data-choice-id="cancel"')).toBeLessThan(
-      markup.indexOf('data-choice-id="save"')
+    expect(choiceIndex(markup, "cancel")).toBeGreaterThan(
+      choiceIndex(markup, "discard")
     );
   });
 
   it("preserves caller order when requested", () => {
     const markup = renderDialog({
       platform: "macos",
-      options: baseOptions({ actionOrderPolicy: "caller" })
+      options: baseOptions({
+        actionOrderPolicy: "caller",
+        choices: [
+          { id: "cancel", label: "キャンセル", role: "cancel" },
+          { id: "save", label: "保存", role: "primary" },
+          { id: "discard", label: "保存しない", role: "destructive" }
+        ]
+      })
     });
 
-    expect(markup.indexOf('data-choice-id="save"')).toBeLessThan(
-      markup.indexOf('data-choice-id="discard"')
+    expect(choiceIndex(markup, "cancel")).toBeLessThan(
+      choiceIndex(markup, "save")
     );
-    expect(markup.indexOf('data-choice-id="discard"')).toBeLessThan(
-      markup.indexOf('data-choice-id="cancel"')
+    expect(choiceIndex(markup, "save")).toBeLessThan(
+      choiceIndex(markup, "discard")
     );
   });
 });

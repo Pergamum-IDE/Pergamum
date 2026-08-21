@@ -263,43 +263,32 @@ describe("choice dialog primary/cancel/focus resolution (#192)", () => {
   });
 });
 
-describe("choice dialog platform action order (#192)", () => {
-  it('defaults actionOrderPolicy to "platform"', () => {
+describe("choice dialog semantic action order (#192)", () => {
+  it('defaults actionOrderPolicy to "semantic"', () => {
     expect(resolveChoiceDialogActionOrderPolicy(dirtyCloseChoiceOptions())).toBe(
-      "platform"
+      "semantic"
     );
   });
 
-  it("orders dirty-close-style choices as save / discard / cancel on Windows", () => {
+  it("orders dirty-close-style choices as save / discard / cancel on every platform", () => {
+    for (const platform of ["windows", "linux", "macos", "other"] as const) {
+      expect(
+        resolveChoiceDialogActionOrder(dirtyCloseChoiceOptions(), platform).map(
+          (choice) => choice.id
+        )
+      ).toEqual(["save", "discard", "cancel"]);
+    }
+  });
+
+  it("does not carry over horizontal macOS ordering into semantic choice order", () => {
     expect(
-      resolveChoiceDialogActionOrder(dirtyCloseChoiceOptions(), "windows").map(
+      resolveChoiceDialogActionOrder(dirtyCloseChoiceOptions(), "macos").map(
         (choice) => choice.id
       )
-    ).toEqual(["save", "discard", "cancel"]);
+    ).not.toEqual(["discard", "cancel", "save"]);
   });
 
-  it("orders dirty-close-style choices as save / discard / cancel on Linux", () => {
-    expect(
-      resolveChoiceDialogActionOrder(dirtyCloseChoiceOptions(), "linux").map(
-        (choice) => choice.id
-      )
-    ).toEqual(["save", "discard", "cancel"]);
-  });
-
-  it("orders dirty-close-style choices as discard / cancel / save on macOS", () => {
-    const callerOrder = dirtyCloseChoiceOptions().choices.map(
-      (choice) => choice.id
-    );
-    const macOrder = resolveChoiceDialogActionOrder(
-      dirtyCloseChoiceOptions(),
-      "macos"
-    ).map((choice) => choice.id);
-
-    expect(macOrder).toEqual(["discard", "cancel", "save"]);
-    expect(macOrder).not.toEqual([...callerOrder].reverse());
-  });
-
-  it("does not implement macOS ordering as a simple reverse in the helper", () => {
+  it("does not implement choice ordering as a simple reverse in the helper", () => {
     const source = readFileSync("src/renderer/dialog/appDialogTypes.ts", "utf8");
 
     expect(source).not.toContain(".reverse(");
@@ -308,10 +297,17 @@ describe("choice dialog platform action order (#192)", () => {
   it("preserves caller-provided order when actionOrderPolicy is caller", () => {
     expect(
       resolveChoiceDialogActionOrder(
-        dirtyCloseChoiceOptions({ actionOrderPolicy: "caller" }),
+        dirtyCloseChoiceOptions({
+          actionOrderPolicy: "caller",
+          choices: [
+            { id: "cancel", label: "Cancel", role: "cancel" },
+            { id: "save", label: "Save", role: "primary" },
+            { id: "discard", label: "Discard", role: "destructive" }
+          ]
+        }),
         "macos"
       ).map((choice) => choice.id)
-    ).toEqual(["save", "discard", "cancel"]);
+    ).toEqual(["cancel", "save", "discard"]);
   });
 
   it("preserves relative order among neutral and destructive choices", () => {
@@ -326,7 +322,7 @@ describe("choice dialog platform action order (#192)", () => {
 
     expect(
       resolveChoiceDialogActionOrder(options, "macos").map((choice) => choice.id)
-    ).toEqual(["discard", "review", "cancel", "save"]);
+    ).toEqual(["save", "discard", "review", "cancel"]);
   });
 });
 

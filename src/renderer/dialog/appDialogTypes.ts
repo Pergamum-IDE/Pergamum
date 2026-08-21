@@ -74,7 +74,7 @@ export type AppChoiceDialogResult =
   | { readonly kind: "chosen"; readonly id: AppDialogChoiceId }
   | { readonly kind: "dismissed" };
 
-export type AppChoiceDialogActionOrderPolicy = "platform" | "caller";
+export type AppChoiceDialogActionOrderPolicy = "semantic" | "caller";
 
 export interface AppChoiceDialogOptions {
   readonly title: string;
@@ -285,12 +285,12 @@ export function resolveInitialFocusChoiceId(
 export function resolveChoiceDialogActionOrderPolicy(
   options: AppChoiceDialogOptions
 ): AppChoiceDialogActionOrderPolicy {
-  return options.actionOrderPolicy ?? "platform";
+  return options.actionOrderPolicy ?? "semantic";
 }
 
 export function resolveChoiceDialogActionOrder(
   options: AppChoiceDialogOptions,
-  platform: AppPlatform
+  _platform: AppPlatform
 ): readonly AppDialogChoice[] {
   if (resolveChoiceDialogActionOrderPolicy(options) === "caller") {
     return [...options.choices];
@@ -308,17 +308,9 @@ export function resolveChoiceDialogActionOrder(
     (choice) => choice.id !== primaryChoiceId && choice.id !== cancelChoiceId
   );
 
-  if (platform === "windows" || platform === "linux") {
-    return [
-      ...(primaryChoice ? [primaryChoice] : []),
-      ...middleChoices,
-      ...(cancelChoice ? [cancelChoice] : [])
-    ];
-  }
-
   return [
+    ...(primaryChoice ? [primaryChoice] : []),
     ...middleChoices,
-    ...(cancelChoice ? [cancelChoice] : []),
-    ...(primaryChoice ? [primaryChoice] : [])
+    ...(cancelChoice ? [cancelChoice] : [])
   ];
 }
