@@ -122,6 +122,9 @@ describe("IME composition save guard", () => {
     const execute = vi.fn<ApplicationMenuAllowedCommandExecutor>();
 
     guard.handleCompositionStart();
+    expect(
+      guard.handleCommand(applicationCommandIds.createProject, execute)
+    ).toBe(true);
     expect(guard.handleCommand(applicationCommandIds.openProject, execute)).toBe(
       true
     );
@@ -129,6 +132,7 @@ describe("IME composition save guard", () => {
       guard.handleCommand(editorCommandIds.openMarkdownDocument, execute)
     ).toBe(true);
 
+    expect(execute).toHaveBeenCalledWith(applicationCommandIds.createProject);
     expect(execute).toHaveBeenCalledWith(applicationCommandIds.openProject);
     expect(execute).toHaveBeenCalledWith(
       editorCommandIds.openMarkdownDocument

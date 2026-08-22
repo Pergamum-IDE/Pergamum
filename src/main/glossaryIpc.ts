@@ -35,10 +35,10 @@ import {
   openProjectDatabase,
   type ProjectDatabase
 } from "./projectDatabase";
-import { requireCurrentProjectRootPath } from "./projectIpc";
+import { requireCurrentActiveProjectFilePath } from "./projectIpc";
 import { getDebugLogger, type DebugLogger } from "./debugLogger";
 
-export type CurrentProjectRootPathProvider = () => string;
+export type CurrentActiveProjectFilePathProvider = () => string;
 
 // index 0 ("OK") confirms the deletion; index 1 ("Cancel") is both the
 // default and cancel action, matching every dismiss path (Cancel, ESC,
@@ -141,12 +141,12 @@ function parseGlossarySurfaceLookupRequest(
 }
 
 async function withCurrentProjectDatabase<T>(
-  getCurrentProjectRootPath: CurrentProjectRootPathProvider,
+  getCurrentActiveProjectFilePath: CurrentActiveProjectFilePathProvider,
   logger: DebugLogger,
   operation: (database: ProjectDatabase) => Promise<T>
 ): Promise<T> {
-  const projectRootPath = getCurrentProjectRootPath();
-  const database = await openProjectDatabase(projectRootPath, logger);
+  const activeProjectFilePath = getCurrentActiveProjectFilePath();
+  const database = await openProjectDatabase(activeProjectFilePath, logger);
 
   try {
     return await operation(database);
@@ -156,8 +156,8 @@ async function withCurrentProjectDatabase<T>(
 }
 
 export function createGlossaryIpcHandlers(
-  getCurrentProjectRootPath: CurrentProjectRootPathProvider =
-    requireCurrentProjectRootPath,
+  getCurrentActiveProjectFilePath: CurrentActiveProjectFilePathProvider =
+    requireCurrentActiveProjectFilePath,
   confirmDeletion: ConfirmGlossaryEntryDeletion =
     confirmGlossaryEntryDeletionWithDialog,
   logger: DebugLogger = getDebugLogger()
@@ -168,7 +168,7 @@ export function createGlossaryIpcHandlers(
         validateCreateGlossaryEntryInput(rawRequest);
 
       return withCurrentProjectDatabase(
-        getCurrentProjectRootPath,
+        getCurrentActiveProjectFilePath,
         logger,
         (database) => createGlossaryEntry(database, input, logger)
       );
@@ -177,14 +177,14 @@ export function createGlossaryIpcHandlers(
       const request = parseGlossaryEntryIdRequest(rawRequest);
 
       return withCurrentProjectDatabase(
-        getCurrentProjectRootPath,
+        getCurrentActiveProjectFilePath,
         logger,
         (database) => getGlossaryEntryById(database, request.id, logger)
       );
     },
     async list() {
       return withCurrentProjectDatabase(
-        getCurrentProjectRootPath,
+        getCurrentActiveProjectFilePath,
         logger,
         (database) => listGlossaryEntries(database, logger)
       );
@@ -193,7 +193,7 @@ export function createGlossaryIpcHandlers(
       const request = parseGlossarySurfaceLookupRequest(rawRequest);
 
       return withCurrentProjectDatabase(
-        getCurrentProjectRootPath,
+        getCurrentActiveProjectFilePath,
         logger,
         (database) => lookupGlossarySurface(database, request, logger)
       );
@@ -207,7 +207,7 @@ export function createGlossaryIpcHandlers(
         input = validatedInput;
 
         return await withCurrentProjectDatabase(
-          getCurrentProjectRootPath,
+          getCurrentActiveProjectFilePath,
           logger,
           (database) => updateGlossaryEntry(database, validatedInput, logger)
         );
@@ -241,7 +241,7 @@ export function createGlossaryIpcHandlers(
       }
 
       return withCurrentProjectDatabase(
-        getCurrentProjectRootPath,
+        getCurrentActiveProjectFilePath,
         logger,
         async (database) => {
           try {
@@ -263,7 +263,7 @@ export function registerGlossaryIpc(
   logger: DebugLogger = getDebugLogger()
 ): void {
   const handlers = createGlossaryIpcHandlers(
-    requireCurrentProjectRootPath,
+    requireCurrentActiveProjectFilePath,
     confirmGlossaryEntryDeletionWithDialog,
     logger
   );

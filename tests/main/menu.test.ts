@@ -74,6 +74,7 @@ describe("application menu", () => {
     clickCommandItems(fileItems);
 
     expect(send.mock.calls.map((call) => call[1])).toEqual([
+      applicationCommandIds.createProject,
       applicationCommandIds.openProject,
       editorCommandIds.openMarkdownDocument,
       editorCommandIds.saveDocument,
@@ -85,6 +86,7 @@ describe("application menu", () => {
 
   it("keeps the application-menu-sendable allowlist a superset of the File menu", () => {
     for (const commandId of [
+      applicationCommandIds.createProject,
       applicationCommandIds.openProject,
       editorCommandIds.openMarkdownDocument,
       editorCommandIds.saveDocument,
@@ -224,6 +226,9 @@ describe("application menu", () => {
   it("sets accelerators on the existing File command items", () => {
     const fileItems = fileMenuItems("win32");
 
+    expect(fileItemByLabel(fileItems, "Create Project...").accelerator).toBe(
+      undefined
+    );
     expect(fileItemByLabel(fileItems, "Open Project").accelerator).toBe(
       "CommandOrControl+Shift+O"
     );

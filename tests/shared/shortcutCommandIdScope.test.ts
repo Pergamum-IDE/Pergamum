@@ -9,6 +9,7 @@ import {
 describe("shortcut command ID scope", () => {
   it("does not add shortcut-specific Command IDs", () => {
     const commandIds = [
+      applicationCommandIds.createProject,
       applicationCommandIds.openProject,
       applicationCommandIds.toggleRecentProjects,
       editorCommandIds.openMarkdownDocument,

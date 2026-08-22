@@ -29,6 +29,7 @@ export type {
   NewFileEncoding,
   NewFileLineEnding,
   PreviewRendererId,
+  RecordRecentProjectInput,
   ProjectSettings,
   RecentProject,
   SaveApplicationSettingsRequest
@@ -57,6 +58,7 @@ export const FILE_CHANNELS = {
 } as const;
 
 export const PROJECT_CHANNELS = {
+  createProject: "projects:createProject",
   openProject: "projects:openProject",
   openRecentProject: "projects:openRecentProject",
   readProjectDocument: "projects:readProjectDocument",
@@ -181,13 +183,14 @@ export interface SaveProjectDocumentResult {
 
 export interface PergamumProject {
   rootPath: string;
+  activeProjectFilePath: string;
   name: string;
   config: PergamumProjectConfig | null;
   documents: ProjectDocument[];
 }
 
 export interface OpenRecentProjectRequest {
-  path: string;
+  projectFilePath: string;
 }
 
 export interface GlossaryEntryIdRequest {
@@ -234,8 +237,9 @@ export interface PergamumApi {
     ) => Promise<WriteMarkdownResult>;
   };
   projects: {
+    createProject: () => Promise<PergamumProject | null>;
     openProject: () => Promise<PergamumProject | null>;
-    openRecentProject: (path: string) => Promise<PergamumProject>;
+    openRecentProject: (projectFilePath: string) => Promise<PergamumProject>;
     readProjectDocument: (
       relativePath: string
     ) => Promise<ProjectDocumentContent>;

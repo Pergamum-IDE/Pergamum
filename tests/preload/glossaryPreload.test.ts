@@ -6,6 +6,7 @@ import {
   EDIT_CHANNELS,
   FILE_CHANNELS,
   GLOSSARY_CHANNELS,
+  PROJECT_CHANNELS,
   type PergamumApi
 } from "../../src/shared/api";
 import { editorCommandIds } from "../../src/shared/commandIds";
@@ -38,6 +39,37 @@ await import("../../src/preload/preload");
 const entryId = "018f4b8c-7a2b-7c3d-8e4f-123456789abc";
 
 describe("glossary preload API", () => {
+  it("exposes project file foundation operations through the Pergamum API", async () => {
+    electronMock.invoke.mockClear();
+    const api = electronMock.exposedApi;
+
+    if (!api) {
+      throw new Error("Pergamum API was not exposed.");
+    }
+
+    await api.projects.createProject();
+    await api.projects.openProject();
+    await api.projects.openRecentProject("C:\\Novel\\Novel.pergamum");
+
+    expect(api.projects as Record<string, unknown>).not.toHaveProperty(
+      "openProjectFile"
+    );
+    expect(electronMock.invoke.mock.calls).toEqual([
+      [PROJECT_CHANNELS.createProject],
+      [PROJECT_CHANNELS.openProject],
+      [
+        PROJECT_CHANNELS.openRecentProject,
+        {
+          projectFilePath: "C:\\Novel\\Novel.pergamum"
+        }
+      ]
+    ]);
+    expect(JSON.stringify(PROJECT_CHANNELS)).not.toContain("openProjectFile");
+    expect(JSON.stringify(PROJECT_CHANNELS)).not.toContain(
+      "projects:openProjectFile"
+    );
+  });
+
   it("exposes glossary operations through the Pergamum API", () => {
     expect(electronMock.exposeInMainWorld).toHaveBeenCalledWith(
       "pergamum",
@@ -55,6 +87,7 @@ describe("glossary preload API", () => {
   });
 
   it("invokes glossary IPC channels with request payloads", async () => {
+    electronMock.invoke.mockClear();
     const api = electronMock.exposedApi;
 
     if (!api) {

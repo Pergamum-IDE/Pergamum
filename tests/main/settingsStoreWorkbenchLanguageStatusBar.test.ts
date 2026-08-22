@@ -38,6 +38,14 @@ const defaultSoundSettings = {
   newline: { enabled: false },
   keypress: { enabled: false }
 };
+const recentProject = {
+  projectId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
+  projectName: "proj",
+  projectFilePath: "C:\\proj\\proj.pergamum",
+  projectRootPath: "C:\\proj",
+  schemaVersion: 1,
+  lastOpenedAt: "2026-08-23T00:00:00.000Z"
+};
 
 function onDiskSettings(overrides: Record<string, unknown>): string {
   return JSON.stringify({
@@ -266,7 +274,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
           fontFamily: "Fira Code"
         },
         preview: { renderer: "markdown" },
-        recentProjects: [{ path: "C:\\proj", name: "proj" }]
+        recentProjects: [recentProject]
       })
     );
 
@@ -284,7 +292,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
     ];
     const written = JSON.parse(writtenContent);
 
-    expect(written.recentProjects).toEqual([{ path: "C:\\proj", name: "proj" }]);
+    expect(written.recentProjects).toEqual([recentProject]);
     expect(written.preview).toEqual({ renderer: "markdown" });
     expect(written.workbench.fontFamily).toBe("Fira Code");
     expect(written.workbench.sound).toEqual(defaultSoundSettings);

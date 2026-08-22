@@ -45,6 +45,7 @@ const translate: Translate = (key) => key;
 
 const project: PergamumProject = {
   rootPath: "C:\\Novel",
+  activeProjectFilePath: "C:\\Novel\\pergamum.db",
   name: "Novel",
   config: null,
   documents: [
@@ -479,6 +480,7 @@ describe("workspace navigation", () => {
     const projectA: PergamumProject = {
       ...project,
       rootPath: "C:\\ProjectA",
+      activeProjectFilePath: "C:\\ProjectA\\pergamum.db",
       name: "ProjectA",
       documents: [
         {
@@ -490,6 +492,7 @@ describe("workspace navigation", () => {
     const projectB: PergamumProject = {
       ...project,
       rootPath: "C:\\ProjectB",
+      activeProjectFilePath: "C:\\ProjectB\\pergamum.db",
       name: "ProjectB",
       documents: [
         {

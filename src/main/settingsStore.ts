@@ -4,6 +4,7 @@ import path from "node:path";
 import {
   createDefaultApplicationSettings,
   type ApplicationSettings,
+  type RecordRecentProjectInput,
   type RecentProject,
   type SaveApplicationSettingsRequest
 } from "../shared/settings";
@@ -34,8 +35,12 @@ function nodeErrorCode(error: unknown): string | undefined {
 function isRecentProject(value: unknown): value is RecentProject {
   return (
     isObject(value) &&
-    typeof value.path === "string" &&
-    typeof value.name === "string"
+    typeof value.projectId === "string" &&
+    typeof value.projectName === "string" &&
+    typeof value.projectFilePath === "string" &&
+    typeof value.projectRootPath === "string" &&
+    typeof value.schemaVersion === "number" &&
+    typeof value.lastOpenedAt === "string"
   );
 }
 
@@ -43,17 +48,21 @@ function normalizeRecentProjects(
   recentProjects: RecentProject[]
 ): RecentProject[] {
   const normalizedProjects: RecentProject[] = [];
-  const seenPaths = new Set<string>();
+  const seenProjectIds = new Set<string>();
 
   for (const recentProject of recentProjects) {
-    if (seenPaths.has(recentProject.path)) {
+    if (seenProjectIds.has(recentProject.projectId)) {
       continue;
     }
 
-    seenPaths.add(recentProject.path);
+    seenProjectIds.add(recentProject.projectId);
     normalizedProjects.push({
-      path: recentProject.path,
-      name: recentProject.name
+      projectId: recentProject.projectId,
+      projectName: recentProject.projectName,
+      projectFilePath: recentProject.projectFilePath,
+      projectRootPath: recentProject.projectRootPath,
+      schemaVersion: recentProject.schemaVersion,
+      lastOpenedAt: recentProject.lastOpenedAt
     });
 
     if (normalizedProjects.length === maxRecentProjects) {
@@ -255,18 +264,30 @@ function parseRecentProjectForSave(value: unknown): RecentProject {
   const keys = Object.keys(value);
 
   if (
-    keys.length !== 2 ||
-    !keys.includes("path") ||
-    !keys.includes("name") ||
-    typeof value.path !== "string" ||
-    typeof value.name !== "string"
+    keys.length !== 6 ||
+    !keys.includes("projectId") ||
+    !keys.includes("projectName") ||
+    !keys.includes("projectFilePath") ||
+    !keys.includes("projectRootPath") ||
+    !keys.includes("schemaVersion") ||
+    !keys.includes("lastOpenedAt") ||
+    typeof value.projectId !== "string" ||
+    typeof value.projectName !== "string" ||
+    typeof value.projectFilePath !== "string" ||
+    typeof value.projectRootPath !== "string" ||
+    typeof value.schemaVersion !== "number" ||
+    typeof value.lastOpenedAt !== "string"
   ) {
     throw new Error("Invalid recent project.");
   }
 
   return {
-    path: value.path,
-    name: value.name
+    projectId: value.projectId,
+    projectName: value.projectName,
+    projectFilePath: value.projectFilePath,
+    projectRootPath: value.projectRootPath,
+    schemaVersion: value.schemaVersion,
+    lastOpenedAt: value.lastOpenedAt
   };
 }
 
@@ -276,14 +297,14 @@ function parseRecentProjectsForSave(value: unknown): RecentProject[] {
   }
 
   const recentProjects = value.map(parseRecentProjectForSave);
-  const paths = new Set<string>();
+  const projectIds = new Set<string>();
 
   for (const recentProject of recentProjects) {
-    if (paths.has(recentProject.path)) {
+    if (projectIds.has(recentProject.projectId)) {
       throw new Error("Invalid application settings.");
     }
 
-    paths.add(recentProject.path);
+    projectIds.add(recentProject.projectId);
   }
 
   return recentProjects;
@@ -693,13 +714,17 @@ export async function saveApplicationSettings(
 }
 
 export async function recordRecentProject(
-  recentProject: RecentProject
+  recentProject: RecordRecentProjectInput
 ): Promise<ApplicationSettings> {
   const settings = await loadSettings();
+  const openedProject: RecentProject = {
+    ...recentProject,
+    lastOpenedAt: new Date().toISOString()
+  };
   const recentProjects = normalizeRecentProjects([
-    recentProject,
+    openedProject,
     ...settings.recentProjects.filter(
-      (storedProject) => storedProject.path !== recentProject.path
+      (storedProject) => storedProject.projectId !== recentProject.projectId
     )
   ]);
 
@@ -709,10 +734,20 @@ export async function recordRecentProject(
   });
 }
 
-export async function isRecentProjectPath(projectPath: string): Promise<boolean> {
+export async function isRecentProjectFilePath(
+  projectFilePath: string
+): Promise<boolean> {
+  return (await findRecentProjectByFilePath(projectFilePath)) !== null;
+}
+
+export async function findRecentProjectByFilePath(
+  projectFilePath: string
+): Promise<RecentProject | null> {
   const settings = await loadSettings();
 
-  return settings.recentProjects.some(
-    (recentProject) => recentProject.path === projectPath
+  return (
+    settings.recentProjects.find(
+      (recentProject) => recentProject.projectFilePath === projectFilePath
+    ) ?? null
   );
 }

@@ -3,7 +3,10 @@ import {
   dialog,
   ipcMain,
   type IpcMainInvokeEvent,
-  type OpenDialogOptions
+  type MessageBoxOptions,
+  type MessageBoxReturnValue,
+  type OpenDialogOptions,
+  type SaveDialogOptions
 } from "electron";
 import { promises as fs } from "node:fs";
 import path from "node:path";
@@ -15,6 +18,7 @@ import {
   type ProjectDocument,
   type ProjectDocumentContent,
   type ReadProjectDocumentRequest,
+  type RecordRecentProjectInput,
   type SaveProjectDocumentRequest,
   type SaveProjectDocumentResult
 } from "../shared/api";
@@ -31,18 +35,55 @@ import {
   markdownWriteMetadata,
   sanitizedFileIoError
 } from "./markdownFileIo";
-import { readProjectConfig } from "./projectConfigStore";
-import { isRecentProjectPath, recordRecentProject } from "./settingsStore";
+import { projectConfigFileName, readProjectConfig } from "./projectConfigStore";
+import {
+  createProjectDatabase,
+  openProjectDatabase,
+  projectFileExtension,
+  readProjectMetadata,
+  resolveProjectFilePath,
+  resolveProjectRoot,
+  type ProjectDatabase,
+  type ProjectMetadata
+} from "./projectDatabase";
+import {
+  findRecentProjectByFilePath,
+  recordRecentProject
+} from "./settingsStore";
 
 interface CurrentProjectState {
   rootPath: string;
+  activeProjectFilePath: string;
   documentRelativePaths: Set<string>;
+}
+
+interface ProjectFileOpenResult {
+  project: PergamumProject;
+  metadata: ProjectMetadata;
+  projectFilePath: string;
+  projectRootPath: string;
 }
 
 let currentProjectState: CurrentProjectState | null = null;
 
+const defaultProjectRecoveryDirectoryName = ".pergamum_recovery";
+const createProjectConflictWarningMessage =
+  "既に Pergamum のプロジェクト設定または復旧領域があります。\n\n" +
+  "既存の設定を上書きし、本文やGlossaryに関する復旧領域があるフォルダに新しいプロジェクトを作成します。\n\n" +
+  "これは破壊的な変更を伴います。\n" +
+  "本当によろしいですか？";
+
+const createProjectConflictDialogButtonIndex = {
+  confirm: 0,
+  cancel: 1
+} as const;
+
 export function currentProjectRootPath(): string | null {
   return currentProjectState?.rootPath ?? null;
+}
+
+export function currentActiveProjectFilePath(): string | null {
+  return currentProjectState?.activeProjectFilePath ?? null;
 }
 
 export function requireCurrentProjectRootPath(): string {
@@ -53,24 +94,127 @@ export function requireCurrentProjectRootPath(): string {
   return currentProjectState.rootPath;
 }
 
+export function requireCurrentActiveProjectFilePath(): string {
+  if (!currentProjectState) {
+    throw new Error("No project is currently open.");
+  }
+
+  return currentProjectState.activeProjectFilePath;
+}
+
 function parentWindow(event: IpcMainInvokeEvent): BrowserWindow | undefined {
   return BrowserWindow.fromWebContents(event.sender) ?? undefined;
+}
+
+function nodeErrorCode(error: unknown): string | undefined {
+  if (typeof error === "object" && error !== null && "code" in error) {
+    return String((error as { code: unknown }).code);
+  }
+
+  return undefined;
+}
+
+function sanitizedProjectConfigWriteError(error: unknown): Error & {
+  code?: string;
+} {
+  const sanitized = new Error(
+    "Could not write project configuration."
+  ) as Error & {
+    code?: string;
+  };
+  const code = nodeErrorCode(error);
+
+  if (code) {
+    sanitized.code = code;
+  }
+
+  return sanitized;
+}
+
+async function pathExists(targetPath: string): Promise<boolean> {
+  try {
+    await fs.access(targetPath);
+    return true;
+  } catch (error) {
+    if (nodeErrorCode(error) === "ENOENT") {
+      return false;
+    }
+
+    throw error;
+  }
+}
+
+function projectFileDialogFilters() {
+  return [
+    {
+      name: "Pergamum Project",
+      extensions: [projectFileExtension.slice(1)]
+    }
+  ];
+}
+
+async function showProjectMessageBox(
+  event: IpcMainInvokeEvent,
+  options: MessageBoxOptions
+): Promise<MessageBoxReturnValue> {
+  const owner = parentWindow(event);
+
+  return owner
+    ? dialog.showMessageBox(owner, options)
+    : dialog.showMessageBox(options);
+}
+
+async function showInvalidProjectFileDialog(
+  event: IpcMainInvokeEvent
+): Promise<void> {
+  await showProjectMessageBox(event, {
+    type: "error",
+    message: `Pergamum project files must use the ${projectFileExtension} extension.`,
+    buttons: ["OK"],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  });
+}
+
+async function showExistingProjectFileDialog(
+  event: IpcMainInvokeEvent
+): Promise<void> {
+  await showProjectMessageBox(event, {
+    type: "error",
+    message: "プロジェクトファイルは既に存在します。上書きせずに中止しました。",
+    buttons: ["OK"],
+    defaultId: 0,
+    cancelId: 0,
+    noLink: true
+  });
+}
+
+async function confirmCreateProjectInExistingRoot(
+  event: IpcMainInvokeEvent
+): Promise<boolean> {
+  const result = await showProjectMessageBox(event, {
+    type: "warning",
+    message: createProjectConflictWarningMessage,
+    buttons: ["意味を理解して同意", "キャンセル"],
+    defaultId: createProjectConflictDialogButtonIndex.cancel,
+    cancelId: createProjectConflictDialogButtonIndex.cancel,
+    noLink: true
+  });
+
+  return result?.response === createProjectConflictDialogButtonIndex.confirm;
 }
 
 function normalizeRelativePath(relativePath: string): string {
   return relativePath.split(path.sep).join("/");
 }
 
-function directoryName(rootPath: string): string {
-  return path.basename(rootPath) || rootPath;
-}
-
-function projectName(
-  rootPath: string,
-  config: PergamumProjectConfig | null
+function initialProjectNameFromProjectFilePath(
+  projectFilePath: string
 ): string {
-  const configuredName = config?.name?.trim();
-  return configuredName || directoryName(rootPath);
+  const initialName = path.parse(projectFilePath).name.trim();
+
+  return initialName || "Untitled Project";
 }
 
 function errorDetail(error: unknown): string {
@@ -123,14 +267,14 @@ function parseOpenRecentProjectRequest(
 ): OpenRecentProjectRequest {
   if (
     !isRequestObject(value) ||
-    typeof value.path !== "string" ||
-    value.path.length === 0
+    typeof value.projectFilePath !== "string" ||
+    value.projectFilePath.length === 0
   ) {
     throw new Error("Invalid recent project open request.");
   }
 
   return {
-    path: value.path
+    projectFilePath: value.projectFilePath
   };
 }
 
@@ -199,42 +343,288 @@ async function discoverMarkdownFiles(
   );
 }
 
-async function recordProjectRecently(project: PergamumProject): Promise<void> {
+function activateProject(project: PergamumProject): void {
+  currentProjectState = {
+    rootPath: project.rootPath,
+    activeProjectFilePath: project.activeProjectFilePath,
+    documentRelativePaths: new Set(
+      project.documents.map((document) => document.relativePath)
+    )
+  };
+}
+
+async function createProjectFromParts(
+  rootPath: string,
+  activeProjectFilePath: string,
+  name: string,
+  config: PergamumProjectConfig | null
+): Promise<PergamumProject> {
+  const documents = await discoverMarkdownFiles(rootPath);
+
+  return {
+    rootPath,
+    activeProjectFilePath,
+    name,
+    config,
+    documents
+  };
+}
+
+async function writeProjectConfig(
+  rootPath: string,
+  config: PergamumProjectConfig
+): Promise<void> {
   try {
-    await recordRecentProject({
-      path: project.rootPath,
-      name: project.name
-    });
+    await fs.writeFile(
+      path.join(rootPath, projectConfigFileName),
+      `${JSON.stringify(config, null, 2)}\n`,
+      "utf8"
+    );
   } catch (error) {
-    console.warn(`Could not record recent project: ${errorDetail(error)}`);
+    throw sanitizedProjectConfigWriteError(error);
   }
 }
 
-async function openProjectRoot(
-  rootPath: string,
+async function readProjectMetadataAndClose(
+  database: ProjectDatabase
+): Promise<ProjectMetadata> {
+  try {
+    return await readProjectMetadata(database);
+  } finally {
+    await database.close();
+  }
+}
+
+async function hasCreateProjectConflict(rootPath: string): Promise<boolean> {
+  const hasProjectConfig = await pathExists(
+    path.join(rootPath, projectConfigFileName)
+  );
+  const hasProjectRecoveryDirectory = await pathExists(
+    path.join(rootPath, defaultProjectRecoveryDirectoryName)
+  );
+
+  return hasProjectConfig || hasProjectRecoveryDirectory;
+}
+
+async function recordProjectRecently(
+  recentProject: RecordRecentProjectInput
+): Promise<void> {
+  try {
+    await recordRecentProject(recentProject);
+  } catch {
+    console.warn("Could not record recent project.");
+  }
+}
+
+function recentProjectInputFromMetadata(
+  metadata: ProjectMetadata,
+  projectFilePath: string,
+  projectRootPath: string
+): RecordRecentProjectInput {
+  return {
+    projectId: metadata.projectId,
+    projectName: metadata.projectName,
+    projectFilePath,
+    projectRootPath,
+    schemaVersion: metadata.schemaVersion
+  };
+}
+
+async function recordProjectFileOpenRecently(
+  openedProject: ProjectFileOpenResult
+): Promise<void> {
+  await recordProjectRecently(
+    recentProjectInputFromMetadata(
+      openedProject.metadata,
+      openedProject.projectFilePath,
+      openedProject.projectRootPath
+    )
+  );
+}
+
+async function createProjectFromProjectFile(
+  projectFilePath: string,
   logger: DebugLogger
-): Promise<PergamumProject> {
+): Promise<ProjectFileOpenResult> {
+  const projectRootPath = resolveProjectRoot(projectFilePath);
+  const initialProjectName =
+    initialProjectNameFromProjectFilePath(projectFilePath);
+  const database = await createProjectDatabase(
+    {
+      projectFilePath,
+      projectName: initialProjectName
+    },
+    logger
+  );
+  const metadata = await readProjectMetadataAndClose(database);
+
+  const config: PergamumProjectConfig = {
+    name: metadata.projectName
+  };
+
+  await writeProjectConfig(projectRootPath, config);
+
+  const project = await createProjectFromParts(
+    projectRootPath,
+    projectFilePath,
+    metadata.projectName,
+    await readProjectConfig(projectRootPath)
+  );
+
+  activateProject(project);
+
+  return {
+    project,
+    metadata,
+    projectFilePath,
+    projectRootPath
+  };
+}
+
+async function openProjectFromProjectFile(
+  projectFilePath: string,
+  logger: DebugLogger
+): Promise<ProjectFileOpenResult> {
+  const projectRootPath = resolveProjectRoot(projectFilePath);
+  const database = await openProjectDatabase(projectFilePath, logger);
+  const metadata = await readProjectMetadataAndClose(database);
+
+  const config = await readProjectConfig(projectRootPath);
+  const project = await createProjectFromParts(
+    projectRootPath,
+    projectFilePath,
+    metadata.projectName,
+    config
+  );
+
+  activateProject(project);
+
+  return {
+    project,
+    metadata,
+    projectFilePath,
+    projectRootPath
+  };
+}
+
+export async function createProject(
+  event: IpcMainInvokeEvent,
+  logger: DebugLogger = getDebugLogger()
+): Promise<PergamumProject | null> {
   const startedAt = Date.now();
-  const projectRef = logger.projectRefForKey(rootPath);
+  let projectRef: string | undefined;
 
   try {
-    const config = await readProjectConfig(rootPath);
-    const documents = await discoverMarkdownFiles(rootPath);
-    const project: PergamumProject = {
-      rootPath,
-      name: projectName(rootPath, config),
-      config,
-      documents
+    const owner = parentWindow(event);
+    const options: SaveDialogOptions = {
+      title: "Create Pergamum Project",
+      filters: projectFileDialogFilters()
     };
+    const result = owner
+      ? await dialog.showSaveDialog(owner, options)
+      : await dialog.showSaveDialog(options);
 
-    currentProjectState = {
-      rootPath: project.rootPath,
-      documentRelativePaths: new Set(
-        project.documents.map((document) => document.relativePath)
-      )
+    if (result.canceled || !result.filePath) {
+      return null;
+    }
+
+    let projectFilePath: string;
+    try {
+      projectFilePath = resolveProjectFilePath(result.filePath);
+    } catch {
+      await showInvalidProjectFileDialog(event);
+      return null;
+    }
+
+    projectRef = logger.projectRefForKey(projectFilePath);
+
+    if (await pathExists(projectFilePath)) {
+      await showExistingProjectFileDialog(event);
+      return null;
+    }
+
+    const projectRootPath = resolveProjectRoot(projectFilePath);
+    if (await hasCreateProjectConflict(projectRootPath)) {
+      const confirmed = await confirmCreateProjectInExistingRoot(event);
+
+      if (!confirmed) {
+        return null;
+      }
+    }
+
+    const openedProject = await createProjectFromProjectFile(
+      projectFilePath,
+      logger
+    );
+    await recordProjectFileOpenRecently(openedProject);
+
+    logger.log({
+      level: "info",
+      event: "project.open.succeeded",
+      details: {
+        projectRef,
+        operation: "create",
+        result: "succeeded",
+        durationMs: durationSince(startedAt)
+      }
+    });
+
+    return openedProject.project;
+  } catch (error) {
+    const safeError = sanitizedFileIoError(error);
+    logger.log({
+      level: "error",
+      event: "project.open.failed",
+      details: {
+        ...(projectRef ? { projectRef } : {}),
+        operation: "create",
+        result: "failed",
+        durationMs: durationSince(startedAt),
+        error: safeError
+      }
+    });
+
+    throw safeError;
+  }
+}
+
+export async function openProject(
+  event: IpcMainInvokeEvent,
+  logger: DebugLogger = getDebugLogger()
+): Promise<PergamumProject | null> {
+  const startedAt = Date.now();
+  let projectRef: string | undefined;
+
+  try {
+    const owner = parentWindow(event);
+    const options: OpenDialogOptions = {
+      title: "Open Pergamum Project",
+      properties: ["openFile"],
+      filters: projectFileDialogFilters()
     };
+    const result = owner
+      ? await dialog.showOpenDialog(owner, options)
+      : await dialog.showOpenDialog(options);
 
-    await recordProjectRecently(project);
+    if (result.canceled || result.filePaths.length === 0) {
+      return null;
+    }
+
+    let projectFilePath: string;
+    try {
+      projectFilePath = resolveProjectFilePath(result.filePaths[0]);
+    } catch {
+      await showInvalidProjectFileDialog(event);
+      return null;
+    }
+
+    projectRef = logger.projectRefForKey(projectFilePath);
+
+    const openedProject = await openProjectFromProjectFile(
+      projectFilePath,
+      logger
+    );
+    await recordProjectFileOpenRecently(openedProject);
 
     logger.log({
       level: "info",
@@ -247,14 +637,14 @@ async function openProjectRoot(
       }
     });
 
-    return project;
+    return openedProject.project;
   } catch (error) {
     const safeError = sanitizedFileIoError(error);
     logger.log({
       level: "error",
       event: "project.open.failed",
       details: {
-        projectRef,
+        ...(projectRef ? { projectRef } : {}),
         operation: "open",
         result: "failed",
         durationMs: durationSince(startedAt),
@@ -269,45 +659,12 @@ async function openProjectRoot(
 export function registerProjectIpc(
   logger: DebugLogger = getDebugLogger()
 ): void {
-  ipcMain.handle(
-    PROJECT_CHANNELS.openProject,
-    async (event): Promise<PergamumProject | null> => {
-      const startedAt = Date.now();
-      let rootPath: string | null = null;
+  ipcMain.handle(PROJECT_CHANNELS.createProject, (event) =>
+    createProject(event, logger)
+  );
 
-      try {
-        const owner = parentWindow(event);
-        const options: OpenDialogOptions = {
-          title: "Open Pergamum Project",
-          properties: ["openDirectory"]
-        };
-        const result = owner
-          ? await dialog.showOpenDialog(owner, options)
-          : await dialog.showOpenDialog(options);
-
-        if (result.canceled || result.filePaths.length === 0) {
-          return null;
-        }
-
-        rootPath = result.filePaths[0];
-      } catch (error) {
-        const safeError = sanitizedFileIoError(error);
-        logger.log({
-          level: "error",
-          event: "project.open.failed",
-          details: {
-            operation: "open",
-            result: "failed",
-            durationMs: durationSince(startedAt),
-            error: safeError
-          }
-        });
-
-        throw safeError;
-      }
-
-      return openProjectRoot(rootPath, logger);
-    }
+  ipcMain.handle(PROJECT_CHANNELS.openProject, (event) =>
+    openProject(event, logger)
   );
 
   ipcMain.handle(
@@ -321,15 +678,33 @@ export function registerProjectIpc(
 
       try {
         request = parseOpenRecentProjectRequest(rawRequest);
-        const isRegisteredRecentProject = await isRecentProjectPath(
-          request.path
+        const projectFilePath = resolveProjectFilePath(request.projectFilePath);
+        const recentProject = await findRecentProjectByFilePath(
+          projectFilePath
         );
 
-        if (!isRegisteredRecentProject) {
+        if (!recentProject) {
           throw new Error("Recent project is not registered.");
         }
 
-        return openProjectRoot(request.path, logger);
+        const openedProject = await openProjectFromProjectFile(
+          projectFilePath,
+          logger
+        );
+        await recordProjectFileOpenRecently(openedProject);
+
+        logger.log({
+          level: "info",
+          event: "project.open.succeeded",
+          details: {
+            projectRef: logger.projectRefForKey(projectFilePath),
+            operation: "open",
+            result: "succeeded",
+            durationMs: durationSince(startedAt)
+          }
+        });
+
+        return openedProject.project;
       } catch (error) {
         const safeError = sanitizedFileIoError(error);
         logger.log({
@@ -345,8 +720,6 @@ export function registerProjectIpc(
 
         throw safeError;
       }
-
-      return openProjectRoot(request.path, logger);
     }
   );
 

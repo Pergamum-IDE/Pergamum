@@ -12,10 +12,12 @@ describe("application menu command registration", () => {
     registerApplicationCommands(
       registry,
       {
+        createProject: () => undefined,
         openProject: () => undefined,
         toggleRecentProjects: () => undefined
       },
       {
+        createProject: "Create Project",
         openProject: "Open Project",
         toggleRecentProjects: "Toggle Recent Projects"
       }
