@@ -38,6 +38,7 @@ const confirmMessage = "この語彙を削除します。よろしいですか�
 
 describe("glossary IPC", () => {
   let projectRootPath: string;
+  let activeProjectFilePath: string;
 
   beforeEach(async () => {
     electronMock.handle.mockClear();
@@ -46,6 +47,7 @@ describe("glossary IPC", () => {
     projectRootPath = await fs.mkdtemp(
       path.join(os.tmpdir(), "pergamum-glossary-ipc-")
     );
+    activeProjectFilePath = path.join(projectRootPath, projectDatabaseFileName);
   });
 
   afterEach(async () => {
@@ -69,7 +71,7 @@ describe("glossary IPC", () => {
   });
 
   it("runs glossary operations against the current project database", async () => {
-    const handlers = createGlossaryIpcHandlers(() => projectRootPath);
+    const handlers = createGlossaryIpcHandlers(() => activeProjectFilePath);
     const createdEntry = await handlers.create({
       kind: "place",
       canonicalSurface: "王都アルセリア",
@@ -150,7 +152,7 @@ describe("glossary IPC", () => {
   });
 
   it("rejects invalid glossary input through the shared validation model", async () => {
-    const handlers = createGlossaryIpcHandlers(() => projectRootPath);
+    const handlers = createGlossaryIpcHandlers(() => activeProjectFilePath);
 
     await expect(
       handlers.create({
@@ -171,7 +173,7 @@ describe("glossary IPC", () => {
   });
 
   it("rejects delete requests missing a confirmation message", async () => {
-    const handlers = createGlossaryIpcHandlers(() => projectRootPath);
+    const handlers = createGlossaryIpcHandlers(() => activeProjectFilePath);
 
     await expect(
       handlers.delete({
@@ -183,7 +185,7 @@ describe("glossary IPC", () => {
   });
 
   it("treats deleting an already-missing entry as idempotent success", async () => {
-    const handlers = createGlossaryIpcHandlers(() => projectRootPath);
+    const handlers = createGlossaryIpcHandlers(() => activeProjectFilePath);
     electronMock.showMessageBox.mockResolvedValue({
       response: 0,
       checkboxChecked: false
@@ -199,7 +201,7 @@ describe("glossary IPC", () => {
 
   describe("delete confirmation dialog", () => {
     async function seedEntry(): Promise<GlossaryEntry> {
-      const handlers = createGlossaryIpcHandlers(() => projectRootPath);
+      const handlers = createGlossaryIpcHandlers(() => activeProjectFilePath);
 
       return handlers.create({
         kind: "term",
@@ -251,7 +253,7 @@ describe("glossary IPC", () => {
 
     it("does not delete when the Cancel-equivalent button is chosen", async () => {
       const entry = await seedEntry();
-      const handlers = createGlossaryIpcHandlers(() => projectRootPath);
+      const handlers = createGlossaryIpcHandlers(() => activeProjectFilePath);
       electronMock.showMessageBox.mockResolvedValue({
         response: 1,
         checkboxChecked: false
@@ -265,7 +267,7 @@ describe("glossary IPC", () => {
 
     it("does not delete when the dialog is dismissed (undefined response)", async () => {
       const entry = await seedEntry();
-      const handlers = createGlossaryIpcHandlers(() => projectRootPath);
+      const handlers = createGlossaryIpcHandlers(() => activeProjectFilePath);
       electronMock.showMessageBox.mockResolvedValue({
         response: undefined,
         checkboxChecked: false
@@ -279,7 +281,7 @@ describe("glossary IPC", () => {
 
     it("deletes only when the OK-equivalent button is chosen", async () => {
       const entry = await seedEntry();
-      const handlers = createGlossaryIpcHandlers(() => projectRootPath);
+      const handlers = createGlossaryIpcHandlers(() => activeProjectFilePath);
       electronMock.showMessageBox.mockResolvedValue({
         response: 0,
         checkboxChecked: false

@@ -25,6 +25,7 @@ const projectDocument: ProjectDocument = {
 
 const project: PergamumProject = {
   rootPath: projectContext.rootPath,
+  activeProjectFilePath: `${projectContext.rootPath}\\pergamum.db`,
   name: "Novel",
   config: null,
   documents: [projectDocument]

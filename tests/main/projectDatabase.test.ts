@@ -84,6 +84,17 @@ describe("project database", () => {
       );
     });
 
+    it("resolves explicit legacy pergamum.db paths directly in resolveProjectDatabasePath", () => {
+      const legacyDatabasePath = path.join(
+        projectRootPath,
+        projectDatabaseFileName
+      );
+
+      expect(resolveProjectDatabasePath(legacyDatabasePath)).toBe(
+        path.resolve(legacyDatabasePath)
+      );
+    });
+
     it("resolves explicit .pergamum path directly in resolveProjectDatabasePath", () => {
       const explicitPath = path.join(projectRootPath, "novel.pergamum");
       expect(resolveProjectDatabasePath(explicitPath)).toBe(
@@ -598,6 +609,18 @@ describe("project database", () => {
           })
         ])
       );
+    });
+
+    it("opens a legacy pergamum.db file path directly for active project file compatibility", async () => {
+      const legacyDatabasePath = path.join(
+        projectRootPath,
+        projectDatabaseFileName
+      );
+
+      database = await openProjectDatabase(legacyDatabasePath);
+
+      expect(database.databasePath).toBe(path.resolve(legacyDatabasePath));
+      await expect(fs.access(legacyDatabasePath)).resolves.toBeUndefined();
     });
 
     it("logs database initialization without count or project path", async () => {

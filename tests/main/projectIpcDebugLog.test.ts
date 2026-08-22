@@ -4,6 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PROJECT_CHANNELS } from "../../src/shared/api";
 import type { DebugLogger } from "../../src/main/debugLogger";
+import { projectDatabaseFileName } from "../../src/main/projectDatabase";
 
 const electronMock = vi.hoisted(() => ({
   handle: vi.fn(),
@@ -27,7 +28,13 @@ vi.mock("electron", () => ({
   }
 }));
 
-import { registerProjectIpc } from "../../src/main/projectIpc";
+import {
+  currentActiveProjectFilePath,
+  currentProjectRootPath,
+  registerProjectIpc,
+  requireCurrentActiveProjectFilePath,
+  requireCurrentProjectRootPath
+} from "../../src/main/projectIpc";
 
 describe("project IPC debug logging", () => {
   let projectRootPath: string;
@@ -105,6 +112,60 @@ describe("project IPC debug logging", () => {
     expect(JSON.stringify(documentOpenFailureLogs[0].details)).not.toContain(
       "missing-secret-title"
     );
+  });
+
+  it("sets active project file state when opening a directory-based project", async () => {
+    const logger = createLoggerMock();
+    registerProjectIpc(logger);
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectRootPath]
+    });
+
+    const openProject = registeredHandler(PROJECT_CHANNELS.openProject);
+    const project = await openProject({ sender: {} });
+    const activeProjectFilePath = path.join(
+      projectRootPath,
+      projectDatabaseFileName
+    );
+
+    expect(project).toMatchObject({
+      rootPath: projectRootPath,
+      activeProjectFilePath
+    });
+    expect(currentProjectRootPath()).toBe(projectRootPath);
+    expect(requireCurrentProjectRootPath()).toBe(projectRootPath);
+    expect(currentActiveProjectFilePath()).toBe(activeProjectFilePath);
+    expect(requireCurrentActiveProjectFilePath()).toBe(activeProjectFilePath);
+  });
+
+  it("does not write raw project details to console when recent project recording fails", async () => {
+    const logger = createLoggerMock();
+    const consoleWarnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    const invalidUserDataPath = path.join(projectRootPath, "known.md");
+
+    registerProjectIpc(logger);
+    electronMock.getPath.mockReturnValue(invalidUserDataPath);
+    electronMock.showOpenDialog.mockResolvedValue({
+      canceled: false,
+      filePaths: [projectRootPath]
+    });
+
+    let warnings: string[] = [];
+    try {
+      const openProject = registeredHandler(PROJECT_CHANNELS.openProject);
+      await openProject({ sender: {} });
+      warnings = consoleWarnSpy.mock.calls.map((call) => call.join(" "));
+    } finally {
+      consoleWarnSpy.mockRestore();
+    }
+
+    expect(warnings).toEqual(["Could not record recent project."]);
+    expect(warnings.join("\n")).not.toContain(projectRootPath);
+    expect(warnings.join("\n")).not.toContain(invalidUserDataPath);
+    expect(warnings.join("\n")).not.toContain("known.md");
   });
 
   it("throws a sanitized project document read failure without exposing the raw path", async () => {

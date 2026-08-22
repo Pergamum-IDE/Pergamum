@@ -181,6 +181,7 @@ export interface SaveProjectDocumentResult {
 
 export interface PergamumProject {
   rootPath: string;
+  activeProjectFilePath: string;
   name: string;
   config: PergamumProjectConfig | null;
   documents: ProjectDocument[];

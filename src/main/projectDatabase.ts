@@ -162,6 +162,10 @@ export function resolveProjectDatabasePath(targetPath: string): string {
     return resolved;
   }
 
+  if (path.basename(resolved).toLowerCase() === projectDatabaseFileName) {
+    return resolved;
+  }
+
   const databasePath = path.resolve(resolved, projectDatabaseFileName);
   const relativeDatabasePath = path.relative(resolved, databasePath);
 
@@ -868,11 +872,11 @@ async function validateExplicitProjectFile(
  * Legacy compatibility branch for directory-based database opening (pergamum.db).
  * Slice 2 will move IPC callers to explicit .pergamum paths.
  */
-async function openLegacyDirectoryProjectDatabase(
-  projectRootPath: string,
+async function openLegacyProjectDatabase(
+  legacyTargetPath: string,
   logger: DbOperationLogger
 ): Promise<ProjectDatabase> {
-  const databasePath = resolveProjectDatabasePath(projectRootPath);
+  const databasePath = resolveProjectDatabasePath(legacyTargetPath);
 
   return withDbOperationLog(
     {
@@ -938,5 +942,5 @@ export async function openProjectDatabase(
     return openExplicitProjectFile(databasePath, logger);
   }
 
-  return openLegacyDirectoryProjectDatabase(targetPath, logger);
+  return openLegacyProjectDatabase(targetPath, logger);
 }

@@ -32,10 +32,12 @@ import {
   sanitizedFileIoError
 } from "./markdownFileIo";
 import { readProjectConfig } from "./projectConfigStore";
+import { resolveProjectDatabasePath } from "./projectDatabase";
 import { isRecentProjectPath, recordRecentProject } from "./settingsStore";
 
 interface CurrentProjectState {
   rootPath: string;
+  activeProjectFilePath: string;
   documentRelativePaths: Set<string>;
 }
 
@@ -45,12 +47,24 @@ export function currentProjectRootPath(): string | null {
   return currentProjectState?.rootPath ?? null;
 }
 
+export function currentActiveProjectFilePath(): string | null {
+  return currentProjectState?.activeProjectFilePath ?? null;
+}
+
 export function requireCurrentProjectRootPath(): string {
   if (!currentProjectState) {
     throw new Error("No project is currently open.");
   }
 
   return currentProjectState.rootPath;
+}
+
+export function requireCurrentActiveProjectFilePath(): string {
+  if (!currentProjectState) {
+    throw new Error("No project is currently open.");
+  }
+
+  return currentProjectState.activeProjectFilePath;
 }
 
 function parentWindow(event: IpcMainInvokeEvent): BrowserWindow | undefined {
@@ -205,8 +219,8 @@ async function recordProjectRecently(project: PergamumProject): Promise<void> {
       path: project.rootPath,
       name: project.name
     });
-  } catch (error) {
-    console.warn(`Could not record recent project: ${errorDetail(error)}`);
+  } catch {
+    console.warn("Could not record recent project.");
   }
 }
 
@@ -218,10 +232,12 @@ async function openProjectRoot(
   const projectRef = logger.projectRefForKey(rootPath);
 
   try {
+    const activeProjectFilePath = resolveProjectDatabasePath(rootPath);
     const config = await readProjectConfig(rootPath);
     const documents = await discoverMarkdownFiles(rootPath);
     const project: PergamumProject = {
       rootPath,
+      activeProjectFilePath,
       name: projectName(rootPath, config),
       config,
       documents
@@ -229,6 +245,7 @@ async function openProjectRoot(
 
     currentProjectState = {
       rootPath: project.rootPath,
+      activeProjectFilePath: project.activeProjectFilePath,
       documentRelativePaths: new Set(
         project.documents.map((document) => document.relativePath)
       )
