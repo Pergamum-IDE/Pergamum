@@ -106,6 +106,73 @@ describe("workbench.fontFamily wiring (#173)", () => {
   });
 });
 
+describe("Application Settings core defaults and effective settings (#195)", () => {
+  it("workbench.advancedSettings.enabled derives from the catalog default and is concrete, not sparse", () => {
+    const catalogDefault = getCatalogDefaultValue(
+      "workbench.advancedSettings.enabled"
+    );
+
+    expect(builtInDefaultSettings.workbench.advancedSettings.enabled).toBe(
+      catalogDefault
+    );
+    expect(defaultApplicationSettings.workbench.advancedSettings.enabled).toBe(
+      catalogDefault
+    );
+    expect(
+      createDefaultApplicationSettings().workbench.advancedSettings.enabled
+    ).toBe(catalogDefault);
+  });
+
+  it("editor.fontFamily falls through to the catalog default when application settings omit it", () => {
+    expect(defaultApplicationSettings.editor.fontFamily).toBeUndefined();
+    expect(createDefaultApplicationSettings().editor.fontFamily).toBeUndefined();
+    expect(
+      resolveEffectiveSettings(defaultApplicationSettings, undefined).editor
+        .fontFamily
+    ).toBe(getCatalogDefaultValue("editor.fontFamily"));
+  });
+
+  it("resolveEffectiveSettings passes through a valid editor.fontFamily application override", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      editor: { fontFamily: "Fira Code" }
+    };
+
+    expect(
+      resolveEffectiveSettings(applicationSettings, undefined).editor.fontFamily
+    ).toBe("Fira Code");
+  });
+
+  it("files.newFile defaults derive from the catalog and are concrete application settings", () => {
+    const defaults = createDefaultApplicationSettings();
+
+    expect(defaults.files.newFile.lineEnding).toBe(
+      getCatalogDefaultValue("files.newFile.lineEnding")
+    );
+    expect(defaults.files.newFile.encoding).toBe(
+      getCatalogDefaultValue("files.newFile.encoding")
+    );
+    expect(
+      resolveEffectiveSettings(defaults, undefined).files.newFile
+    ).toEqual(defaults.files.newFile);
+  });
+
+  it("does not add Project Settings shape for #195 Application Settings controls", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      editor: { fontFamily: "Fira Code" },
+      files: { newFile: { lineEnding: "crlf", encoding: "utf8" } }
+    };
+    const effective = resolveEffectiveSettings(applicationSettings, {});
+
+    expect(effective.editor.fontFamily).toBe("Fira Code");
+    expect(effective.files.newFile).toEqual({
+      lineEnding: "crlf",
+      encoding: "utf8"
+    });
+  });
+});
+
 describe("workbench.language / workbench.statusBar.visible wiring (#174)", () => {
   it("builtInDefaultSettings.workbench.language derives from the catalog default", () => {
     expect(builtInDefaultSettings.workbench.language).toBe(

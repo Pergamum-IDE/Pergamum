@@ -1,30 +1,94 @@
+import React from "react";
 import { renderToStaticMarkup } from "react-dom/server";
-import { describe, expect, it } from "vitest";
-import { defaultApplicationSettings } from "../../src/shared/settings";
+import { describe, expect, it, vi } from "vitest";
+import {
+  defaultApplicationSettings,
+  type ApplicationSettings
+} from "../../src/shared/settings";
 import { t, type Language, type Translate } from "../../src/shared/i18n";
 import { SettingsPanel } from "../../src/renderer/SettingsPanel";
+
+type ElementProps = Record<string, unknown> & {
+  children?: React.ReactNode;
+};
 
 function translateFor(language: Language): Translate {
   return (key, values) => t(language, key, values);
 }
 
+function settingsPanelElement(
+  currentUiLanguage: Language,
+  settings: ApplicationSettings = defaultApplicationSettings,
+  onConfirmEnableAdvancedSettings: () => Promise<boolean> = () =>
+    Promise.resolve(true),
+  onChangeSettings: Parameters<typeof SettingsPanel>[0]["onChangeSettings"] =
+    () => undefined
+): JSX.Element {
+  return SettingsPanel({
+    settings,
+    isLoading: false,
+    error: null,
+    translate: translateFor(currentUiLanguage),
+    onConfirmEnableAdvancedSettings,
+    onChangeSettings
+  });
+}
+
 function renderSettingsPanel(currentUiLanguage: Language): string {
-  return renderToStaticMarkup(
-    <SettingsPanel
-      settings={defaultApplicationSettings}
-      isLoading={false}
-      error={null}
-      translate={translateFor(currentUiLanguage)}
-      onChangeSettings={() => undefined}
-    />
-  );
+  return renderToStaticMarkup(settingsPanelElement(currentUiLanguage));
 }
 
 function extractLanguageOptions(markup: string): Array<[string, string]> {
+  const languageSelect =
+    markup.match(
+      /<select\b[^>]*id="applicationSettingsLanguage"[^>]*>[\s\S]*?<\/select>/
+    )?.[0] ?? "";
+
   return Array.from(
-    markup.matchAll(/<option\b[^>]*value="([^"]+)"[^>]*>([^<]*)<\/option>/g),
+    languageSelect.matchAll(
+      /<option\b[^>]*value="([^"]+)"[^>]*>([^<]*)<\/option>/g
+    ),
     (match) => [match[1] ?? "", match[2] ?? ""]
   );
+}
+
+function collectElements(
+  node: React.ReactNode,
+  predicate: (element: React.ReactElement<ElementProps>) => boolean
+): React.ReactElement<ElementProps>[] {
+  const elements: React.ReactElement<ElementProps>[] = [];
+
+  React.Children.forEach(node, (child) => {
+    if (!React.isValidElement<ElementProps>(child)) {
+      return;
+    }
+
+    if (predicate(child)) {
+      elements.push(child);
+    }
+
+    elements.push(...collectElements(child.props.children, predicate));
+  });
+
+  return elements;
+}
+
+function elementById(
+  node: React.ReactNode,
+  id: string
+): React.ReactElement<ElementProps> {
+  const element = collectElements(node, (child) => child.props.id === id)[0];
+
+  if (!element) {
+    throw new Error(`Element not found: ${id}`);
+  }
+
+  return element;
+}
+
+async function flushPromises(): Promise<void> {
+  await Promise.resolve();
+  await Promise.resolve();
 }
 
 describe("SettingsPanel language selector (#186)", () => {
@@ -40,5 +104,182 @@ describe("SettingsPanel language selector (#186)", () => {
       ["ja", "日本語"],
       ["en", "English"]
     ]);
+  });
+});
+
+describe("SettingsPanel application settings core controls (#195)", () => {
+  it("renders the Application Settings title, description, and section headings", () => {
+    const markup = renderSettingsPanel("ja");
+
+    expect(markup).toContain("アプリケーション設定");
+    expect(markup).toContain("Pergamum のアプリケーション全体に適用される設定です。");
+    expect(markup).toContain("一般");
+    expect(markup).toContain("外観");
+    expect(markup).toContain("エディタ");
+    expect(markup).toContain("ファイル");
+  });
+
+  it("renders core setting controls for language, status bar, UI font, editor font, line ending, and encoding", () => {
+    const element = settingsPanelElement("en");
+
+    expect(elementById(element, "applicationSettingsLanguage").type).toBe(
+      "select"
+    );
+    expect(elementById(element, "applicationSettingsStatusBar").type).toBe(
+      "input"
+    );
+    expect(elementById(element, "applicationSettingsUiFont").type).toBe(
+      "input"
+    );
+    expect(elementById(element, "applicationSettingsEditorFont").type).toBe(
+      "input"
+    );
+    expect(elementById(element, "applicationSettingsLineEnding").type).toBe(
+      "select"
+    );
+    expect(elementById(element, "applicationSettingsEncoding").type).toBe(
+      "select"
+    );
+  });
+
+  it("disables the advanced files controls until advanced settings are enabled", () => {
+    const element = settingsPanelElement("en");
+
+    expect(elementById(element, "applicationSettingsLineEnding").props.disabled).toBe(
+      true
+    );
+    expect(elementById(element, "applicationSettingsEncoding").props.disabled).toBe(
+      true
+    );
+  });
+
+  it("enables the advanced files controls when advanced settings are enabled", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        advancedSettings: { enabled: true }
+      }
+    };
+    const element = settingsPanelElement("en", settings);
+
+    expect(elementById(element, "applicationSettingsLineEnding").props.disabled).toBe(
+      false
+    );
+    expect(elementById(element, "applicationSettingsEncoding").props.disabled).toBe(
+      false
+    );
+  });
+
+  it("asks for binary confirmation before enabling advanced settings and only saves when confirmed", async () => {
+    const onConfirmEnableAdvancedSettings = vi.fn().mockResolvedValue(false);
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelElement(
+      "en",
+      defaultApplicationSettings,
+      onConfirmEnableAdvancedSettings,
+      onChangeSettings
+    );
+    const checkbox = collectElements(
+      element,
+      (child) =>
+        child.type === "input" &&
+        child.props.type === "checkbox" &&
+        child.props.checked === false
+    )[0];
+
+    expect(checkbox).toBeDefined();
+
+    const onChange = checkbox.props.onChange as (event: {
+      target: { checked: boolean };
+    }) => void;
+
+    onChange({ target: { checked: true } });
+    await flushPromises();
+
+    expect(onConfirmEnableAdvancedSettings).toHaveBeenCalledTimes(1);
+    expect(onChangeSettings).not.toHaveBeenCalled();
+
+    onConfirmEnableAdvancedSettings.mockResolvedValue(true);
+    onChange({ target: { checked: true } });
+    await flushPromises();
+
+    expect(onChangeSettings).toHaveBeenCalledTimes(1);
+    expect(onChangeSettings).toHaveBeenCalledWith({
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        advancedSettings: { enabled: true }
+      },
+      editor: defaultApplicationSettings.editor,
+      files: defaultApplicationSettings.files
+    });
+  });
+
+  it("does not enable advanced settings while the enable confirmation remains pending, matching backdrop-click no-op behavior", async () => {
+    const onConfirmEnableAdvancedSettings = vi.fn(
+      () => new Promise<boolean>(() => undefined)
+    );
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelElement(
+      "en",
+      defaultApplicationSettings,
+      onConfirmEnableAdvancedSettings,
+      onChangeSettings
+    );
+    const checkbox = collectElements(
+      element,
+      (child) =>
+        child.type === "input" &&
+        child.props.type === "checkbox" &&
+        child.props.checked === false
+    )[0];
+
+    expect(checkbox).toBeDefined();
+
+    const onChange = checkbox.props.onChange as (event: {
+      target: { checked: boolean };
+    }) => void;
+
+    onChange({ target: { checked: true } });
+    await flushPromises();
+
+    expect(onConfirmEnableAdvancedSettings).toHaveBeenCalledTimes(1);
+    expect(onChangeSettings).not.toHaveBeenCalled();
+    expect(checkbox.props.checked).toBe(false);
+  });
+
+  it("clears optional font settings by omitting fontFamily instead of sending undefined", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        fontFamily: "Inter"
+      },
+      editor: { fontFamily: "Fira Code" }
+    };
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelElement(
+      "en",
+      settings,
+      () => Promise.resolve(true),
+      onChangeSettings
+    );
+
+    const uiFont = elementById(element, "applicationSettingsUiFont");
+    const onChange = uiFont.props.onChange as (event: {
+      target: { value: string };
+    }) => void;
+
+    onChange({ target: { value: "   " } });
+
+    expect(onChangeSettings).toHaveBeenCalledWith({
+      workbench: {
+        language: settings.workbench.language,
+        statusBar: settings.workbench.statusBar,
+        advancedSettings: settings.workbench.advancedSettings
+      },
+      editor: settings.editor,
+      files: settings.files
+    });
   });
 });

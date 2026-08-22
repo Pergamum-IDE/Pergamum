@@ -263,23 +263,41 @@ button:active {
 
 .settingsPanel {
   display: flex;
-  align-items: center;
-  flex-wrap: wrap;
-  gap: 16px;
-  min-height: 42px;
-  padding: 8px 12px;
-  border-bottom: 1px solid #d3dae2;
-  background: #fbfcfd;
+  min-height: 0;
+  flex: 1;
+  flex-direction: column;
+  gap: 22px;
+  overflow: auto;
+  padding: 28px 36px 42px;
+  background: #ffffff;
 }
 
 .settingsPanelHeader {
-  color: #52616f;
-  font-size: 12px;
-  font-weight: 700;
-  text-transform: uppercase;
+  display: flex;
+  max-width: 760px;
+  flex-direction: column;
+  gap: 8px;
 }
 
-.settingsToggle {
+.settingsPanelHeader h1 {
+  margin: 0;
+  color: #17212b;
+  font-size: 24px;
+  line-height: 1.25;
+}
+
+.settingsPanelHeader p,
+.settingsAdvancedDescription,
+.settingsDescription,
+.settingsAdvancedDisabled {
+  margin: 0;
+  color: #52616f;
+  font-size: 13px;
+  line-height: 1.5;
+}
+
+.settingsAdvancedToggle,
+.settingsInlineCheckbox {
   display: flex;
   align-items: center;
   gap: 8px;
@@ -287,41 +305,111 @@ button:active {
   font-size: 13px;
 }
 
-.settingsToggle input {
+.settingsAdvancedToggle input,
+.settingsInlineCheckbox input {
   margin: 0;
 }
 
-.settingsField {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  color: #25313d;
-  font-size: 13px;
+.settingsAdvancedToggle {
+  font-weight: 700;
 }
 
-.settingsSelect {
-  height: 28px;
+.settingsAdvancedDescription {
+  max-width: 760px;
+  margin-top: -14px;
+}
+
+.settingsSection {
+  display: flex;
+  max-width: 860px;
+  flex-direction: column;
+  gap: 14px;
+}
+
+.settingsSection h2 {
+  margin: 0;
+  padding-top: 6px;
+  border-top: 1px solid #e3e8ee;
+  color: #17212b;
+  font-size: 15px;
+  line-height: 1.4;
+}
+
+.settingsRow {
+  display: grid;
+  grid-template-columns: minmax(140px, 220px) minmax(0, 520px);
+  gap: 14px;
+  align-items: start;
+}
+
+.settingsLabel {
+  color: #25313d;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 30px;
+  text-align: end;
+}
+
+.settingsControl {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  align-items: flex-start;
+  gap: 6px;
+}
+
+.settingsSelect,
+.settingsTextInput {
+  width: min(100%, 360px);
+  min-height: 30px;
   border: 1px solid #a9b4c0;
   border-radius: 4px;
   background: #ffffff;
   color: #182531;
   font: inherit;
-  padding: 0 8px;
+  font-size: 13px;
+  padding: 4px 8px;
 }
 
-.settingsHelp {
-  min-width: 180px;
+.settingsSelect:disabled,
+.settingsTextInput:disabled {
+  background: #eef3f8;
   color: #6b7785;
-  font-size: 12px;
+}
+
+.settingsAdvancedDisabled {
+  color: #8a4c0f;
+}
+
+.settingsSelect {
+  height: 30px;
 }
 
 .settingsError {
-  min-width: 0;
-  overflow: hidden;
+  max-width: 760px;
   color: #9a3412;
-  font-size: 12px;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 13px;
+}
+
+@media (max-width: 720px) {
+  .settingsPanel {
+    padding: 22px 20px 34px;
+  }
+
+  .settingsRow {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 6px;
+  }
+
+  .settingsLabel {
+    line-height: 1.4;
+    text-align: start;
+  }
+
+  .settingsSelect,
+  .settingsTextInput {
+    width: 100%;
+  }
 }
 
 .recentProjectsPanel {
@@ -1217,7 +1305,13 @@ button:active {
 }
 
 .editorHost .cm-scroller {
-  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;
+  font-family: var(
+    --pergamum-editor-font-family,
+    "Cascadia Code",
+    "SFMono-Regular",
+    Consolas,
+    monospace
+  );
   line-height: 1.55;
 }
 

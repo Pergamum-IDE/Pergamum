@@ -150,6 +150,7 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
     expect(written.workbench).toEqual({
       language: "ja",
       statusBar: { visible: true },
+      advancedSettings: { enabled: false },
       fontFamily: "Fira Code"
     });
   });
@@ -168,7 +169,8 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
 
     expect(written.workbench).toEqual({
       language: "ja",
-      statusBar: { visible: true }
+      statusBar: { visible: true },
+      advancedSettings: { enabled: false }
     });
     expect(JSON.stringify(written)).not.toContain(catalogDefault);
   });
@@ -189,7 +191,8 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
 
     expect(written.workbench).toEqual({
       language: "ja",
-      statusBar: { visible: true }
+      statusBar: { visible: true },
+      advancedSettings: { enabled: false }
     });
     expect(JSON.stringify(written)).not.toContain("color: red");
   });
@@ -199,7 +202,12 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
       workbench: {
         language: "ja",
         statusBar: { visible: true },
+        advancedSettings: { enabled: false },
         fontFamily: 'Fira Code"; color: red'
+      },
+      editor: {},
+      files: {
+        newFile: { lineEnding: "lf", encoding: "utf8" }
       }
     };
 

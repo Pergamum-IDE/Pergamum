@@ -8,6 +8,8 @@ import {
 // deliberately do not consume it (#173 D-1).
 export const workbenchFontFamilyCustomProperty =
   "--pergamum-workbench-font-family";
+export const editorFontFamilyCustomProperty =
+  "--pergamum-editor-font-family";
 
 // The main process already validates workbench.fontFamily against the
 // catalog before it reaches effective settings (#173 D-4), but the
@@ -20,6 +22,12 @@ export function resolveSafeWorkbenchFontFamily(fontFamily: string): string {
     : getCatalogDefaultValue("workbench.fontFamily");
 }
 
+export function resolveSafeEditorFontFamily(fontFamily: string): string {
+  return validateCatalogValue("editor.fontFamily", fontFamily).ok
+    ? fontFamily
+    : getCatalogDefaultValue("editor.fontFamily");
+}
+
 // `target` defaults to the live document root, but accepts an injected
 // CSSStyleDeclaration so this stays testable without a DOM environment.
 export function applyWorkbenchFontFamily(
@@ -29,5 +37,15 @@ export function applyWorkbenchFontFamily(
   target.setProperty(
     workbenchFontFamilyCustomProperty,
     resolveSafeWorkbenchFontFamily(fontFamily)
+  );
+}
+
+export function applyEditorFontFamily(
+  fontFamily: string,
+  target: CSSStyleDeclaration = document.documentElement.style
+): void {
+  target.setProperty(
+    editorFontFamilyCustomProperty,
+    resolveSafeEditorFontFamily(fontFamily)
   );
 }

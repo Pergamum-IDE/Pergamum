@@ -56,7 +56,10 @@ import {
   registerApplicationCommands
 } from "./applicationCommands";
 import { subscribeApplicationMenuCommands } from "./applicationMenuBridge";
-import { applyWorkbenchFontFamily } from "./workbenchFontFamily";
+import {
+  applyEditorFontFamily,
+  applyWorkbenchFontFamily
+} from "./workbenchFontFamily";
 import { CommandPalette } from "./CommandPalette";
 import {
   createCommandPaletteCommandTitles,
@@ -94,7 +97,9 @@ import {
 import {
   getDialogActionOrder,
   type AppChoiceDialogOptions,
-  type AppChoiceDialogResult
+  type AppChoiceDialogResult,
+  type AppConfirmDialogOptions,
+  type AppConfirmDialogResult
 } from "./dialog/appDialogTypes";
 import { runEditorCloseFlow } from "./documentTabCloseFlow";
 import {
@@ -329,6 +334,16 @@ export function App(): JSX.Element {
     () => getDialogActionOrder(window.pergamum.platform),
     []
   );
+
+  function confirmDialog(
+    options: AppConfirmDialogOptions
+  ): Promise<AppConfirmDialogResult> {
+    if (typeof document !== "undefined") {
+      dialogOpenerRef.current = document.activeElement;
+    }
+
+    return dialogController.confirm(options);
+  }
 
   function choiceDialog(
     options: AppChoiceDialogOptions
@@ -580,6 +595,9 @@ export function App(): JSX.Element {
   useEffect(() => {
     applyWorkbenchFontFamily(effectiveSettings.workbench.fontFamily);
   }, [effectiveSettings.workbench.fontFamily]);
+  useEffect(() => {
+    applyEditorFontFamily(effectiveSettings.editor.fontFamily);
+  }, [effectiveSettings.editor.fontFamily]);
   const isDirty = isCurrentEditorDirty(currentEditor);
   const isSavingGlossaryEntry =
     currentEditor.kind === "glossaryEntry" &&
@@ -2675,6 +2693,28 @@ export function App(): JSX.Element {
     }
   }
 
+  async function confirmEnableAdvancedSettings(): Promise<boolean> {
+    const result = await confirmDialog({
+      title: translate("settings.application.advanced.enableConfirm.title"),
+      message: {
+        kind: "plainText",
+        text: translate("settings.application.advanced.enableConfirm.message")
+      },
+      icon: {
+        kind: "warning",
+        tooltip: translate("dialog.icon.warning")
+      },
+      clipboardText: null,
+      dismissOnBackdropClick: false,
+      confirmLabel: translate(
+        "settings.application.advanced.enableConfirm.confirm"
+      ),
+      cancelLabel: translate("common.cancel")
+    });
+
+    return result === "confirm";
+  }
+
   return (
     <main
       className="appShell"
@@ -2861,6 +2901,9 @@ export function App(): JSX.Element {
                       isLoading={isSettingsLoading}
                       error={settingsError}
                       translate={translate}
+                      onConfirmEnableAdvancedSettings={
+                        confirmEnableAdvancedSettings
+                      }
                       onChangeSettings={(nextSettings) => {
                         void changeSettings(nextSettings);
                       }}

@@ -103,6 +103,58 @@ describe("application settings translations (#181)", () => {
   });
 });
 
+describe("Application Settings core control translations (#195)", () => {
+  it("defines Application Settings page, section, and advanced guard labels for ja and en", () => {
+    for (const language of ["ja", "en"] as const) {
+      for (const key of [
+        "settings.application.description",
+        "settings.application.section.general",
+        "settings.application.section.appearance",
+        "settings.application.section.editor",
+        "settings.application.section.files",
+        "settings.application.advanced.enabled.label",
+        "settings.application.advanced.enabled.description",
+        "settings.application.advanced.disabledDescription",
+        "settings.application.advanced.enableConfirm.title",
+        "settings.application.advanced.enableConfirm.message",
+        "settings.application.advanced.enableConfirm.confirm"
+      ] as const) {
+        expect(t(language, key).length).toBeGreaterThan(0);
+      }
+    }
+
+    expect(t("ja", "settings.application.advanced.enabled.label")).toBe(
+      "達人向け設定を有効にする"
+    );
+    expect(t("en", "settings.application.advanced.enabled.label")).toBe(
+      "Enable advanced settings"
+    );
+  });
+
+  it("defines catalog label and description keys used by Application Settings controls", () => {
+    for (const language of ["ja", "en"] as const) {
+      for (const key of [
+        "settings.workbench.language.label",
+        "settings.workbench.language.description",
+        "settings.workbench.statusBar.visible.label",
+        "settings.workbench.statusBar.visible.description",
+        "settings.workbench.fontFamily.label",
+        "settings.workbench.fontFamily.description",
+        "settings.workbench.advancedSettings.enabled.label",
+        "settings.workbench.advancedSettings.enabled.description",
+        "settings.editor.fontFamily.label",
+        "settings.editor.fontFamily.description",
+        "settings.files.newFile.lineEnding.label",
+        "settings.files.newFile.lineEnding.description",
+        "settings.files.newFile.encoding.label",
+        "settings.files.newFile.encoding.description"
+      ] as const) {
+        expect(t(language, key).length).toBeGreaterThan(0);
+      }
+    }
+  });
+});
+
 describe("glossary form match boundary translations", () => {
   it("defines every advanced matching settings key for ja and en", () => {
     for (const key of matchBoundaryKeys) {
