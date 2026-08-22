@@ -26,6 +26,7 @@ ADR は、単なる設計メモではありません。
 | ADR-0005 | Command Domain Taxonomy | Draft | Command ID domain の責務境界、built-in domain、reserved plugin namespace、collision policy を定義する。 |
 | ADR-0006 | Durable State Categories and Settings Architecture | Proposed | settings / meta / session / recovery / runtime coordination のカテゴリ境界と Settings Catalog / resolution / validation 方針を定義する。日本語版: `0006-settings-architecture.ja.md` / English: `0006-settings-architecture.en.md` |
 | ADR-0007 | Recovery and Runtime Coordination | Proposed | recovery storage / identity / restore と runtime coordination marker の非破壊・best-effort 方針を定義する。日本語版: `0007-recovery-and-runtime-coordination.ja.md` / English: `0007-recovery-and-runtime-coordination.en.md` |
+| ADR-0008 | Project File, Project Root, and Project-Local Recovery Layout | Proposed | Defines the `.pergamum` project file, project root boundary, project metadata, and project-local recovery layout.日本語版: `0008-project_file-project_root-and-project_local-recovery-layout.ja.md` / English: `0008-project_file-project_root-and-project_local-recovery-layout.en.md` |
 
 ---
 
