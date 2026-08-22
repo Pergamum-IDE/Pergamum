@@ -194,7 +194,6 @@ import {
   documentTabs,
   editorIdForCurrentDocument,
   findOpenDocument,
-  hasDirtyOpenDocuments,
   hasOpenDocument,
   isOnlyInitialUntitledDocument,
   openOrActivateEditor,
@@ -212,6 +211,7 @@ import {
   ProjectActivationLifetime,
   resetOpenDocumentsForProjectContextSwitch
 } from "./projectActivationState";
+import { confirmProjectSwitchWithUnsavedDocuments } from "./projectSwitchConfirmation";
 import { RecentProjectsPanel } from "./RecentProjectsPanel";
 import { resolveCurrentEditor } from "./resolveCurrentEditor";
 import { SettingsPanel } from "./SettingsPanel";
@@ -1025,12 +1025,12 @@ export function App(): JSX.Element {
     applyEditor
   });
 
-  function confirmProjectSwitch(): boolean {
-    if (!hasDirtyOpenDocuments(openDocumentsState)) {
-      return true;
-    }
-
-    return window.confirm(translate("confirm.discardOpenDocuments"));
+  async function confirmProjectSwitch(): Promise<boolean> {
+    return confirmProjectSwitchWithUnsavedDocuments({
+      state: openDocumentsState,
+      translate,
+      choiceDialog
+    });
   }
 
   function setActiveDocumentContent(nextContent: string): void {
@@ -2726,7 +2726,7 @@ export function App(): JSX.Element {
   }
 
   async function createProject(): Promise<void> {
-    if (!confirmProjectSwitch()) {
+    if (!(await confirmProjectSwitch())) {
       setStatus({ key: "status.openProjectCanceled" });
       return;
     }
@@ -2756,7 +2756,7 @@ export function App(): JSX.Element {
   }
 
   async function openProject(): Promise<void> {
-    if (!confirmProjectSwitch()) {
+    if (!(await confirmProjectSwitch())) {
       setStatus({ key: "status.openProjectCanceled" });
       return;
     }
@@ -2786,7 +2786,7 @@ export function App(): JSX.Element {
   }
 
   async function openRecentProject(projectFilePath: string): Promise<void> {
-    if (!confirmProjectSwitch()) {
+    if (!(await confirmProjectSwitch())) {
       setStatus({ key: "status.openProjectCanceled" });
       return;
     }
