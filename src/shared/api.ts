@@ -57,7 +57,9 @@ export const FILE_CHANNELS = {
 } as const;
 
 export const PROJECT_CHANNELS = {
+  createProject: "projects:createProject",
   openProject: "projects:openProject",
+  openProjectFile: "projects:openProjectFile",
   openRecentProject: "projects:openRecentProject",
   readProjectDocument: "projects:readProjectDocument",
   saveProjectDocument: "projects:saveProjectDocument"
@@ -235,7 +237,9 @@ export interface PergamumApi {
     ) => Promise<WriteMarkdownResult>;
   };
   projects: {
+    createProject: () => Promise<PergamumProject | null>;
     openProject: () => Promise<PergamumProject | null>;
+    openProjectFile: () => Promise<PergamumProject | null>;
     openRecentProject: (path: string) => Promise<PergamumProject>;
     readProjectDocument: (
       relativePath: string
