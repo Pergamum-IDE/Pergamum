@@ -523,6 +523,16 @@ describe("ConfirmDialog backdrop dismissal wiring (#184 follow-up, source check)
   });
 });
 
+describe("ConfirmDialog sound feedback wiring (#200)", () => {
+  it("does not create local audio elements; dialog display sound is handled at the controller request boundary", async () => {
+    const { readFileSync } = await import("node:fs");
+    const source = readFileSync("src/renderer/dialog/ConfirmDialog.tsx", "utf8");
+
+    expect(source).not.toContain("playDialogShownSound");
+    expect(source).not.toContain("new Audio");
+  });
+});
+
 describe("ConfirmDialog button accelerators (#184 follow-up)", () => {
   it("does not wire accessKey (or any other per-button accelerator) onto dialog buttons (source check)", async () => {
     const { readFileSync } = await import("node:fs");

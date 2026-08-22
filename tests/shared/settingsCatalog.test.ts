@@ -269,6 +269,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       expectTypeOf(
         getCatalogDefaultValue("workbench.advancedSettings.enabled")
       ).toEqualTypeOf<boolean>();
+      expectTypeOf(
+        getCatalogDefaultValue("workbench.sound.enabled")
+      ).toEqualTypeOf<boolean>();
     });
 
     it("rejects an invalid/unknown key at the type level", () => {
@@ -633,14 +636,18 @@ describe("Settings Catalog Foundation (#150)", () => {
       ).toBe(false);
     });
 
-    it("workbench.statusBar.visible (#174) and workbench.advancedSettings.enabled (#195) are the production boolean entries", () => {
+    it("workbench.statusBar.visible (#174), advanced settings (#195), and sound feedback (#200) are the production boolean entries", () => {
       const booleanEntries = getCatalogEntries().filter(
         (entry) => entry.type === "boolean"
       );
 
       expect(booleanEntries.map((entry) => entry.key)).toEqual([
         "workbench.statusBar.visible",
-        "workbench.advancedSettings.enabled"
+        "workbench.advancedSettings.enabled",
+        "workbench.sound.enabled",
+        "workbench.sound.dialog.enabled",
+        "workbench.sound.newline.enabled",
+        "workbench.sound.keypress.enabled"
       ]);
     });
   });
@@ -745,6 +752,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(getCatalogEntry("workbench.statusBar.visible").scope).toBe(
         "applicationOnly"
       );
+      expect(getCatalogEntry("workbench.sound.enabled").scope).toBe(
+        "applicationOnly"
+      );
     });
 
     it("represents all three ADR-0006 S-11 scope values", () => {
@@ -806,7 +816,7 @@ describe("Settings Catalog Foundation (#150)", () => {
   });
 
   describe("initial catalog entries", () => {
-    it("registers exactly the six #150 entries, the two #174 entries, and the #195 advanced settings guard", () => {
+    it("registers exactly the #150 entries, #174 entries, #195 advanced settings guard, and #200 sound feedback entries", () => {
       expect(Object.keys(settingsCatalog).sort()).toEqual(
         [
           "editor.fontFamily",
@@ -816,6 +826,10 @@ describe("Settings Catalog Foundation (#150)", () => {
           "workbench.colorTheme",
           "workbench.fontFamily",
           "workbench.advancedSettings.enabled",
+          "workbench.sound.enabled",
+          "workbench.sound.dialog.enabled",
+          "workbench.sound.newline.enabled",
+          "workbench.sound.keypress.enabled",
           "workbench.language",
           "workbench.statusBar.visible"
         ].sort()
@@ -878,6 +892,42 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(
         validateCatalogValue("workbench.advancedSettings.enabled", "true")
       ).toEqual({ ok: false, failure: "typeMismatch" });
+    });
+  });
+
+  describe("workbench.sound.* (#200)", () => {
+    it("registers applicationOnly boolean settings with the required defaults", () => {
+      const expectedDefaults = {
+        "workbench.sound.enabled": true,
+        "workbench.sound.dialog.enabled": true,
+        "workbench.sound.newline.enabled": false,
+        "workbench.sound.keypress.enabled": false
+      } as const;
+
+      for (const [key, defaultValue] of Object.entries(expectedDefaults)) {
+        const settingKey = key as keyof typeof expectedDefaults;
+        const entry = getCatalogEntry(settingKey);
+
+        expect(entry.scope).toBe("applicationOnly");
+        expect(entry.type).toBe("boolean");
+        expect(getCatalogDefaultValue(settingKey)).toBe(defaultValue);
+      }
+    });
+
+    it("validates only boolean values for every sound feedback setting", () => {
+      for (const key of [
+        "workbench.sound.enabled",
+        "workbench.sound.dialog.enabled",
+        "workbench.sound.newline.enabled",
+        "workbench.sound.keypress.enabled"
+      ] as const) {
+        expect(validateCatalogValue(key, true)).toEqual({ ok: true });
+        expect(validateCatalogValue(key, false)).toEqual({ ok: true });
+        expect(validateCatalogValue(key, "true")).toEqual({
+          ok: false,
+          failure: "typeMismatch"
+        });
+      }
     });
   });
 
@@ -1079,7 +1129,7 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
     });
 
-    it("settingsStore.ts and shared settings now wire editor.fontFamily, files.newFile.*, and workbench.advancedSettings.enabled for Application Settings", () => {
+    it("settingsStore.ts and shared settings now wire editor.fontFamily, files.newFile.*, advanced settings, and sound feedback for Application Settings", () => {
       const settingsStoreSource = readFileSync(
         "src/main/settingsStore.ts",
         "utf8"
@@ -1097,6 +1147,10 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(settingsStoreSource).toContain(
         '"workbench.advancedSettings.enabled"'
       );
+      expect(settingsStoreSource).toContain('"workbench.sound.enabled"');
+      expect(settingsStoreSource).toContain('"workbench.sound.dialog.enabled"');
+      expect(settingsStoreSource).toContain('"workbench.sound.newline.enabled"');
+      expect(settingsStoreSource).toContain('"workbench.sound.keypress.enabled"');
       expect(settingsSource).toMatch(/CatalogDefaultValue\("editor\.fontFamily"/);
       expect(settingsSource).toContain(
         'getCatalogDefaultValue("files.newFile.lineEnding")'
@@ -1106,6 +1160,18 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
       expect(settingsSource).toContain(
         'getCatalogDefaultValue("workbench.advancedSettings.enabled")'
+      );
+      expect(settingsSource).toContain(
+        'getCatalogDefaultValue("workbench.sound.enabled")'
+      );
+      expect(settingsSource).toContain(
+        'getCatalogDefaultValue("workbench.sound.dialog.enabled")'
+      );
+      expect(settingsSource).toContain(
+        'getCatalogDefaultValue("workbench.sound.newline.enabled")'
+      );
+      expect(settingsSource).toContain(
+        'getCatalogDefaultValue("workbench.sound.keypress.enabled")'
       );
       expect(rendererSource).toMatch(/CatalogValue\("editor\.fontFamily"/);
       expect(rendererSource).toMatch(
@@ -1120,7 +1186,11 @@ describe("Settings Catalog Foundation (#150)", () => {
           "workbench.colorTheme",
           "files.newFile.lineEnding",
           "files.newFile.encoding",
-          "workbench.advancedSettings.enabled"
+          "workbench.advancedSettings.enabled",
+          "workbench.sound.enabled",
+          "workbench.sound.dialog.enabled",
+          "workbench.sound.newline.enabled",
+          "workbench.sound.keypress.enabled"
         ])
       );
 
@@ -1145,7 +1215,11 @@ describe("Settings Catalog Foundation (#150)", () => {
         "editor.fontFamily",
         "files.newFile.lineEnding",
         "files.newFile.encoding",
-        "workbench.advancedSettings.enabled"
+        "workbench.advancedSettings.enabled",
+        "workbench.sound.enabled",
+        "workbench.sound.dialog.enabled",
+        "workbench.sound.newline.enabled",
+        "workbench.sound.keypress.enabled"
       ]) {
         expect(projectConfigStoreSource).not.toContain(applicationSettingsOnlyKey);
       }

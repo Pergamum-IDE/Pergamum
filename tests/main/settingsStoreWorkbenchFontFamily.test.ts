@@ -28,6 +28,12 @@ import {
 import { getCatalogDefaultValue } from "../../src/shared/settingsCatalog";
 
 const catalogDefault = getCatalogDefaultValue("workbench.fontFamily");
+const defaultSoundSettings = {
+  enabled: true,
+  dialog: { enabled: true },
+  newline: { enabled: false },
+  keypress: { enabled: false }
+};
 
 function onDiskSettings(overrides: Record<string, unknown>): string {
   return JSON.stringify({
@@ -151,6 +157,7 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
       language: "ja",
       statusBar: { visible: true },
       advancedSettings: { enabled: false },
+      sound: defaultSoundSettings,
       fontFamily: "Fira Code"
     });
   });
@@ -170,7 +177,8 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
     expect(written.workbench).toEqual({
       language: "ja",
       statusBar: { visible: true },
-      advancedSettings: { enabled: false }
+      advancedSettings: { enabled: false },
+      sound: defaultSoundSettings
     });
     expect(JSON.stringify(written)).not.toContain(catalogDefault);
   });
@@ -192,7 +200,8 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
     expect(written.workbench).toEqual({
       language: "ja",
       statusBar: { visible: true },
-      advancedSettings: { enabled: false }
+      advancedSettings: { enabled: false },
+      sound: defaultSoundSettings
     });
     expect(JSON.stringify(written)).not.toContain("color: red");
   });
@@ -203,6 +212,7 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
         language: "ja",
         statusBar: { visible: true },
         advancedSettings: { enabled: false },
+        sound: defaultSoundSettings,
         fontFamily: 'Fira Code"; color: red'
       },
       editor: {},

@@ -173,6 +173,48 @@ describe("Application Settings core defaults and effective settings (#195)", () 
   });
 });
 
+describe("Application Settings sound feedback defaults and effective settings (#200)", () => {
+  it("workbench.sound defaults derive from the catalog and are concrete, not sparse", () => {
+    expect(builtInDefaultSettings.workbench.sound).toEqual({
+      enabled: getCatalogDefaultValue("workbench.sound.enabled"),
+      dialog: {
+        enabled: getCatalogDefaultValue("workbench.sound.dialog.enabled")
+      },
+      newline: {
+        enabled: getCatalogDefaultValue("workbench.sound.newline.enabled")
+      },
+      keypress: {
+        enabled: getCatalogDefaultValue("workbench.sound.keypress.enabled")
+      }
+    });
+    expect(defaultApplicationSettings.workbench.sound).toEqual(
+      builtInDefaultSettings.workbench.sound
+    );
+    expect(createDefaultApplicationSettings().workbench.sound).toEqual(
+      builtInDefaultSettings.workbench.sound
+    );
+  });
+
+  it("resolveEffectiveSettings passes application workbench.sound through without adding a project override", () => {
+    const applicationSettings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        sound: {
+          enabled: false,
+          dialog: { enabled: true },
+          newline: { enabled: true },
+          keypress: { enabled: false }
+        }
+      }
+    };
+
+    expect(
+      resolveEffectiveSettings(applicationSettings, {}).workbench.sound
+    ).toEqual(applicationSettings.workbench.sound);
+  });
+});
+
 describe("workbench.language / workbench.statusBar.visible wiring (#174)", () => {
   it("builtInDefaultSettings.workbench.language derives from the catalog default", () => {
     expect(builtInDefaultSettings.workbench.language).toBe(

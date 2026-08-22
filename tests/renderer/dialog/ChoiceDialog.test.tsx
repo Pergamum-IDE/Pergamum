@@ -522,6 +522,15 @@ describe("ChoiceDialog result and shortcut scope (#192)", () => {
   });
 });
 
+describe("ChoiceDialog sound feedback wiring (#200)", () => {
+  it("does not create local audio elements; dialog display sound is handled at the controller request boundary", () => {
+    const source = readFileSync("src/renderer/dialog/ChoiceDialog.tsx", "utf8");
+
+    expect(source).not.toContain("playDialogShownSound");
+    expect(source).not.toContain("new Audio");
+  });
+});
+
 describe("ChoiceDialog clipboard copy button (#192)", () => {
   it("reuses the app dialog copy control when clipboardText is present", () => {
     const markup = renderDialog({

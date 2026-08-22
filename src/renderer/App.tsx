@@ -217,6 +217,11 @@ import { resolveCurrentEditor } from "./resolveCurrentEditor";
 import { SettingsPanel } from "./SettingsPanel";
 import { createSaveInFlightGuard } from "./saveInFlightGuard";
 import { defaultSidebarMode, type SidebarMode } from "./sidebarMode";
+import {
+  createBrowserSoundFeedbackPlayer,
+  playDialogShownSound,
+  type SoundFeedbackPlayer
+} from "./soundFeedback";
 import { useApplicationSettings } from "./useApplicationSettings";
 import { useHorizontalDrag } from "./useHorizontalDrag";
 import { useVerticalDrag } from "./useVerticalDrag";
@@ -315,6 +320,27 @@ export function App(): JSX.Element {
   }
 
   const dialogController = dialogControllerRef.current;
+  const [status, setStatus] = useState<StatusMessage>({ key: "app.ready" });
+  const soundPlaybackWarningReportedRef = useRef(false);
+
+  function reportSoundPlaybackFailure(): void {
+    if (soundPlaybackWarningReportedRef.current) {
+      return;
+    }
+
+    soundPlaybackWarningReportedRef.current = true;
+    setStatus({ key: "status.soundPlaybackFailed" });
+  }
+
+  const soundFeedbackRef = useRef<SoundFeedbackPlayer | null>(null);
+
+  if (!soundFeedbackRef.current) {
+    soundFeedbackRef.current = createBrowserSoundFeedbackPlayer({
+      onPlaybackFailure: reportSoundPlaybackFailure
+    });
+  }
+
+  const soundFeedback = soundFeedbackRef.current;
   const dialogOpenerRef = useRef<Element | null>(null);
   const [pendingDialogRequest, setPendingDialogRequest] =
     useState<DialogControllerPendingRequest | null>(() =>
@@ -342,7 +368,19 @@ export function App(): JSX.Element {
       dialogOpenerRef.current = document.activeElement;
     }
 
-    return dialogController.confirm(options);
+    const result = dialogController.confirm(options);
+
+    const pending = dialogController.getPendingRequest();
+
+    if (pending?.kind === "confirm" && pending.options === options) {
+      playDialogShownSound(
+        soundFeedback,
+        effectiveSettings.workbench.sound,
+        reportSoundPlaybackFailure
+      );
+    }
+
+    return result;
   }
 
   function choiceDialog(
@@ -352,7 +390,19 @@ export function App(): JSX.Element {
       dialogOpenerRef.current = document.activeElement;
     }
 
-    return dialogController.choice(options);
+    const result = dialogController.choice(options);
+
+    const pending = dialogController.getPendingRequest();
+
+    if (pending?.kind === "choice" && pending.options === options) {
+      playDialogShownSound(
+        soundFeedback,
+        effectiveSettings.workbench.sound,
+        reportSoundPlaybackFailure
+      );
+    }
+
+    return result;
   }
   const [sidebarMode, setSidebarMode] = useState(defaultSidebarMode);
   const [layout, setLayout] = useState<WorkbenchLayoutState>(
@@ -363,7 +413,6 @@ export function App(): JSX.Element {
     useState<SpecialTabId | null>(null);
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
-  const [status, setStatus] = useState<StatusMessage>({ key: "app.ready" });
   const [glossaryRefreshToken, setGlossaryRefreshToken] = useState(0);
   const [pendingMarkdownSelection, setPendingMarkdownSelection] =
     useState<GlossaryOccurrenceRange | null>(null);
@@ -2915,6 +2964,8 @@ export function App(): JSX.Element {
                         projectRootPath={project?.rootPath ?? null}
                         glossaryRefreshToken={glossaryRefreshToken}
                         translate={translate}
+                        soundFeedback={soundFeedback}
+                        soundSettings={effectiveSettings.workbench.sound}
                         markdownEditorPreviewRatio={
                           layout.markdownEditorPreview.ratio
                         }

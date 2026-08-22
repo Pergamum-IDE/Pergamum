@@ -503,6 +503,42 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
+  "workbench.sound.enabled": defineBooleanSetting({
+    key: "workbench.sound.enabled",
+    scope: "applicationOnly",
+    defaultValue: true,
+    labelKey: "settings.workbench.sound.enabled.label",
+    descriptionKey: "settings.workbench.sound.enabled.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "workbench.sound.dialog.enabled": defineBooleanSetting({
+    key: "workbench.sound.dialog.enabled",
+    scope: "applicationOnly",
+    defaultValue: true,
+    labelKey: "settings.workbench.sound.dialog.enabled.label",
+    descriptionKey: "settings.workbench.sound.dialog.enabled.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "workbench.sound.newline.enabled": defineBooleanSetting({
+    key: "workbench.sound.newline.enabled",
+    scope: "applicationOnly",
+    defaultValue: false,
+    labelKey: "settings.workbench.sound.newline.enabled.label",
+    descriptionKey: "settings.workbench.sound.newline.enabled.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
+  "workbench.sound.keypress.enabled": defineBooleanSetting({
+    key: "workbench.sound.keypress.enabled",
+    scope: "applicationOnly",
+    defaultValue: false,
+    labelKey: "settings.workbench.sound.keypress.enabled.label",
+    descriptionKey: "settings.workbench.sound.keypress.enabled.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
   "editor.fontFamily": defineStringSetting({
     key: "editor.fontFamily",
     scope: "applicationWithProjectOverride",

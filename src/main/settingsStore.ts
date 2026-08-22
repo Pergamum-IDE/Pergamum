@@ -114,6 +114,45 @@ function readWorkbenchAdvancedSettings(
   };
 }
 
+function readWorkbenchSoundToggleSettings(
+  key:
+    | "workbench.sound.dialog.enabled"
+    | "workbench.sound.newline.enabled"
+    | "workbench.sound.keypress.enabled",
+  value: unknown
+): { enabled: boolean } {
+  const enabled = isObject(value) ? value.enabled : undefined;
+
+  return {
+    enabled: resolveCatalogValue(key, enabled).value
+  };
+}
+
+function readWorkbenchSoundSettings(
+  value: unknown
+): ApplicationSettings["workbench"]["sound"] {
+  const soundValue = isObject(value) ? value : undefined;
+
+  return {
+    enabled: resolveCatalogValue(
+      "workbench.sound.enabled",
+      soundValue?.enabled
+    ).value,
+    dialog: readWorkbenchSoundToggleSettings(
+      "workbench.sound.dialog.enabled",
+      soundValue?.dialog
+    ),
+    newline: readWorkbenchSoundToggleSettings(
+      "workbench.sound.newline.enabled",
+      soundValue?.newline
+    ),
+    keypress: readWorkbenchSoundToggleSettings(
+      "workbench.sound.keypress.enabled",
+      soundValue?.keypress
+    )
+  };
+}
+
 // #174: reads the legacy top-level `language` / `showStatusBar` keys are
 // intentionally never consulted here — only the nested workbench.language /
 // workbench.statusBar.visible keys are read, matching the write path below.
@@ -136,19 +175,21 @@ function readWorkbenchSettings(value: unknown): ApplicationSettings["workbench"]
   const advancedSettings = readWorkbenchAdvancedSettings(
     workbenchValue?.advancedSettings
   );
+  const sound = readWorkbenchSoundSettings(workbenchValue?.sound);
 
   if (
     workbenchValue === undefined ||
     typeof workbenchValue.fontFamily !== "string" ||
     !validateCatalogValue("workbench.fontFamily", workbenchValue.fontFamily).ok
   ) {
-    return { language, statusBar, advancedSettings };
+    return { language, statusBar, advancedSettings, sound };
   }
 
   return {
     language,
     statusBar,
     advancedSettings,
+    sound,
     fontFamily: workbenchValue.fontFamily
   };
 }
@@ -302,10 +343,10 @@ function parsePreviewSettingsForWrite(
 }
 
 // Same validate-and-reject-the-whole-write style as parsePreviewSettingsForWrite:
-// an invalid language/statusBar.visible/advancedSettings.enabled/fontFamily
+// an invalid language/statusBar.visible/advancedSettings.enabled/sound/fontFamily
 // rejects the save request rather than silently dropping just that field
 // (#173 D-9). An absent fontFamily key is valid and preserves sparse storage
-// (#173 D-7); language, statusBar, and advancedSettings are required
+// (#173 D-7); language, statusBar, advancedSettings, and sound are required
 // concrete values.
 function parseWorkbenchStatusBarSettingsForWrite(
   value: unknown
@@ -357,6 +398,77 @@ function parseWorkbenchAdvancedSettingsForWrite(
   return { enabled: resolution.value };
 }
 
+function parseWorkbenchSoundToggleSettingsForWrite(
+  key:
+    | "workbench.sound.dialog.enabled"
+    | "workbench.sound.newline.enabled"
+    | "workbench.sound.keypress.enabled",
+  value: unknown
+): { enabled: boolean } {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (keys.length !== 1 || !keys.includes("enabled")) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const resolution = resolveCatalogValue(key, value.enabled);
+
+  if (!resolution.ok) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return { enabled: resolution.value };
+}
+
+function parseWorkbenchSoundSettingsForWrite(
+  value: unknown
+): ApplicationSettings["workbench"]["sound"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (
+    keys.length !== 4 ||
+    !keys.includes("enabled") ||
+    !keys.includes("dialog") ||
+    !keys.includes("newline") ||
+    !keys.includes("keypress")
+  ) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const enabledResolution = resolveCatalogValue(
+    "workbench.sound.enabled",
+    value.enabled
+  );
+
+  if (!enabledResolution.ok) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    enabled: enabledResolution.value,
+    dialog: parseWorkbenchSoundToggleSettingsForWrite(
+      "workbench.sound.dialog.enabled",
+      value.dialog
+    ),
+    newline: parseWorkbenchSoundToggleSettingsForWrite(
+      "workbench.sound.newline.enabled",
+      value.newline
+    ),
+    keypress: parseWorkbenchSoundToggleSettingsForWrite(
+      "workbench.sound.keypress.enabled",
+      value.keypress
+    )
+  };
+}
+
 function parseWorkbenchSettingsForWrite(
   value: unknown
 ): ApplicationSettings["workbench"] {
@@ -366,13 +478,14 @@ function parseWorkbenchSettingsForWrite(
 
   const keys = Object.keys(value);
   const hasFontFamily = keys.includes("fontFamily");
-  const expectedKeyCount = hasFontFamily ? 4 : 3;
+  const expectedKeyCount = hasFontFamily ? 5 : 4;
 
   if (
     keys.length !== expectedKeyCount ||
     !keys.includes("language") ||
     !keys.includes("statusBar") ||
-    !keys.includes("advancedSettings")
+    !keys.includes("advancedSettings") ||
+    !keys.includes("sound")
   ) {
     throw new Error("Invalid application settings.");
   }
@@ -390,12 +503,14 @@ function parseWorkbenchSettingsForWrite(
   const advancedSettings = parseWorkbenchAdvancedSettingsForWrite(
     value.advancedSettings
   );
+  const sound = parseWorkbenchSoundSettingsForWrite(value.sound);
 
   if (!hasFontFamily) {
     return {
       language: languageResolution.value,
       statusBar,
-      advancedSettings
+      advancedSettings,
+      sound
     };
   }
 
@@ -410,6 +525,7 @@ function parseWorkbenchSettingsForWrite(
     language: languageResolution.value,
     statusBar,
     advancedSettings,
+    sound,
     fontFamily: value.fontFamily
   };
 }

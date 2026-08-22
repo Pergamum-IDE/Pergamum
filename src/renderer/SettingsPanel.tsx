@@ -78,6 +78,8 @@ export function SettingsPanel({
 }: SettingsPanelProps): JSX.Element {
   const advancedSettingsEnabled = settings.workbench.advancedSettings.enabled;
   const advancedControlsDisabled = isLoading || !advancedSettingsEnabled;
+  const soundSettings = settings.workbench.sound;
+  const soundControlsDisabled = isLoading || !soundSettings.enabled;
 
   async function changeAdvancedSettingsEnabled(enabled: boolean): Promise<void> {
     if (enabled && !advancedSettingsEnabled) {
@@ -93,6 +95,37 @@ export function SettingsPanel({
         workbench: {
           ...settings.workbench,
           advancedSettings: { enabled }
+        }
+      })
+    );
+  }
+
+  function changeSoundEnabled(enabled: boolean): void {
+    onChangeSettings(
+      saveRequest(settings, {
+        workbench: {
+          ...settings.workbench,
+          sound: {
+            ...soundSettings,
+            enabled
+          }
+        }
+      })
+    );
+  }
+
+  function changeSoundChildEnabled(
+    child: "dialog" | "newline" | "keypress",
+    enabled: boolean
+  ): void {
+    onChangeSettings(
+      saveRequest(settings, {
+        workbench: {
+          ...settings.workbench,
+          sound: {
+            ...soundSettings,
+            [child]: { enabled }
+          }
         }
       })
     );
@@ -357,6 +390,123 @@ export function SettingsPanel({
                 {translate("settings.application.advanced.disabledDescription")}
               </p>
             ) : null}
+          </div>
+        </div>
+      </section>
+
+      <section
+        className="settingsSection"
+        aria-labelledby="applicationSettingsSound"
+      >
+        <h2 id="applicationSettingsSound">
+          {translate("settings.application.section.sound")}
+        </h2>
+        <div className="settingsRow">
+          <label
+            className="settingsLabel"
+            htmlFor="applicationSettingsSoundEnabled"
+          >
+            {translate("settings.workbench.sound.enabled.label")}
+          </label>
+          <div className="settingsControl">
+            <label className="settingsInlineCheckbox">
+              <input
+                id="applicationSettingsSoundEnabled"
+                type="checkbox"
+                checked={soundSettings.enabled}
+                disabled={isLoading}
+                onChange={(event) =>
+                  changeSoundEnabled(event.target.checked)
+                }
+              />
+              <span>{translate("settings.workbench.sound.enabled.label")}</span>
+            </label>
+            <p className="settingsDescription">
+              {translate("settings.workbench.sound.enabled.description")}
+            </p>
+          </div>
+        </div>
+        <div className="settingsRow">
+          <label
+            className="settingsLabel"
+            htmlFor="applicationSettingsDialogSound"
+          >
+            {translate("settings.workbench.sound.dialog.enabled.label")}
+          </label>
+          <div className="settingsControl">
+            <label className="settingsInlineCheckbox">
+              <input
+                id="applicationSettingsDialogSound"
+                type="checkbox"
+                checked={soundSettings.dialog.enabled}
+                disabled={soundControlsDisabled}
+                onChange={(event) =>
+                  changeSoundChildEnabled("dialog", event.target.checked)
+                }
+              />
+              <span>
+                {translate("settings.workbench.sound.dialog.enabled.label")}
+              </span>
+            </label>
+            <p className="settingsDescription">
+              {translate("settings.workbench.sound.dialog.enabled.description")}
+            </p>
+          </div>
+        </div>
+        <div className="settingsRow">
+          <label
+            className="settingsLabel"
+            htmlFor="applicationSettingsNewlineSound"
+          >
+            {translate("settings.workbench.sound.newline.enabled.label")}
+          </label>
+          <div className="settingsControl">
+            <label className="settingsInlineCheckbox">
+              <input
+                id="applicationSettingsNewlineSound"
+                type="checkbox"
+                checked={soundSettings.newline.enabled}
+                disabled={soundControlsDisabled}
+                onChange={(event) =>
+                  changeSoundChildEnabled("newline", event.target.checked)
+                }
+              />
+              <span>
+                {translate("settings.workbench.sound.newline.enabled.label")}
+              </span>
+            </label>
+            <p className="settingsDescription">
+              {translate("settings.workbench.sound.newline.enabled.description")}
+            </p>
+          </div>
+        </div>
+        <div className="settingsRow">
+          <label
+            className="settingsLabel"
+            htmlFor="applicationSettingsKeypressSound"
+          >
+            {translate("settings.workbench.sound.keypress.enabled.label")}
+          </label>
+          <div className="settingsControl">
+            <label className="settingsInlineCheckbox">
+              <input
+                id="applicationSettingsKeypressSound"
+                type="checkbox"
+                checked={soundSettings.keypress.enabled}
+                disabled={soundControlsDisabled}
+                onChange={(event) =>
+                  changeSoundChildEnabled("keypress", event.target.checked)
+                }
+              />
+              <span>
+                {translate("settings.workbench.sound.keypress.enabled.label")}
+              </span>
+            </label>
+            <p className="settingsDescription">
+              {translate(
+                "settings.workbench.sound.keypress.enabled.description"
+              )}
+            </p>
           </div>
         </div>
       </section>

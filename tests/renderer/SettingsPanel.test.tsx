@@ -116,10 +116,11 @@ describe("SettingsPanel application settings core controls (#195)", () => {
     expect(markup).toContain("一般");
     expect(markup).toContain("外観");
     expect(markup).toContain("エディタ");
+    expect(markup).toContain("サウンド");
     expect(markup).toContain("ファイル");
   });
 
-  it("renders core setting controls for language, status bar, UI font, editor font, line ending, and encoding", () => {
+  it("renders core setting controls for language, status bar, UI font, editor font, sound, line ending, and encoding", () => {
     const element = settingsPanelElement("en");
 
     expect(elementById(element, "applicationSettingsLanguage").type).toBe(
@@ -132,6 +133,18 @@ describe("SettingsPanel application settings core controls (#195)", () => {
       "input"
     );
     expect(elementById(element, "applicationSettingsEditorFont").type).toBe(
+      "input"
+    );
+    expect(elementById(element, "applicationSettingsSoundEnabled").type).toBe(
+      "input"
+    );
+    expect(elementById(element, "applicationSettingsDialogSound").type).toBe(
+      "input"
+    );
+    expect(elementById(element, "applicationSettingsNewlineSound").type).toBe(
+      "input"
+    );
+    expect(elementById(element, "applicationSettingsKeypressSound").type).toBe(
       "input"
     );
     expect(elementById(element, "applicationSettingsLineEnding").type).toBe(
@@ -169,6 +182,128 @@ describe("SettingsPanel application settings core controls (#195)", () => {
     expect(elementById(element, "applicationSettingsEncoding").props.disabled).toBe(
       false
     );
+  });
+
+  it("renders sound feedback controls with the catalog-backed default states", () => {
+    const element = settingsPanelElement("en");
+
+    expect(elementById(element, "applicationSettingsSoundEnabled").props.checked).toBe(
+      true
+    );
+    expect(elementById(element, "applicationSettingsDialogSound").props.checked).toBe(
+      true
+    );
+    expect(elementById(element, "applicationSettingsNewlineSound").props.checked).toBe(
+      false
+    );
+    expect(elementById(element, "applicationSettingsKeypressSound").props.checked).toBe(
+      false
+    );
+  });
+
+  it("disables child sound controls when the global sound feedback setting is off while keeping their stored values visible", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        sound: {
+          enabled: false,
+          dialog: { enabled: true },
+          newline: { enabled: true },
+          keypress: { enabled: false }
+        }
+      }
+    };
+    const element = settingsPanelElement("en", settings);
+
+    expect(elementById(element, "applicationSettingsDialogSound").props.disabled).toBe(
+      true
+    );
+    expect(elementById(element, "applicationSettingsNewlineSound").props.disabled).toBe(
+      true
+    );
+    expect(elementById(element, "applicationSettingsKeypressSound").props.disabled).toBe(
+      true
+    );
+    expect(elementById(element, "applicationSettingsDialogSound").props.checked).toBe(
+      true
+    );
+    expect(elementById(element, "applicationSettingsNewlineSound").props.checked).toBe(
+      true
+    );
+  });
+
+  it("saves the parent sound toggle without discarding child sound settings", () => {
+    const settings: ApplicationSettings = {
+      ...defaultApplicationSettings,
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        sound: {
+          enabled: true,
+          dialog: { enabled: false },
+          newline: { enabled: true },
+          keypress: { enabled: false }
+        }
+      }
+    };
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelElement(
+      "en",
+      settings,
+      () => Promise.resolve(true),
+      onChangeSettings
+    );
+    const soundEnabled = elementById(element, "applicationSettingsSoundEnabled");
+    const onChange = soundEnabled.props.onChange as (event: {
+      target: { checked: boolean };
+    }) => void;
+
+    onChange({ target: { checked: false } });
+
+    expect(onChangeSettings).toHaveBeenCalledWith({
+      workbench: {
+        ...settings.workbench,
+        sound: {
+          enabled: false,
+          dialog: { enabled: false },
+          newline: { enabled: true },
+          keypress: { enabled: false }
+        }
+      },
+      editor: settings.editor,
+      files: settings.files
+    });
+  });
+
+  it("saves each child sound toggle independently when sound feedback is enabled", () => {
+    const onChangeSettings = vi.fn();
+    const element = settingsPanelElement(
+      "en",
+      defaultApplicationSettings,
+      () => Promise.resolve(true),
+      onChangeSettings
+    );
+    const keypressSound = elementById(
+      element,
+      "applicationSettingsKeypressSound"
+    );
+    const onChange = keypressSound.props.onChange as (event: {
+      target: { checked: boolean };
+    }) => void;
+
+    onChange({ target: { checked: true } });
+
+    expect(onChangeSettings).toHaveBeenCalledWith({
+      workbench: {
+        ...defaultApplicationSettings.workbench,
+        sound: {
+          ...defaultApplicationSettings.workbench.sound,
+          keypress: { enabled: true }
+        }
+      },
+      editor: defaultApplicationSettings.editor,
+      files: defaultApplicationSettings.files
+    });
   });
 
   it("asks for binary confirmation before enabling advanced settings and only saves when confirmed", async () => {
@@ -276,7 +411,8 @@ describe("SettingsPanel application settings core controls (#195)", () => {
       workbench: {
         language: settings.workbench.language,
         statusBar: settings.workbench.statusBar,
-        advancedSettings: settings.workbench.advancedSettings
+        advancedSettings: settings.workbench.advancedSettings,
+        sound: settings.workbench.sound
       },
       editor: settings.editor,
       files: settings.files

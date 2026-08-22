@@ -5,6 +5,7 @@ import {
   documentLineCount,
   documentMaxLineLength
 } from "../shared/documentMetrics";
+import type { WorkbenchSoundSettings } from "../shared/settings";
 import type {
   GlossaryEntryKind,
   GlossaryFormMatchBoundary,
@@ -24,6 +25,7 @@ import { MarkdownEditor } from "./MarkdownEditor";
 import { markdownPreviewRenderer } from "./preview/markdownPreviewRenderer";
 import { useGlossaryEntriesForMatching } from "./useGlossaryEntriesForMatching";
 import { useHorizontalDrag } from "./useHorizontalDrag";
+import type { SoundFeedbackPlayer } from "./soundFeedback";
 import { clampMarkdownEditorPreviewRatio } from "./workbenchLayout";
 
 const NARROW_MARKDOWN_WORKSPACE_MEDIA_QUERY = "(max-width: 760px)";
@@ -221,6 +223,8 @@ interface EditorSurfaceProps {
   projectRootPath: string | null;
   glossaryRefreshToken: number;
   translate: Translate;
+  soundFeedback: SoundFeedbackPlayer;
+  soundSettings: WorkbenchSoundSettings;
   markdownEditorPreviewRatio: number;
   onChangeMarkdownEditorPreviewRatio: (ratio: number) => void;
   onChangeMarkdownContent: (content: string) => void;
@@ -319,6 +323,8 @@ export function EditorSurface({
   projectRootPath,
   glossaryRefreshToken,
   translate,
+  soundFeedback,
+  soundSettings,
   markdownEditorPreviewRatio,
   onChangeMarkdownEditorPreviewRatio,
   onChangeMarkdownContent,
@@ -354,6 +360,8 @@ export function EditorSurface({
           projectRootPath={projectRootPath}
           glossaryRefreshToken={glossaryRefreshToken}
           translate={translate}
+          soundFeedback={soundFeedback}
+          soundSettings={soundSettings}
           onChangeMarkdownContent={onChangeMarkdownContent}
           pendingSelection={pendingMarkdownSelection}
           onPendingSelectionApplied={onPendingMarkdownSelectionApplied}
@@ -415,6 +423,8 @@ interface MarkdownEditorSurfaceProps {
   projectRootPath: string | null;
   glossaryRefreshToken: number;
   translate: Translate;
+  soundFeedback: SoundFeedbackPlayer;
+  soundSettings: WorkbenchSoundSettings;
   onChangeMarkdownContent: (content: string) => void;
   pendingSelection: GlossaryOccurrenceRange | null;
   onPendingSelectionApplied: () => void;
@@ -454,6 +464,8 @@ function MarkdownEditorSurface({
   projectRootPath,
   glossaryRefreshToken,
   translate,
+  soundFeedback,
+  soundSettings,
   onChangeMarkdownContent,
   pendingSelection,
   onPendingSelectionApplied,
@@ -602,6 +614,8 @@ function MarkdownEditorSurface({
           pendingSelection={pendingSelection}
           onPendingSelectionApplied={onPendingSelectionApplied}
           contextSurface="markdownEditor"
+          soundFeedback={soundFeedback}
+          soundSettings={soundSettings}
         />
       </section>
 

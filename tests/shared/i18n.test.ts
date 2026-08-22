@@ -75,6 +75,15 @@ describe("dirty close choice dogfood translations (#192)", () => {
       "Save before close is not implemented"
     );
   });
+
+  it("defines the non-blocking sound playback warning status message", () => {
+    expect(t("ja", "status.soundPlaybackFailed")).toBe(
+      "警告: 音声を再生できません"
+    );
+    expect(t("en", "status.soundPlaybackFailed")).toBe(
+      "Warning: Could not play sound"
+    );
+  });
 });
 
 describe("application settings translations (#181)", () => {
@@ -112,6 +121,7 @@ describe("Application Settings core control translations (#195)", () => {
         "settings.application.section.appearance",
         "settings.application.section.editor",
         "settings.application.section.files",
+        "settings.application.section.sound",
         "settings.application.advanced.enabled.label",
         "settings.application.advanced.enabled.description",
         "settings.application.advanced.disabledDescription",
@@ -142,6 +152,14 @@ describe("Application Settings core control translations (#195)", () => {
         "settings.workbench.fontFamily.description",
         "settings.workbench.advancedSettings.enabled.label",
         "settings.workbench.advancedSettings.enabled.description",
+        "settings.workbench.sound.enabled.label",
+        "settings.workbench.sound.enabled.description",
+        "settings.workbench.sound.dialog.enabled.label",
+        "settings.workbench.sound.dialog.enabled.description",
+        "settings.workbench.sound.newline.enabled.label",
+        "settings.workbench.sound.newline.enabled.description",
+        "settings.workbench.sound.keypress.enabled.label",
+        "settings.workbench.sound.keypress.enabled.description",
         "settings.editor.fontFamily.label",
         "settings.editor.fontFamily.description",
         "settings.files.newFile.lineEnding.label",

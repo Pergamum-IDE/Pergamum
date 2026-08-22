@@ -76,4 +76,30 @@ describe("Application Settings core controls runtime wiring (#195)", () => {
       "onConfirmEnableAdvancedSettings"
     );
   });
+
+  it("SettingsPanel exposes the #200 sound feedback controls and disables child controls through the parent sound guard", () => {
+    const settingsPanelSource = readFileSync(
+      "src/renderer/SettingsPanel.tsx",
+      "utf8"
+    );
+
+    expect(settingsPanelSource).toContain("settings.workbench.sound");
+    expect(settingsPanelSource).toContain("soundControlsDisabled");
+    expect(settingsPanelSource).toContain("applicationSettingsSoundEnabled");
+    expect(settingsPanelSource).toContain("applicationSettingsDialogSound");
+    expect(settingsPanelSource).toContain("applicationSettingsNewlineSound");
+    expect(settingsPanelSource).toContain("applicationSettingsKeypressSound");
+  });
+
+  it("App.tsx wires the renderer sound feedback player to dialogs and the Markdown editor surface", () => {
+    const appSource = readFileSync("src/renderer/App.tsx", "utf8");
+
+    expect(appSource).toContain("createBrowserSoundFeedbackPlayer");
+    expect(appSource).toContain("onPlaybackFailure");
+    expect(appSource).toContain("soundPlaybackWarningReportedRef");
+    expect(appSource).toContain("status.soundPlaybackFailed");
+    expect(appSource).toContain("playDialogShownSound");
+    expect(appSource).toContain("soundSettings={effectiveSettings.workbench.sound}");
+    expect(appSource).toContain("soundFeedback={soundFeedback}");
+  });
 });
