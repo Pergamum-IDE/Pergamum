@@ -77,6 +77,32 @@ describe("dirty close choice dogfood translations (#192)", () => {
   });
 });
 
+describe("application settings translations (#181)", () => {
+  it("defines an explicit Application Settings tab title for ja and en", () => {
+    expect(t("ja", "settings.application.title")).toBe(
+      "アプリケーション設定"
+    );
+    expect(t("en", "settings.application.title")).toBe(
+      "Application Settings"
+    );
+  });
+
+  it("labels the side navigation and command as Application Settings open actions", () => {
+    expect(t("ja", "activity.applicationSettings")).toBe(
+      "アプリケーション設定"
+    );
+    expect(t("en", "activity.applicationSettings")).toBe(
+      "Application Settings"
+    );
+    expect(t("ja", "command.workspace.applicationSettings.open")).toBe(
+      "アプリケーション設定を開く"
+    );
+    expect(t("en", "command.workspace.applicationSettings.open")).toBe(
+      "Open Application Settings"
+    );
+  });
+});
+
 describe("glossary form match boundary translations", () => {
   it("defines every advanced matching settings key for ja and en", () => {
     for (const key of matchBoundaryKeys) {

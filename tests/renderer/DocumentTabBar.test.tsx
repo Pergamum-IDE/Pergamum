@@ -11,6 +11,12 @@ import {
   type ActiveProjectContext,
   type EditorId
 } from "../../src/shared/editorId";
+import {
+  specialWorkspaceTabId,
+  type SpecialTabId,
+  type SpecialWorkspaceTab,
+  type WorkspaceTabId
+} from "../../src/renderer/workspaceTabs";
 
 const realTranslateEn: Translate = (key, values) => t("en", key, values);
 const realTranslateJa: Translate = (key, values) => t("ja", key, values);
@@ -38,17 +44,25 @@ function renderTabBar(
   tabs: DocumentTab[],
   overrides: {
     activeDocumentId?: EditorId;
+    activeWorkspaceTabId?: WorkspaceTabId;
+    specialTabs?: SpecialWorkspaceTab[];
     translate?: Translate;
     onCloseDocument?: (documentId: EditorId) => void;
+    onSelectSpecialTab?: (tabId: SpecialTabId) => void;
+    onCloseSpecialTab?: (tabId: SpecialTabId) => void;
   } = {}
 ): string {
   return renderToStaticMarkup(
     React.createElement(DocumentTabBar, {
       tabs,
       activeDocumentId: overrides.activeDocumentId ?? tabs[0]?.id ?? projectDocumentId,
+      activeWorkspaceTabId: overrides.activeWorkspaceTabId,
+      specialTabs: overrides.specialTabs,
       translate: overrides.translate ?? realTranslateEn,
       onSelectDocument: noop,
       onCloseDocument: overrides.onCloseDocument ?? noop,
+      onSelectSpecialTab: overrides.onSelectSpecialTab,
+      onCloseSpecialTab: overrides.onCloseSpecialTab,
       isUtilityWindowOpen: false,
       onToggleUtilityWindow: noop
     })
@@ -76,6 +90,72 @@ function tabMarkup(markup: string, occurrence = 0): string {
 
   return markup.slice(start, end);
 }
+
+describe("DocumentTabBar special tabs (#181)", () => {
+  const settingsTab: SpecialWorkspaceTab = {
+    kind: "special",
+    id: "settings",
+    title: "Application Settings"
+  };
+
+  it("renders Settings as a named special tab in the same tab row", () => {
+    const markup = renderTabBar(
+      [
+        {
+          id: projectDocumentId,
+          title: "chapter-01.md",
+          isDirty: false,
+          isExternalMarkdownFile: false
+        }
+      ],
+      { specialTabs: [settingsTab] }
+    );
+
+    expect(tabMarkup(markup, 0)).toContain(">chapter-01.md<");
+    expect(tabMarkup(markup, 1)).toContain(">Application Settings<");
+  });
+
+  it("marks the Settings special tab active independently from the active document", () => {
+    const markup = renderTabBar(
+      [
+        {
+          id: projectDocumentId,
+          title: "chapter-01.md",
+          isDirty: false,
+          isExternalMarkdownFile: false
+        }
+      ],
+      {
+        activeWorkspaceTabId: specialWorkspaceTabId("settings"),
+        specialTabs: [settingsTab]
+      }
+    );
+
+    expect(tabMarkup(markup, 0)).toContain('aria-selected="false"');
+    expect(tabMarkup(markup, 1)).toContain('aria-selected="true"');
+  });
+
+  it("renders a close button for Settings without dirty document affordances", () => {
+    const markup = renderTabBar(
+      [
+        {
+          id: projectDocumentId,
+          title: "chapter-01.md",
+          isDirty: true,
+          isExternalMarkdownFile: false
+        }
+      ],
+      {
+        activeWorkspaceTabId: specialWorkspaceTabId("settings"),
+        specialTabs: [settingsTab]
+      }
+    );
+    const settingsTabMarkup = tabMarkup(markup, 1);
+
+    expect(settingsTabMarkup).toContain("documentTabCloseButton");
+    expect(settingsTabMarkup).not.toContain("documentTabDirtyIndicator");
+  });
+});
 
 describe("DocumentTabBar", () => {
   it("renders the alert-triangle warning icon before the file name for an external Markdown tab", () => {

@@ -82,13 +82,13 @@ function buildCoreCommandRegistry(): CommandRegistry {
     registry,
     {
       focusSidebarMode: () => undefined,
-      toggleProjectSettings: () => undefined
+      openApplicationSettings: () => undefined
     },
     {
       focusFiles: "Focus Files",
       focusSearch: "Focus Search",
       focusGlossary: "Focus Glossary",
-      toggleSettings: "Toggle Settings"
+      openApplicationSettings: "Open Application Settings"
     }
   );
   registerUtilityWindowCommands(

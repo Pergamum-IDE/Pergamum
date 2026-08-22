@@ -16,7 +16,7 @@ describe("workspace commands", () => {
     focusFiles: "Focus Files",
     focusSearch: "Focus Search",
     focusGlossary: "Focus Glossary",
-    toggleSettings: "Toggle Settings"
+    openApplicationSettings: "Open Application Settings"
   };
 
   it("registers Workspace focus and settings commands", () => {
@@ -26,7 +26,7 @@ describe("workspace commands", () => {
       registry,
       {
         focusSidebarMode: () => undefined,
-        toggleProjectSettings: () => undefined
+        openApplicationSettings: () => undefined
       },
       titles
     );
@@ -35,7 +35,7 @@ describe("workspace commands", () => {
       workspaceCommandIds.focusFiles,
       workspaceCommandIds.focusSearch,
       workspaceCommandIds.focusGlossary,
-      workspaceCommandIds.toggleSettings
+      workspaceCommandIds.openApplicationSettings
     ]);
   });
 
@@ -49,7 +49,7 @@ describe("workspace commands", () => {
         focusSidebarMode: (mode) => {
           focusedModes.push(mode);
         },
-        toggleProjectSettings: () => undefined
+        openApplicationSettings: () => undefined
       },
       titles
     );
@@ -61,22 +61,25 @@ describe("workspace commands", () => {
     expect(focusedModes).toEqual(["files", "search", "glossary"]);
   });
 
-  it("toggles Project Settings through a command", async () => {
+  it("opens Application Settings through a command", async () => {
     const registry = new CommandRegistry();
-    const toggleProjectSettings = vi.fn();
+    const openApplicationSettings = vi.fn();
 
     registerWorkspaceCommands(
       registry,
       {
         focusSidebarMode: () => undefined,
-        toggleProjectSettings
+        openApplicationSettings
       },
       titles
     );
 
-    await registry.execute(workspaceCommandIds.toggleSettings, executionOptions);
+    await registry.execute(
+      workspaceCommandIds.openApplicationSettings,
+      executionOptions
+    );
 
-    expect(toggleProjectSettings).toHaveBeenCalledTimes(1);
+    expect(openApplicationSettings).toHaveBeenCalledTimes(1);
   });
 
   it("maps Sidebar modes to stable Workspace Command IDs", () => {
@@ -98,7 +101,8 @@ describe("workspace commands", () => {
       focusFiles: "translated:command.workspace.files.focus",
       focusSearch: "translated:command.workspace.search.focus",
       focusGlossary: "translated:command.workspace.glossary.focus",
-      toggleSettings: "translated:command.workspace.settings.toggle"
+      openApplicationSettings:
+        "translated:command.workspace.applicationSettings.open"
     });
   });
 
