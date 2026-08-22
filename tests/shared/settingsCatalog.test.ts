@@ -266,6 +266,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       expectTypeOf(
         getCatalogDefaultValue("workbench.colorTheme")
       ).toEqualTypeOf<string>();
+      expectTypeOf(
+        getCatalogDefaultValue("workbench.advancedSettings.enabled")
+      ).toEqualTypeOf<boolean>();
     });
 
     it("rejects an invalid/unknown key at the type level", () => {
@@ -630,13 +633,14 @@ describe("Settings Catalog Foundation (#150)", () => {
       ).toBe(false);
     });
 
-    it("workbench.statusBar.visible (#174) is the only production catalog entry of type boolean", () => {
+    it("workbench.statusBar.visible (#174) and workbench.advancedSettings.enabled (#195) are the production boolean entries", () => {
       const booleanEntries = getCatalogEntries().filter(
         (entry) => entry.type === "boolean"
       );
 
       expect(booleanEntries.map((entry) => entry.key)).toEqual([
-        "workbench.statusBar.visible"
+        "workbench.statusBar.visible",
+        "workbench.advancedSettings.enabled"
       ]);
     });
   });
@@ -802,7 +806,7 @@ describe("Settings Catalog Foundation (#150)", () => {
   });
 
   describe("initial catalog entries", () => {
-    it("registers exactly the six #150 entries plus the two #174 entries", () => {
+    it("registers exactly the six #150 entries, the two #174 entries, and the #195 advanced settings guard", () => {
       expect(Object.keys(settingsCatalog).sort()).toEqual(
         [
           "editor.fontFamily",
@@ -811,6 +815,7 @@ describe("Settings Catalog Foundation (#150)", () => {
           "preview.renderer",
           "workbench.colorTheme",
           "workbench.fontFamily",
+          "workbench.advancedSettings.enabled",
           "workbench.language",
           "workbench.statusBar.visible"
         ].sort()
@@ -849,6 +854,30 @@ describe("Settings Catalog Foundation (#150)", () => {
       expect(keys).not.toContain("editor.lineHeight");
       expect(keys).not.toContain("editor.wordWrap");
       expect(keys).not.toContain("workbench.fontSize");
+    });
+  });
+
+  describe("workbench.advancedSettings.enabled (#195)", () => {
+    it("is an applicationOnly boolean setting with default false", () => {
+      const entry = getCatalogEntry("workbench.advancedSettings.enabled");
+
+      expect(entry.scope).toBe("applicationOnly");
+      expect(entry.type).toBe("boolean");
+      expect(getCatalogDefaultValue("workbench.advancedSettings.enabled")).toBe(
+        false
+      );
+    });
+
+    it("validates only boolean values", () => {
+      expect(
+        validateCatalogValue("workbench.advancedSettings.enabled", true)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("workbench.advancedSettings.enabled", false)
+      ).toEqual({ ok: true });
+      expect(
+        validateCatalogValue("workbench.advancedSettings.enabled", "true")
+      ).toEqual({ ok: false, failure: "typeMismatch" });
     });
   });
 
@@ -937,36 +966,12 @@ describe("Settings Catalog Foundation (#150)", () => {
     });
   });
 
-  describe("existing implementation alignment: editor.fontFamily / workbench.colorTheme (#150)", () => {
+  describe("existing implementation alignment: workbench.colorTheme (#150)", () => {
     // Investigation finding (see the #150 PR description): unlike
-    // preview.renderer, editor.fontFamily and workbench.colorTheme /
-    // appearance.uiTheme have NO existing runtime consumer anywhere in the
-    // codebase — no settings.json/pergamum.json read path, no CSS
-    // application. src/renderer/styles.css hardcodes both the editor font
-    // (.editorHost .cm-scroller) and the workbench font (:root), and there
-    // is no theme-switching mechanism at all. "consumer fallback default
-    // replacement" for these two keys is therefore vacuous: there is
-    // nothing to replace, and #150's own non-goals ("runtime 中の設定反映",
-    // "Settings UI") mean this PR does not add new CSS/font application
-    // code for them either. These tests document that finding as a
-    // regression guard, not as evidence of a completed consumer wiring.
-    it("editor.fontFamily is registered in the catalog but no store file calls a catalog helper with it (no wired consumer)", () => {
-      expect(Object.keys(settingsCatalog)).toContain("editor.fontFamily");
-
-      for (const path of [
-        "src/main/settingsStore.ts",
-        "src/main/projectConfigStore.ts",
-        "src/shared/settings.ts"
-      ]) {
-        const source = readFileSync(path, "utf8");
-
-        // Checks for an actual catalog-helper call site, not a bare key
-        // substring, so metadata-only references do not false-positive.
-        expect(source).not.toMatch(/CatalogValue\("editor\.fontFamily"/);
-        expect(source).not.toMatch(/CatalogDefaultValue\("editor\.fontFamily"/);
-      }
-    });
-
+    // preview.renderer and editor.fontFamily, workbench.colorTheme /
+    // appearance.uiTheme still has no runtime consumer in #195 — no
+    // settings.json/pergamum.json read path, no CSS application, and no
+    // theme-switching mechanism.
     it("workbench.colorTheme is registered in the catalog but no store file calls a catalog helper with it (no wired consumer)", () => {
       expect(Object.keys(settingsCatalog)).toContain("workbench.colorTheme");
 
@@ -984,10 +989,9 @@ describe("Settings Catalog Foundation (#150)", () => {
       }
     });
 
-    it("styles.css still hardcodes editor/workbench fonts and colors directly — #150 does not add CSS custom property application", () => {
+    it("styles.css still has no workbench color theme CSS custom property application", () => {
       const stylesSource = readFileSync("src/renderer/styles.css", "utf8");
 
-      expect(stylesSource).not.toContain("--editor-font-family");
       expect(stylesSource).not.toContain("--workbench-color-theme");
     });
   });
@@ -1038,7 +1042,7 @@ describe("Settings Catalog Foundation (#150)", () => {
     });
   });
 
-  describe("workbench.fontFamily wiring (#173) vs. editor.fontFamily / workbench.colorTheme / files.newFile.* remaining metadata-only", () => {
+  describe("Application Settings core control wiring (#173, #195)", () => {
     it("settingsStore.ts and src/renderer/workbenchFontFamily.ts call catalog helpers with workbench.fontFamily (wired consumer)", () => {
       const settingsStoreSource = readFileSync(
         "src/main/settingsStore.ts",
@@ -1056,51 +1060,94 @@ describe("Settings Catalog Foundation (#150)", () => {
       );
     });
 
-    it("styles.css consumes --pergamum-workbench-font-family for UI chrome, but editor/preview body font rules are unchanged", () => {
+    it("styles.css consumes the workbench font custom property for UI chrome and the editor font custom property for editor body text", () => {
       const stylesSource = readFileSync("src/renderer/styles.css", "utf8");
 
       expect(stylesSource).toContain("--pergamum-workbench-font-family");
-      // Regression guard for #173 D-1: the editor body (.cm-scroller) and
-      // preview code blocks keep their pre-#173 hardcoded monospace stacks,
-      // not the workbench custom property.
+      expect(stylesSource).toContain("--pergamum-editor-font-family");
+      // Regression guard for #173 D-1: the editor body does not consume the
+      // workbench custom property, and preview code blocks keep their
+      // hardcoded monospace stack.
+      expect(stylesSource).not.toContain(
+        ".editorHost .cm-scroller {\n  font-family: var(\n    --pergamum-workbench-font-family"
+      );
       expect(stylesSource).toContain(
-        '.editorHost .cm-scroller {\n  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;'
+        ".editorHost .cm-scroller {\n  font-family: var(\n    --pergamum-editor-font-family"
       );
       expect(stylesSource).toContain(
         '.preview code {\n  border-radius: 4px;\n  background: #eef3f8;\n  font-family: "Cascadia Code", "SFMono-Regular", Consolas, monospace;'
       );
     });
 
-    it("editor.fontFamily, workbench.colorTheme, and files.newFile.* remain unwired — no store/renderer file calls a catalog helper with them", () => {
+    it("settingsStore.ts and shared settings now wire editor.fontFamily, files.newFile.*, and workbench.advancedSettings.enabled for Application Settings", () => {
+      const settingsStoreSource = readFileSync(
+        "src/main/settingsStore.ts",
+        "utf8"
+      );
+      const settingsSource = readFileSync("src/shared/settings.ts", "utf8");
+      const rendererSource = readFileSync(
+        "src/renderer/workbenchFontFamily.ts",
+        "utf8"
+      );
+
+      expect(settingsStoreSource).toMatch(/CatalogValue\("editor\.fontFamily"/);
+      expect(settingsStoreSource).toContain("resolveCatalogValue");
+      expect(settingsStoreSource).toContain('"files.newFile.lineEnding"');
+      expect(settingsStoreSource).toContain('"files.newFile.encoding"');
+      expect(settingsStoreSource).toContain(
+        '"workbench.advancedSettings.enabled"'
+      );
+      expect(settingsSource).toMatch(/CatalogDefaultValue\("editor\.fontFamily"/);
+      expect(settingsSource).toContain(
+        'getCatalogDefaultValue("files.newFile.lineEnding")'
+      );
+      expect(settingsSource).toContain(
+        'getCatalogDefaultValue("files.newFile.encoding")'
+      );
+      expect(settingsSource).toContain(
+        'getCatalogDefaultValue("workbench.advancedSettings.enabled")'
+      );
+      expect(rendererSource).toMatch(/CatalogValue\("editor\.fontFamily"/);
+      expect(rendererSource).toMatch(
+        /CatalogDefaultValue\("editor\.fontFamily"/
+      );
+    });
+
+    it("workbench.colorTheme remains unwired and #195 does not add Project Settings/pergamum.json consumers for Application Settings-only controls", () => {
       expect(Object.keys(settingsCatalog)).toEqual(
         expect.arrayContaining([
           "editor.fontFamily",
           "workbench.colorTheme",
           "files.newFile.lineEnding",
-          "files.newFile.encoding"
+          "files.newFile.encoding",
+          "workbench.advancedSettings.enabled"
         ])
       );
 
       for (const path of [
-        "src/main/settingsStore.ts",
         "src/main/projectConfigStore.ts",
-        "src/shared/settings.ts",
-        "src/renderer/workbenchFontFamily.ts"
+        "src/shared/settings.ts"
       ]) {
         const source = readFileSync(path, "utf8");
 
-        expect(source).not.toMatch(/CatalogValue\("editor\.fontFamily"/);
-        expect(source).not.toMatch(/CatalogDefaultValue\("editor\.fontFamily"/);
         expect(source).not.toMatch(/CatalogValue\("workbench\.colorTheme"/);
         expect(source).not.toMatch(
           /CatalogDefaultValue\("workbench\.colorTheme"/
         );
-        expect(source).not.toMatch(
-          /CatalogValue\("files\.newFile\.lineEnding"/
-        );
-        expect(source).not.toMatch(
-          /CatalogValue\("files\.newFile\.encoding"/
-        );
+      }
+
+      const projectConfigStoreSource = readFileSync(
+        "src/main/projectConfigStore.ts",
+        "utf8"
+      );
+
+      for (const applicationSettingsOnlyKey of [
+        "editor.fontFamily",
+        "files.newFile.lineEnding",
+        "files.newFile.encoding",
+        "workbench.advancedSettings.enabled"
+      ]) {
+        expect(projectConfigStoreSource).not.toContain(applicationSettingsOnlyKey);
       }
     });
 

@@ -46,3 +46,34 @@ describe("workbench.statusBar.visible / workbench.language runtime wiring (#174)
     expect(settingsPanelSource).not.toContain("languageLabelKey");
   });
 });
+
+describe("Application Settings core controls runtime wiring (#195)", () => {
+  it("App.tsx applies editor.fontFamily from effective settings through the renderer-side safe applier", () => {
+    const appSource = readFileSync("src/renderer/App.tsx", "utf8");
+
+    expect(appSource).toContain("applyEditorFontFamily");
+    expect(appSource).toContain("effectiveSettings.editor.fontFamily");
+  });
+
+  it("styles.css consumes --pergamum-editor-font-family only for the CodeMirror editor body", () => {
+    const stylesSource = readFileSync("src/renderer/styles.css", "utf8");
+
+    expect(stylesSource).toContain("--pergamum-editor-font-family");
+    expect(stylesSource).toContain(".editorHost .cm-scroller");
+  });
+
+  it("SettingsPanel keeps advanced files controls behind the workbench.advancedSettings.enabled guard", () => {
+    const settingsPanelSource = readFileSync(
+      "src/renderer/SettingsPanel.tsx",
+      "utf8"
+    );
+
+    expect(settingsPanelSource).toContain(
+      "settings.workbench.advancedSettings.enabled"
+    );
+    expect(settingsPanelSource).toContain("advancedControlsDisabled");
+    expect(settingsPanelSource).toContain(
+      "onConfirmEnableAdvancedSettings"
+    );
+  });
+});

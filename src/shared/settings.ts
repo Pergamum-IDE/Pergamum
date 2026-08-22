@@ -1,7 +1,8 @@
 import type { Language } from "./i18n";
 import {
   getCatalogDefaultValue,
-  validateCatalogValue
+  validateCatalogValue,
+  type SettingValueOf
 } from "./settingsCatalog";
 
 export type SettingsCategory =
@@ -26,6 +27,26 @@ export interface WorkbenchStatusBarSettings {
   visible: boolean;
 }
 
+export interface WorkbenchAdvancedSettings {
+  enabled: boolean;
+}
+
+export type NewFileLineEnding = SettingValueOf<"files.newFile.lineEnding">;
+export type NewFileEncoding = SettingValueOf<"files.newFile.encoding">;
+
+export interface ApplicationEditorSettings {
+  fontFamily?: string;
+}
+
+export interface ApplicationNewFileSettings {
+  lineEnding: NewFileLineEnding;
+  encoding: NewFileEncoding;
+}
+
+export interface ApplicationFilesSettings {
+  newFile: ApplicationNewFileSettings;
+}
+
 // #174: language and statusBar.visible moved here from legacy top-level
 // ApplicationSettings.language / .showStatusBar — both applicationOnly
 // catalog entries, always resolved to a concrete value at read time (not
@@ -36,24 +57,26 @@ export interface WorkbenchStatusBarSettings {
 export interface ApplicationWorkbenchSettings {
   language: Language;
   statusBar: WorkbenchStatusBarSettings;
+  advancedSettings: WorkbenchAdvancedSettings;
   fontFamily?: string;
 }
 
 export interface ApplicationSettings {
   preview: ApplicationPreviewSettings;
   workbench: ApplicationWorkbenchSettings;
+  editor: ApplicationEditorSettings;
+  files: ApplicationFilesSettings;
   recentProjects: RecentProject[];
 }
 
-// #174: nested under workbench, matching ApplicationWorkbenchSettings.
-// fontFamily stays optional here too — omitting it from a save request
-// preserves the existing sparse value (#173 D-7); it does not reset it.
+// Application Settings saves the currently displayed application-scope
+// settings. fontFamily values stay optional here too — omitting them from a
+// save request preserves the sparse value (#173 D-7); it does not reset them
+// to a catalog default.
 export interface SaveApplicationSettingsRequest {
-  workbench: {
-    language: Language;
-    statusBar: WorkbenchStatusBarSettings;
-    fontFamily?: string;
-  };
+  workbench: ApplicationWorkbenchSettings;
+  editor: ApplicationEditorSettings;
+  files: ApplicationFilesSettings;
 }
 
 export interface ProjectPreviewSettings {
@@ -71,12 +94,23 @@ export interface EffectivePreviewSettings {
 export interface EffectiveWorkbenchSettings {
   language: Language;
   statusBar: WorkbenchStatusBarSettings;
+  advancedSettings: WorkbenchAdvancedSettings;
   fontFamily: string;
+}
+
+export interface EffectiveEditorSettings {
+  fontFamily: string;
+}
+
+export interface EffectiveFilesSettings {
+  newFile: ApplicationNewFileSettings;
 }
 
 export interface EffectiveSettings {
   preview: EffectivePreviewSettings;
   workbench: EffectiveWorkbenchSettings;
+  editor: EffectiveEditorSettings;
+  files: EffectiveFilesSettings;
 }
 
 // The settings catalog is the only source of truth for this default —
@@ -100,17 +134,29 @@ export const builtInDefaultSettings: EffectiveSettings = {
     statusBar: {
       visible: getCatalogDefaultValue("workbench.statusBar.visible")
     },
+    advancedSettings: {
+      enabled: getCatalogDefaultValue("workbench.advancedSettings.enabled")
+    },
     fontFamily: getCatalogDefaultValue("workbench.fontFamily")
+  },
+  editor: {
+    fontFamily: getCatalogDefaultValue("editor.fontFamily")
+  },
+  files: {
+    newFile: {
+      lineEnding: getCatalogDefaultValue("files.newFile.lineEnding"),
+      encoding: getCatalogDefaultValue("files.newFile.encoding")
+    }
   }
 };
 
-// workbench.fontFamily is intentionally omitted here, not
-// builtInDefaultSettings.workbench.fontFamily — this is the "nothing on
-// disk yet" baseline (#173 D-7), and resolveEffectiveSettings below is what
-// falls through to the catalog default when fontFamily is absent.
+// fontFamily values are intentionally omitted here, not copied from
+// builtInDefaultSettings — this is the "nothing on disk yet" baseline (#173
+// D-7), and resolveEffectiveSettings below is what falls through to catalog
+// defaults when fontFamily is absent.
 // workbench.language / workbench.statusBar.visible are NOT sparse (#174):
-// unlike fontFamily, they always carry a concrete value, mirroring the
-// legacy top-level language/showStatusBar fields they replace.
+// unlike fontFamily, they always carry a concrete value, mirroring the legacy
+// top-level language/showStatusBar fields they replace.
 export const defaultApplicationSettings: ApplicationSettings = {
   preview: {
     renderer: builtInDefaultSettings.preview.renderer
@@ -119,6 +165,16 @@ export const defaultApplicationSettings: ApplicationSettings = {
     language: builtInDefaultSettings.workbench.language,
     statusBar: {
       visible: builtInDefaultSettings.workbench.statusBar.visible
+    },
+    advancedSettings: {
+      enabled: builtInDefaultSettings.workbench.advancedSettings.enabled
+    }
+  },
+  editor: {},
+  files: {
+    newFile: {
+      lineEnding: builtInDefaultSettings.files.newFile.lineEnding,
+      encoding: builtInDefaultSettings.files.newFile.encoding
     }
   },
   recentProjects: []
@@ -133,6 +189,17 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
       language: defaultApplicationSettings.workbench.language,
       statusBar: {
         visible: defaultApplicationSettings.workbench.statusBar.visible
+      },
+      advancedSettings: {
+        enabled:
+          defaultApplicationSettings.workbench.advancedSettings.enabled
+      }
+    },
+    editor: {},
+    files: {
+      newFile: {
+        lineEnding: defaultApplicationSettings.files.newFile.lineEnding,
+        encoding: defaultApplicationSettings.files.newFile.encoding
       }
     },
     recentProjects: []
@@ -167,9 +234,25 @@ export function resolveEffectiveSettings(
       statusBar: {
         visible: applicationSettings.workbench.statusBar.visible
       },
+      advancedSettings: {
+        enabled: applicationSettings.workbench.advancedSettings.enabled
+      },
       fontFamily:
         applicationSettings.workbench.fontFamily ??
         builtInDefaultSettings.workbench.fontFamily
+    },
+    // Project-level editor settings remain out of scope for #195; the
+    // project config type intentionally does not carry editor settings yet.
+    editor: {
+      fontFamily:
+        applicationSettings.editor.fontFamily ??
+        builtInDefaultSettings.editor.fontFamily
+    },
+    files: {
+      newFile: {
+        lineEnding: applicationSettings.files.newFile.lineEnding,
+        encoding: applicationSettings.files.newFile.encoding
+      }
     }
   };
 }

@@ -101,6 +101,19 @@ function readWorkbenchStatusBarSettings(
   };
 }
 
+function readWorkbenchAdvancedSettings(
+  value: unknown
+): ApplicationSettings["workbench"]["advancedSettings"] {
+  const enabled = isObject(value) ? value.enabled : undefined;
+
+  return {
+    enabled: resolveCatalogValue(
+      "workbench.advancedSettings.enabled",
+      enabled
+    ).value
+  };
+}
+
 // #174: reads the legacy top-level `language` / `showStatusBar` keys are
 // intentionally never consulted here — only the nested workbench.language /
 // workbench.statusBar.visible keys are read, matching the write path below.
@@ -120,16 +133,63 @@ function readWorkbenchSettings(value: unknown): ApplicationSettings["workbench"]
     workbenchValue?.language
   ).value;
   const statusBar = readWorkbenchStatusBarSettings(workbenchValue?.statusBar);
+  const advancedSettings = readWorkbenchAdvancedSettings(
+    workbenchValue?.advancedSettings
+  );
 
   if (
     workbenchValue === undefined ||
     typeof workbenchValue.fontFamily !== "string" ||
     !validateCatalogValue("workbench.fontFamily", workbenchValue.fontFamily).ok
   ) {
-    return { language, statusBar };
+    return { language, statusBar, advancedSettings };
   }
 
-  return { language, statusBar, fontFamily: workbenchValue.fontFamily };
+  return {
+    language,
+    statusBar,
+    advancedSettings,
+    fontFamily: workbenchValue.fontFamily
+  };
+}
+
+function readEditorSettings(value: unknown): ApplicationSettings["editor"] {
+  const editorValue = isObject(value) ? value : undefined;
+
+  if (
+    editorValue === undefined ||
+    typeof editorValue.fontFamily !== "string" ||
+    !validateCatalogValue("editor.fontFamily", editorValue.fontFamily).ok
+  ) {
+    return {};
+  }
+
+  return { fontFamily: editorValue.fontFamily };
+}
+
+function readNewFileSettings(
+  value: unknown
+): ApplicationSettings["files"]["newFile"] {
+  const newFileValue = isObject(value) ? value : undefined;
+
+  return {
+    lineEnding: resolveCatalogValue(
+      "files.newFile.lineEnding",
+      newFileValue?.lineEnding
+    ).value,
+    encoding: resolveCatalogValue(
+      "files.newFile.encoding",
+      newFileValue?.encoding
+    ).value
+  };
+}
+
+function readFilesSettings(value: unknown): ApplicationSettings["files"] {
+  const filesValue = isObject(value) ? value : undefined;
+
+  return {
+    newFile: readNewFileSettings(filesValue?.newFile)
+  };
 }
 
 function readSettingsValue(value: unknown): ApplicationSettings {
@@ -140,6 +200,8 @@ function readSettingsValue(value: unknown): ApplicationSettings {
   return {
     preview: readPreviewSettings(value.preview),
     workbench: readWorkbenchSettings(value.workbench),
+    editor: readEditorSettings(value.editor),
+    files: readFilesSettings(value.files),
     recentProjects: readRecentProjects(value.recentProjects)
   };
 }
@@ -195,12 +257,19 @@ export function parseSaveApplicationSettingsRequest(
 
   const keys = Object.keys(value);
 
-  if (keys.length !== 1 || !keys.includes("workbench")) {
+  if (
+    keys.length !== 3 ||
+    !keys.includes("workbench") ||
+    !keys.includes("editor") ||
+    !keys.includes("files")
+  ) {
     throw new Error("Invalid application settings.");
   }
 
   return {
-    workbench: parseWorkbenchSettingsForWrite(value.workbench)
+    workbench: parseWorkbenchSettingsForWrite(value.workbench),
+    editor: parseEditorSettingsForWrite(value.editor),
+    files: parseFilesSettingsForWrite(value.files)
   };
 }
 
@@ -233,10 +302,11 @@ function parsePreviewSettingsForWrite(
 }
 
 // Same validate-and-reject-the-whole-write style as parsePreviewSettingsForWrite:
-// an invalid language/statusBar.visible/fontFamily rejects the save request
-// rather than silently dropping just that field (#173 D-9). An absent
-// fontFamily key is valid and preserves sparse storage (#173 D-7); language
-// and statusBar are required (#174 — neither is sparse).
+// an invalid language/statusBar.visible/advancedSettings.enabled/fontFamily
+// rejects the save request rather than silently dropping just that field
+// (#173 D-9). An absent fontFamily key is valid and preserves sparse storage
+// (#173 D-7); language, statusBar, and advancedSettings are required
+// concrete values.
 function parseWorkbenchStatusBarSettingsForWrite(
   value: unknown
 ): ApplicationSettings["workbench"]["statusBar"] {
@@ -262,6 +332,31 @@ function parseWorkbenchStatusBarSettingsForWrite(
   return { visible: resolution.value };
 }
 
+function parseWorkbenchAdvancedSettingsForWrite(
+  value: unknown
+): ApplicationSettings["workbench"]["advancedSettings"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (keys.length !== 1 || !keys.includes("enabled")) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const resolution = resolveCatalogValue(
+    "workbench.advancedSettings.enabled",
+    value.enabled
+  );
+
+  if (!resolution.ok) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return { enabled: resolution.value };
+}
+
 function parseWorkbenchSettingsForWrite(
   value: unknown
 ): ApplicationSettings["workbench"] {
@@ -271,12 +366,13 @@ function parseWorkbenchSettingsForWrite(
 
   const keys = Object.keys(value);
   const hasFontFamily = keys.includes("fontFamily");
-  const expectedKeyCount = hasFontFamily ? 3 : 2;
+  const expectedKeyCount = hasFontFamily ? 4 : 3;
 
   if (
     keys.length !== expectedKeyCount ||
     !keys.includes("language") ||
-    !keys.includes("statusBar")
+    !keys.includes("statusBar") ||
+    !keys.includes("advancedSettings")
   ) {
     throw new Error("Invalid application settings.");
   }
@@ -291,9 +387,16 @@ function parseWorkbenchSettingsForWrite(
   }
 
   const statusBar = parseWorkbenchStatusBarSettingsForWrite(value.statusBar);
+  const advancedSettings = parseWorkbenchAdvancedSettingsForWrite(
+    value.advancedSettings
+  );
 
   if (!hasFontFamily) {
-    return { language: languageResolution.value, statusBar };
+    return {
+      language: languageResolution.value,
+      statusBar,
+      advancedSettings
+    };
   }
 
   if (
@@ -306,7 +409,92 @@ function parseWorkbenchSettingsForWrite(
   return {
     language: languageResolution.value,
     statusBar,
+    advancedSettings,
     fontFamily: value.fontFamily
+  };
+}
+
+function parseEditorSettingsForWrite(
+  value: unknown
+): ApplicationSettings["editor"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+  const hasFontFamily = keys.includes("fontFamily");
+
+  if (keys.length !== (hasFontFamily ? 1 : 0)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  if (!hasFontFamily) {
+    return {};
+  }
+
+  if (
+    typeof value.fontFamily !== "string" ||
+    !validateCatalogValue("editor.fontFamily", value.fontFamily).ok
+  ) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    fontFamily: value.fontFamily
+  };
+}
+
+function parseNewFileSettingsForWrite(
+  value: unknown
+): ApplicationSettings["files"]["newFile"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (
+    keys.length !== 2 ||
+    !keys.includes("lineEnding") ||
+    !keys.includes("encoding")
+  ) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const lineEndingResolution = resolveCatalogValue(
+    "files.newFile.lineEnding",
+    value.lineEnding
+  );
+  const encodingResolution = resolveCatalogValue(
+    "files.newFile.encoding",
+    value.encoding
+  );
+
+  if (!lineEndingResolution.ok || !encodingResolution.ok) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    lineEnding: lineEndingResolution.value,
+    encoding: encodingResolution.value
+  };
+}
+
+function parseFilesSettingsForWrite(
+  value: unknown
+): ApplicationSettings["files"] {
+  if (!isObject(value)) {
+    throw new Error("Invalid application settings.");
+  }
+
+  const keys = Object.keys(value);
+
+  if (keys.length !== 1 || !keys.includes("newFile")) {
+    throw new Error("Invalid application settings.");
+  }
+
+  return {
+    newFile: parseNewFileSettingsForWrite(value.newFile)
   };
 }
 
@@ -318,9 +506,11 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
   const keys = Object.keys(value);
 
   if (
-    keys.length !== 3 ||
+    keys.length !== 5 ||
     !keys.includes("preview") ||
     !keys.includes("workbench") ||
+    !keys.includes("editor") ||
+    !keys.includes("files") ||
     !keys.includes("recentProjects")
   ) {
     throw new Error("Invalid application settings.");
@@ -329,6 +519,8 @@ function parseApplicationSettingsForWrite(value: unknown): ApplicationSettings {
   return {
     preview: parsePreviewSettingsForWrite(value.preview),
     workbench: parseWorkbenchSettingsForWrite(value.workbench),
+    editor: parseEditorSettingsForWrite(value.editor),
+    files: parseFilesSettingsForWrite(value.files),
     recentProjects: parseRecentProjectsForSave(value.recentProjects)
   };
 }
@@ -378,7 +570,9 @@ export async function saveApplicationSettings(
 
   return saveSettings({
     ...settings,
-    workbench: settingsRequest.workbench
+    workbench: settingsRequest.workbench,
+    editor: settingsRequest.editor,
+    files: settingsRequest.files
   });
 }
 

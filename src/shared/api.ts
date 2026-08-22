@@ -26,6 +26,8 @@ export type { AppPlatform } from "./platform";
 export type {
   ApplicationSettings,
   EffectiveSettings,
+  NewFileEncoding,
+  NewFileLineEnding,
   PreviewRendererId,
   ProjectSettings,
   RecentProject,

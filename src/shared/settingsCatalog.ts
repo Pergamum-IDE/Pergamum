@@ -494,6 +494,15 @@ export const settingsCatalog = defineSettingsCatalog({
     deprecatedAliases: [],
     migrationNotes: []
   }),
+  "workbench.advancedSettings.enabled": defineBooleanSetting({
+    key: "workbench.advancedSettings.enabled",
+    scope: "applicationOnly",
+    defaultValue: false,
+    labelKey: "settings.workbench.advancedSettings.enabled.label",
+    descriptionKey: "settings.workbench.advancedSettings.enabled.description",
+    deprecatedAliases: [],
+    migrationNotes: []
+  }),
   "editor.fontFamily": defineStringSetting({
     key: "editor.fontFamily",
     scope: "applicationWithProjectOverride",

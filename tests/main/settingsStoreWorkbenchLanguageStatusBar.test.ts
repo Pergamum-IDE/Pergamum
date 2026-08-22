@@ -25,6 +25,7 @@ import {
   parseSaveApplicationSettingsRequest,
   saveApplicationSettings
 } from "../../src/main/settingsStore";
+import type { SaveApplicationSettingsRequest } from "../../src/shared/settings";
 import { getCatalogDefaultValue } from "../../src/shared/settingsCatalog";
 
 const languageDefault = getCatalogDefaultValue("workbench.language");
@@ -38,6 +39,21 @@ function onDiskSettings(overrides: Record<string, unknown>): string {
     recentProjects: [],
     ...overrides
   });
+}
+
+function saveRequest(
+  workbench: Record<string, unknown>
+): SaveApplicationSettingsRequest {
+  return {
+    workbench: {
+      advancedSettings: { enabled: false },
+      ...workbench
+    },
+    editor: {},
+    files: {
+      newFile: { lineEnding: "lf", encoding: "utf8" }
+    }
+  } as SaveApplicationSettingsRequest;
 }
 
 describe("settingsStore workbench.language / workbench.statusBar.visible read path (#174)", () => {
@@ -141,9 +157,9 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
       onDiskSettings({ workbench: { language: "ja", statusBar: { visible: true } } })
     );
 
-    await saveApplicationSettings({
-      workbench: { language: "en", statusBar: { visible: true } }
-    });
+    await saveApplicationSettings(
+      saveRequest({ language: "en", statusBar: { visible: true } })
+    );
 
     const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
       string,
@@ -160,9 +176,9 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
       onDiskSettings({ workbench: { language: "ja", statusBar: { visible: true } } })
     );
 
-    await saveApplicationSettings({
-      workbench: { language: "ja", statusBar: { visible: false } }
-    });
+    await saveApplicationSettings(
+      saveRequest({ language: "ja", statusBar: { visible: false } })
+    );
 
     const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
       string,
@@ -179,9 +195,9 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
       onDiskSettings({ workbench: { language: "ja", statusBar: { visible: true } } })
     );
 
-    await saveApplicationSettings({
-      workbench: { language: "en", statusBar: { visible: true } }
-    });
+    await saveApplicationSettings(
+      saveRequest({ language: "en", statusBar: { visible: true } })
+    );
 
     const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
       string,
@@ -197,9 +213,9 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
       onDiskSettings({ workbench: { language: "ja", statusBar: { visible: true } } })
     );
 
-    await saveApplicationSettings({
-      workbench: { language: "ja", statusBar: { visible: false } }
-    });
+    await saveApplicationSettings(
+      saveRequest({ language: "ja", statusBar: { visible: false } })
+    );
 
     const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
       string,
@@ -211,9 +227,10 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
   });
 
   it("rejects a save request with an invalid workbench.language and never writes settings.json", () => {
-    const invalidSaveRequest = {
-      workbench: { language: "fr", statusBar: { visible: true } }
-    };
+    const invalidSaveRequest = saveRequest({
+      language: "fr",
+      statusBar: { visible: true }
+    });
 
     expect(() =>
       parseSaveApplicationSettingsRequest(invalidSaveRequest)
@@ -222,9 +239,10 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
   });
 
   it("rejects a save request with an invalid workbench.statusBar.visible and never writes settings.json", () => {
-    const invalidSaveRequest = {
-      workbench: { language: "ja", statusBar: { visible: "yes" } }
-    };
+    const invalidSaveRequest = saveRequest({
+      language: "ja",
+      statusBar: { visible: "yes" }
+    });
 
     expect(() =>
       parseSaveApplicationSettingsRequest(invalidSaveRequest)
@@ -245,13 +263,13 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
       })
     );
 
-    await saveApplicationSettings({
-      workbench: {
+    await saveApplicationSettings(
+      saveRequest({
         language: "ja",
         statusBar: { visible: false },
         fontFamily: "Fira Code"
-      }
-    });
+      })
+    );
 
     const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
       string,
@@ -268,6 +286,10 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
   it("does not introduce unknown-key preservation: an unrecognized top-level key in the save request is rejected, same as before #174 (unknown-key preservation did not exist pre-#174 — see implementation report)", () => {
     const invalidSaveRequest = {
       workbench: { language: "ja", statusBar: { visible: true } },
+      editor: {},
+      files: {
+        newFile: { lineEnding: "lf", encoding: "utf8" }
+      },
       somethingUnknown: true
     };
 
@@ -282,7 +304,12 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
       workbench: {
         language: "ja",
         statusBar: { visible: true },
+        advancedSettings: { enabled: false },
         somethingUnknown: true
+      },
+      editor: {},
+      files: {
+        newFile: { lineEnding: "lf", encoding: "utf8" }
       }
     };
 
@@ -297,9 +324,9 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
       onDiskSettings({ workbench: { language: "ja", statusBar: { visible: true } } })
     );
 
-    await saveApplicationSettings({
-      workbench: { language: "ja", statusBar: { visible: false } }
-    });
+    await saveApplicationSettings(
+      saveRequest({ language: "ja", statusBar: { visible: false } })
+    );
 
     const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
       string,
