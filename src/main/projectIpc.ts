@@ -28,7 +28,6 @@ import {
 } from "./debugLogSanitizer";
 import {
   decodeMarkdownBytes,
-  fileIoFailureReason,
   markdownWriteMetadata,
   sanitizedFileIoError
 } from "./markdownFileIo";
@@ -250,6 +249,7 @@ async function openProjectRoot(
 
     return project;
   } catch (error) {
+    const safeError = sanitizedFileIoError(error);
     logger.log({
       level: "error",
       event: "project.open.failed",
@@ -258,11 +258,11 @@ async function openProjectRoot(
         operation: "open",
         result: "failed",
         durationMs: durationSince(startedAt),
-        error
+        error: safeError
       }
     });
 
-    throw error;
+    throw safeError;
   }
 }
 
@@ -291,6 +291,7 @@ export function registerProjectIpc(
 
         rootPath = result.filePaths[0];
       } catch (error) {
+        const safeError = sanitizedFileIoError(error);
         logger.log({
           level: "error",
           event: "project.open.failed",
@@ -298,11 +299,11 @@ export function registerProjectIpc(
             operation: "open",
             result: "failed",
             durationMs: durationSince(startedAt),
-            error
+            error: safeError
           }
         });
 
-        throw error;
+        throw safeError;
       }
 
       return openProjectRoot(rootPath, logger);
@@ -330,6 +331,7 @@ export function registerProjectIpc(
 
         return openProjectRoot(request.path, logger);
       } catch (error) {
+        const safeError = sanitizedFileIoError(error);
         logger.log({
           level: "error",
           event: "project.open.failed",
@@ -337,11 +339,11 @@ export function registerProjectIpc(
             operation: "open",
             result: "failed",
             durationMs: durationSince(startedAt),
-            error
+            error: safeError
           }
         });
 
-        throw error;
+        throw safeError;
       }
 
       return openProjectRoot(request.path, logger);
@@ -403,6 +405,7 @@ export function registerProjectIpc(
           }
         };
       } catch (error) {
+        const safeError = sanitizedFileIoError(error);
         const rootPath = currentProjectState?.rootPath;
         const documentRef =
           rootPath && request
@@ -429,13 +432,13 @@ export function registerProjectIpc(
               : undefined,
             operation: "read",
             result: "failed",
-            reason: fileIoFailureReason(error),
+            reason: safeError.reason,
             durationMs: durationSince(startedAt),
-            error
+            error: safeError
           }
         });
 
-        throw sanitizedFileIoError(error);
+        throw safeError;
       }
     }
   );
@@ -487,6 +490,7 @@ export function registerProjectIpc(
           relativePath: request.relativePath
         };
       } catch (error) {
+        const safeError = sanitizedFileIoError(error);
         const rootPath = currentProjectState?.rootPath;
         const documentRef =
           rootPath && request
@@ -529,13 +533,13 @@ export function registerProjectIpc(
             encodingAssumption: request ? "utf8" : undefined,
             operation: "write",
             result: "failed",
-            reason: fileIoFailureReason(error),
+            reason: safeError.reason,
             durationMs: durationSince(startedAt),
-            error
+            error: safeError
           }
         });
 
-        throw sanitizedFileIoError(error);
+        throw safeError;
       }
     }
   );

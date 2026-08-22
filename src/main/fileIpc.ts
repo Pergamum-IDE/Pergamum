@@ -29,7 +29,6 @@ import {
 } from "./debugLogSanitizer";
 import {
   decodeMarkdownBytes,
-  fileIoFailureReason,
   markdownWriteMetadata,
   sanitizedFileIoError
 } from "./markdownFileIo";
@@ -288,6 +287,7 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
           }
         };
       } catch (error) {
+        const safeError = sanitizedFileIoError(error);
         const documentRef = filePath
           ? logger.documentRefForKey(filePath)
           : undefined;
@@ -305,13 +305,13 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
             pathDepth: filePath ? debugLogPathDepth(filePath) : undefined,
             operation: "read",
             result: "failed",
-            reason: fileIoFailureReason(error),
+            reason: safeError.reason,
             durationMs: durationSince(startedAt),
-            error
+            error: safeError
           }
         });
 
-        throw sanitizedFileIoError(error);
+        throw safeError;
       }
     }
   );
@@ -350,6 +350,7 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
           path: result.path
         };
       } catch (error) {
+        const safeError = sanitizedFileIoError(error);
         const documentRef = filePath
           ? logger.documentRefForKey(filePath)
           : undefined;
@@ -379,13 +380,13 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
             encodingAssumption: request ? "utf8" : undefined,
             operation: "write",
             result: "failed",
-            reason: fileIoFailureReason(error),
+            reason: safeError.reason,
             durationMs: durationSince(startedAt),
-            error
+            error: safeError
           }
         });
 
-        throw sanitizedFileIoError(error);
+        throw safeError;
       }
     }
   );
@@ -402,7 +403,8 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
           parseSelectMarkdownSavePathRequest(rawRequest)
         );
       } catch (error) {
-        throw sanitizedFileIoError(error);
+        const safeError = sanitizedFileIoError(error);
+        throw safeError;
       }
     }
   );
@@ -425,6 +427,7 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
           startedAt
         );
       } catch (error) {
+        const safeError = sanitizedFileIoError(error);
         const documentRef = filePath
           ? logger.documentRefForKey(filePath)
           : undefined;
@@ -454,13 +457,13 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
             encodingAssumption: request ? "utf8" : undefined,
             operation: "write",
             result: "failed",
-            reason: fileIoFailureReason(error),
+            reason: safeError.reason,
             durationMs: durationSince(startedAt),
-            error
+            error: safeError
           }
         });
 
-        throw sanitizedFileIoError(error);
+        throw safeError;
       }
     }
   );
