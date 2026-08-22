@@ -2751,7 +2751,7 @@ export function App(): JSX.Element {
     }
   }
 
-  async function openRecentProject(projectPath: string): Promise<void> {
+  async function openRecentProject(projectFilePath: string): Promise<void> {
     if (!confirmProjectSwitch()) {
       setStatus({ key: "status.openProjectCanceled" });
       return;
@@ -2759,7 +2759,7 @@ export function App(): JSX.Element {
 
     try {
       const openedProject = await window.pergamum.projects.openRecentProject(
-        projectPath
+        projectFilePath
       );
       const settingsReloadError = await reloadSettingsAfterProjectOpen();
       const openedStatus = await activateProject(openedProject);
@@ -3010,8 +3010,8 @@ export function App(): JSX.Element {
             <RecentProjectsPanel
               recentProjects={settings.recentProjects}
               translate={translate}
-              onOpenProject={(projectPath) => {
-                void openRecentProject(projectPath);
+              onOpenProject={(projectFilePath) => {
+                void openRecentProject(projectFilePath);
               }}
             />
           ) : null}
@@ -3023,8 +3023,8 @@ export function App(): JSX.Element {
               onOpenProject={() => {
                 void openProject();
               }}
-              onOpenRecentProject={(projectPath) => {
-                void openRecentProject(projectPath);
+              onOpenRecentProject={(projectFilePath) => {
+                void openRecentProject(projectFilePath);
               }}
             />
           ) : (

@@ -34,6 +34,14 @@ const defaultSoundSettings = {
   newline: { enabled: false },
   keypress: { enabled: false }
 };
+const recentProject = {
+  projectId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
+  projectName: "proj",
+  projectFilePath: "C:\\proj\\proj.pergamum",
+  projectRootPath: "C:\\proj",
+  schemaVersion: 1,
+  lastOpenedAt: "2026-08-23T00:00:00.000Z"
+};
 
 function onDiskSettings(overrides: Record<string, unknown>): string {
   return JSON.stringify({
@@ -189,7 +197,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
   it("writes workbench/editor/files settings while preserving preview and recent projects", async () => {
     fsMock.readFile.mockResolvedValue(
       onDiskSettings({
-        recentProjects: [{ path: "C:\\proj", name: "proj" }]
+        recentProjects: [recentProject]
       })
     );
 
@@ -224,7 +232,7 @@ describe("settingsStore Application Settings core controls write path (#195)", (
     const written = JSON.parse(writtenContent);
 
     expect(written.preview).toEqual({ renderer: "markdown" });
-    expect(written.recentProjects).toEqual([{ path: "C:\\proj", name: "proj" }]);
+    expect(written.recentProjects).toEqual([recentProject]);
     expect(written.workbench).toEqual({
       language: "en",
       statusBar: { visible: false },

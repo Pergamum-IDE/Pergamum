@@ -15,9 +15,15 @@ export type SettingsCategory =
 export type PreviewRendererId = "markdown";
 
 export interface RecentProject {
-  path: string;
-  name: string;
+  projectId: string;
+  projectName: string;
+  projectFilePath: string;
+  projectRootPath: string;
+  schemaVersion: number;
+  lastOpenedAt: string;
 }
+
+export type RecordRecentProjectInput = Omit<RecentProject, "lastOpenedAt">;
 
 export interface ApplicationPreviewSettings {
   renderer: PreviewRendererId;

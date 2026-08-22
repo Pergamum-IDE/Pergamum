@@ -29,6 +29,7 @@ export type {
   NewFileEncoding,
   NewFileLineEnding,
   PreviewRendererId,
+  RecordRecentProjectInput,
   ProjectSettings,
   RecentProject,
   SaveApplicationSettingsRequest
@@ -190,7 +191,7 @@ export interface PergamumProject {
 }
 
 export interface OpenRecentProjectRequest {
-  path: string;
+  projectFilePath: string;
 }
 
 export interface GlossaryEntryIdRequest {
@@ -240,7 +241,7 @@ export interface PergamumApi {
     createProject: () => Promise<PergamumProject | null>;
     openProject: () => Promise<PergamumProject | null>;
     openProjectFile: () => Promise<PergamumProject | null>;
-    openRecentProject: (path: string) => Promise<PergamumProject>;
+    openRecentProject: (projectFilePath: string) => Promise<PergamumProject>;
     readProjectDocument: (
       relativePath: string
     ) => Promise<ProjectDocumentContent>;

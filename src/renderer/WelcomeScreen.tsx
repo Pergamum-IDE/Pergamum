@@ -5,7 +5,7 @@ interface WelcomeScreenProps {
   recentProjects: RecentProject[];
   translate: Translate;
   onOpenProject: () => void;
-  onOpenRecentProject: (path: string) => void;
+  onOpenRecentProject: (projectFilePath: string) => void;
 }
 
 export function WelcomeScreen({
@@ -39,14 +39,20 @@ export function WelcomeScreen({
             <nav className="welcomeRecentList" aria-label={translate("welcome.recentProjects")}>
               {recentProjects.map((recentProject) => (
                 <button
-                  key={recentProject.path}
+                  key={recentProject.projectId}
                   type="button"
                   className="welcomeRecentItem"
-                  title={recentProject.path}
-                  onClick={() => onOpenRecentProject(recentProject.path)}
+                  title={recentProject.projectFilePath}
+                  onClick={() =>
+                    onOpenRecentProject(recentProject.projectFilePath)
+                  }
                 >
-                  <span className="welcomeRecentName">{recentProject.name}</span>
-                  <span className="welcomeRecentPath">{recentProject.path}</span>
+                  <span className="welcomeRecentName">
+                    {recentProject.projectName}
+                  </span>
+                  <span className="welcomeRecentPath">
+                    {recentProject.projectFilePath}
+                  </span>
                 </button>
               ))}
             </nav>

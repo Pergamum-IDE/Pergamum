@@ -34,6 +34,13 @@ const defaultSoundSettings = {
   newline: { enabled: false },
   keypress: { enabled: false }
 };
+const recentProjectInput = {
+  projectId: "018f4b8c-7a2b-7c3d-8e4f-123456789abc",
+  projectName: "proj",
+  projectFilePath: "C:\\proj\\proj.pergamum",
+  projectRootPath: "C:\\proj",
+  schemaVersion: 1
+};
 
 function onDiskSettings(overrides: Record<string, unknown>): string {
   return JSON.stringify({
@@ -144,7 +151,7 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
       onDiskSettings({ workbench: { fontFamily: "Fira Code" } })
     );
 
-    await recordRecentProject({ path: "C:\\proj", name: "proj" });
+    await recordRecentProject(recentProjectInput);
 
     expect(fsMock.writeFile).toHaveBeenCalledTimes(1);
     const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
@@ -165,7 +172,7 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
   it("does not write back the catalog default when workbench.fontFamily was never set on disk (no default write-back, #173 D-7)", async () => {
     fsMock.readFile.mockResolvedValue(onDiskSettings({}));
 
-    await recordRecentProject({ path: "C:\\proj", name: "proj" });
+    await recordRecentProject(recentProjectInput);
 
     expect(fsMock.writeFile).toHaveBeenCalledTimes(1);
     const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [
@@ -188,7 +195,7 @@ describe("settingsStore workbench.fontFamily write path (#173)", () => {
       onDiskSettings({ workbench: { fontFamily: 'Fira Code"; color: red' } })
     );
 
-    await recordRecentProject({ path: "C:\\proj", name: "proj" });
+    await recordRecentProject(recentProjectInput);
 
     expect(fsMock.writeFile).toHaveBeenCalledTimes(1);
     const [, writtenContent] = fsMock.writeFile.mock.calls[0] as [

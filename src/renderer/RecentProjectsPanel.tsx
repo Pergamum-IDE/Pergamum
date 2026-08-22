@@ -4,7 +4,7 @@ import type { Translate } from "../shared/i18n";
 interface RecentProjectsPanelProps {
   recentProjects: RecentProject[];
   translate: Translate;
-  onOpenProject: (path: string) => void;
+  onOpenProject: (projectFilePath: string) => void;
 }
 
 export function RecentProjectsPanel({
@@ -21,14 +21,18 @@ export function RecentProjectsPanel({
         <nav className="recentProjectsList" aria-label={translate("recent.title")}>
           {recentProjects.map((recentProject) => (
             <button
-              key={recentProject.path}
+              key={recentProject.projectId}
               type="button"
               className="recentProjectItem"
-              title={recentProject.path}
-              onClick={() => onOpenProject(recentProject.path)}
+              title={recentProject.projectFilePath}
+              onClick={() => onOpenProject(recentProject.projectFilePath)}
             >
-              <span className="recentProjectName">{recentProject.name}</span>
-              <span className="recentProjectPath">{recentProject.path}</span>
+              <span className="recentProjectName">
+                {recentProject.projectName}
+              </span>
+              <span className="recentProjectPath">
+                {recentProject.projectFilePath}
+              </span>
             </button>
           ))}
         </nav>

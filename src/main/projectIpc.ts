@@ -18,6 +18,8 @@ import {
   type ProjectDocument,
   type ProjectDocumentContent,
   type ReadProjectDocumentRequest,
+  type RecentProject,
+  type RecordRecentProjectInput,
   type SaveProjectDocumentRequest,
   type SaveProjectDocumentResult
 } from "../shared/api";
@@ -38,6 +40,7 @@ import { projectConfigFileName, readProjectConfig } from "./projectConfigStore";
 import {
   createProjectDatabase,
   openProjectDatabase,
+  projectDatabaseFileName,
   projectFileExtension,
   readProjectMetadata,
   resolveProjectDatabasePath,
@@ -46,12 +49,22 @@ import {
   type ProjectDatabase,
   type ProjectMetadata
 } from "./projectDatabase";
-import { isRecentProjectPath, recordRecentProject } from "./settingsStore";
+import {
+  findRecentProjectByFilePath,
+  recordRecentProject
+} from "./settingsStore";
 
 interface CurrentProjectState {
   rootPath: string;
   activeProjectFilePath: string;
   documentRelativePaths: Set<string>;
+}
+
+interface ProjectFileOpenResult {
+  project: PergamumProject;
+  metadata: ProjectMetadata;
+  projectFilePath: string;
+  projectRootPath: string;
 }
 
 let currentProjectState: CurrentProjectState | null = null;
@@ -219,6 +232,35 @@ function initialProjectNameFromProjectFilePath(
   return initialName || "Untitled Project";
 }
 
+function isSamePath(left: string, right: string): boolean {
+  const resolvedLeft = path.resolve(left);
+  const resolvedRight = path.resolve(right);
+
+  return process.platform === "win32"
+    ? resolvedLeft.toLowerCase() === resolvedRight.toLowerCase()
+    : resolvedLeft === resolvedRight;
+}
+
+function isPergamumProjectFilePath(projectFilePath: string): boolean {
+  return path.extname(projectFilePath).toLowerCase() === projectFileExtension;
+}
+
+function isLegacyProjectDatabaseRecentProject(
+  recentProject: RecentProject
+): boolean {
+  if (
+    path.basename(recentProject.projectFilePath).toLowerCase() !==
+    projectDatabaseFileName
+  ) {
+    return false;
+  }
+
+  return isSamePath(
+    recentProject.projectFilePath,
+    path.resolve(recentProject.projectRootPath, projectDatabaseFileName)
+  );
+}
+
 function errorDetail(error: unknown): string {
   return error instanceof Error ? error.message : "Unknown error.";
 }
@@ -269,14 +311,14 @@ function parseOpenRecentProjectRequest(
 ): OpenRecentProjectRequest {
   if (
     !isRequestObject(value) ||
-    typeof value.path !== "string" ||
-    value.path.length === 0
+    typeof value.projectFilePath !== "string" ||
+    value.projectFilePath.length === 0
   ) {
     throw new Error("Invalid recent project open request.");
   }
 
   return {
-    path: value.path
+    projectFilePath: value.projectFilePath
   };
 }
 
@@ -408,12 +450,57 @@ async function hasCreateProjectConflict(rootPath: string): Promise<boolean> {
   return hasProjectConfig || hasProjectRecoveryDirectory;
 }
 
-async function recordProjectRecently(project: PergamumProject): Promise<void> {
+async function recordProjectRecently(
+  recentProject: RecordRecentProjectInput
+): Promise<void> {
   try {
-    await recordRecentProject({
-      path: project.rootPath,
-      name: project.name
-    });
+    await recordRecentProject(recentProject);
+  } catch {
+    console.warn("Could not record recent project.");
+  }
+}
+
+function recentProjectInputFromMetadata(
+  metadata: ProjectMetadata,
+  projectFilePath: string,
+  projectRootPath: string
+): RecordRecentProjectInput {
+  return {
+    projectId: metadata.projectId,
+    projectName: metadata.projectName,
+    projectFilePath,
+    projectRootPath,
+    schemaVersion: metadata.schemaVersion
+  };
+}
+
+async function recordProjectFileOpenRecently(
+  openedProject: ProjectFileOpenResult
+): Promise<void> {
+  await recordProjectRecently(
+    recentProjectInputFromMetadata(
+      openedProject.metadata,
+      openedProject.projectFilePath,
+      openedProject.projectRootPath
+    )
+  );
+}
+
+async function recordLegacyDirectoryOpenRecently(
+  activeProjectFilePath: string,
+  logger: DebugLogger
+): Promise<void> {
+  try {
+    const database = await openProjectDatabase(activeProjectFilePath, logger);
+    const metadata = await readProjectMetadataAndClose(database);
+
+    await recordProjectRecently(
+      recentProjectInputFromMetadata(
+        metadata,
+        activeProjectFilePath,
+        path.dirname(activeProjectFilePath)
+      )
+    );
   } catch {
     console.warn("Could not record recent project.");
   }
@@ -438,7 +525,7 @@ async function openProjectRoot(
 
     activateProject(project);
 
-    await recordProjectRecently(project);
+    await recordLegacyDirectoryOpenRecently(activeProjectFilePath, logger);
 
     logger.log({
       level: "info",
@@ -473,7 +560,7 @@ async function openProjectRoot(
 async function createProjectFromProjectFile(
   projectFilePath: string,
   logger: DebugLogger
-): Promise<PergamumProject> {
+): Promise<ProjectFileOpenResult> {
   const projectRootPath = resolveProjectRoot(projectFilePath);
   const initialProjectName =
     initialProjectNameFromProjectFilePath(projectFilePath);
@@ -501,13 +588,18 @@ async function createProjectFromProjectFile(
 
   activateProject(project);
 
-  return project;
+  return {
+    project,
+    metadata,
+    projectFilePath,
+    projectRootPath
+  };
 }
 
 async function openProjectFromProjectFile(
   projectFilePath: string,
   logger: DebugLogger
-): Promise<PergamumProject> {
+): Promise<ProjectFileOpenResult> {
   const projectRootPath = resolveProjectRoot(projectFilePath);
   const database = await openProjectDatabase(projectFilePath, logger);
   const metadata = await readProjectMetadataAndClose(database);
@@ -522,7 +614,12 @@ async function openProjectFromProjectFile(
 
   activateProject(project);
 
-  return project;
+  return {
+    project,
+    metadata,
+    projectFilePath,
+    projectRootPath
+  };
 }
 
 export async function createProject(
@@ -570,7 +667,11 @@ export async function createProject(
       }
     }
 
-    const project = await createProjectFromProjectFile(projectFilePath, logger);
+    const openedProject = await createProjectFromProjectFile(
+      projectFilePath,
+      logger
+    );
+    await recordProjectFileOpenRecently(openedProject);
 
     logger.log({
       level: "info",
@@ -583,7 +684,7 @@ export async function createProject(
       }
     });
 
-    return project;
+    return openedProject.project;
   } catch (error) {
     const safeError = sanitizedFileIoError(error);
     logger.log({
@@ -634,7 +735,11 @@ export async function openProjectFile(
 
     projectRef = logger.projectRefForKey(projectFilePath);
 
-    const project = await openProjectFromProjectFile(projectFilePath, logger);
+    const openedProject = await openProjectFromProjectFile(
+      projectFilePath,
+      logger
+    );
+    await recordProjectFileOpenRecently(openedProject);
 
     logger.log({
       level: "info",
@@ -647,7 +752,7 @@ export async function openProjectFile(
       }
     });
 
-    return project;
+    return openedProject.project;
   } catch (error) {
     const safeError = sanitizedFileIoError(error);
     logger.log({
@@ -729,15 +834,43 @@ export function registerProjectIpc(
 
       try {
         request = parseOpenRecentProjectRequest(rawRequest);
-        const isRegisteredRecentProject = await isRecentProjectPath(
-          request.path
+        const projectFilePath = path.resolve(request.projectFilePath);
+        const recentProject = await findRecentProjectByFilePath(
+          projectFilePath
         );
 
-        if (!isRegisteredRecentProject) {
+        if (!recentProject) {
           throw new Error("Recent project is not registered.");
         }
 
-        return openProjectRoot(request.path, logger);
+        if (isLegacyProjectDatabaseRecentProject(recentProject)) {
+          return openProjectRoot(recentProject.projectRootPath, logger);
+        }
+
+        if (isPergamumProjectFilePath(projectFilePath)) {
+          const resolvedProjectFilePath =
+            resolveProjectFilePath(projectFilePath);
+          const openedProject = await openProjectFromProjectFile(
+            resolvedProjectFilePath,
+            logger
+          );
+          await recordProjectFileOpenRecently(openedProject);
+
+          logger.log({
+            level: "info",
+            event: "project.open.succeeded",
+            details: {
+              projectRef: logger.projectRefForKey(resolvedProjectFilePath),
+              operation: "open",
+              result: "succeeded",
+              durationMs: durationSince(startedAt)
+            }
+          });
+
+          return openedProject.project;
+        }
+
+        throw new Error("Recent project target is invalid.");
       } catch (error) {
         const safeError = sanitizedFileIoError(error);
         logger.log({
@@ -753,8 +886,6 @@ export function registerProjectIpc(
 
         throw safeError;
       }
-
-      return openProjectRoot(request.path, logger);
     }
   );
 

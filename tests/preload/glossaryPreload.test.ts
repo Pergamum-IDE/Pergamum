@@ -49,10 +49,17 @@ describe("glossary preload API", () => {
 
     await api.projects.createProject();
     await api.projects.openProjectFile();
+    await api.projects.openRecentProject("C:\\Novel\\Novel.pergamum");
 
     expect(electronMock.invoke.mock.calls).toEqual([
       [PROJECT_CHANNELS.createProject],
-      [PROJECT_CHANNELS.openProjectFile]
+      [PROJECT_CHANNELS.openProjectFile],
+      [
+        PROJECT_CHANNELS.openRecentProject,
+        {
+          projectFilePath: "C:\\Novel\\Novel.pergamum"
+        }
+      ]
     ]);
   });
 

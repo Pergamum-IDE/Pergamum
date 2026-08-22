@@ -8,6 +8,7 @@ import type { DebugLogger } from "../../src/main/debugLogger";
 import { projectConfigFileName } from "../../src/main/projectConfigStore";
 import {
   createProjectDatabase,
+  currentProjectDatabaseSchemaVersion,
   openProjectDatabase,
   projectDatabaseFileName,
   readProjectMetadata
@@ -130,6 +131,7 @@ describe("project file IPC foundation", () => {
     await expect(fs.access(projectFilePath)).rejects.toMatchObject({
       code: "ENOENT"
     });
+    await expectSettingsJsonMissing(userDataPath);
     expectDialogHasNoUnsafeSurface([
       projectRootPath,
       projectFilePath,
@@ -184,6 +186,14 @@ describe("project file IPC foundation", () => {
     await expect(
       fs.readFile(path.join(projectRootPath, projectConfigFileName), "utf8")
     ).resolves.toBe('{\n  "name": "Secret Draft"\n}\n');
+    await expect(readRecentProjects(userDataPath)).resolves.toMatchObject([
+      {
+        projectName: "Secret Draft",
+        projectFilePath: path.resolve(projectFilePath),
+        projectRootPath,
+        schemaVersion: currentProjectDatabaseSchemaVersion
+      }
+    ]);
     expectNoUnsafeSurface(logger, [
       projectRootPath,
       projectFilePath,
@@ -369,6 +379,7 @@ describe("project file IPC foundation", () => {
 
     await expect(openProjectFileHandler({ sender: {} })).resolves.toBeNull();
 
+    await expectSettingsJsonMissing(userDataPath);
     expectDialogHasNoUnsafeSurface([
       projectRootPath,
       projectFilePath,
@@ -386,6 +397,7 @@ describe("project file IPC foundation", () => {
       projectFilePath,
       projectName: "Metadata Project Name"
     });
+    const metadata = await readProjectMetadata(created);
     await created.close();
     await fs.writeFile(
       path.join(projectRootPath, projectConfigFileName),
@@ -419,6 +431,15 @@ describe("project file IPC foundation", () => {
     });
     expect(currentProjectRootPath()).toBe(projectRootPath);
     expect(currentActiveProjectFilePath()).toBe(path.resolve(projectFilePath));
+    await expect(readRecentProjects(userDataPath)).resolves.toMatchObject([
+      {
+        projectId: metadata.projectId,
+        projectName: "Metadata Project Name",
+        projectFilePath: path.resolve(projectFilePath),
+        projectRootPath,
+        schemaVersion: metadata.schemaVersion
+      }
+    ]);
   });
 
   it("openProjectFile rejects invalid .pergamum without migration or repair", async () => {
@@ -462,6 +483,7 @@ describe("project file IPC foundation", () => {
 
     expect(userVersion).toBe(0);
     expect(tables).toEqual([]);
+    await expectSettingsJsonMissing(userDataPath);
     expectNoUnsafeSurface(logger, [
       projectRootPath,
       projectFilePath,
@@ -496,6 +518,149 @@ describe("project file IPC foundation", () => {
         }
       ]
     });
+    await expect(readRecentProjects(userDataPath)).resolves.toMatchObject([
+      {
+        projectName: "Untitled Project",
+        projectFilePath: path.join(projectRootPath, projectDatabaseFileName),
+        projectRootPath,
+        schemaVersion: currentProjectDatabaseSchemaVersion
+      }
+    ]);
+  });
+
+  it("openRecentProject opens a registered .pergamum entry by projectFilePath and refreshes recent projects", async () => {
+    const projectFilePath = path.join(projectRootPath, "Recent File.pergamum");
+    const created = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Recent Metadata Name"
+    });
+    const metadata = await readProjectMetadata(created);
+    await created.close();
+    await fs.writeFile(
+      path.join(projectRootPath, projectConfigFileName),
+      '{"name":"Config Name"}\n',
+      "utf8"
+    );
+    await writeRecentProjects(userDataPath, [
+      {
+        projectId: metadata.projectId,
+        projectName: metadata.projectName,
+        projectFilePath: path.resolve(projectFilePath),
+        projectRootPath,
+        schemaVersion: metadata.schemaVersion,
+        lastOpenedAt: "2026-08-22T00:00:00.000Z"
+      }
+    ]);
+
+    const openRecentProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openRecentProject
+    );
+    const project = await openRecentProjectHandler(
+      { sender: {} },
+      { projectFilePath: path.resolve(projectFilePath) }
+    );
+
+    expect(project).toMatchObject({
+      rootPath: projectRootPath,
+      activeProjectFilePath: path.resolve(projectFilePath),
+      name: "Recent Metadata Name",
+      config: {
+        name: "Config Name"
+      }
+    });
+    const recentProjects = await readRecentProjects(userDataPath);
+    expect(recentProjects).toHaveLength(1);
+    const refreshedRecentProject = recentProjects[0];
+    expect(refreshedRecentProject).toMatchObject({
+      projectId: metadata.projectId,
+      projectName: metadata.projectName,
+      projectFilePath: path.resolve(projectFilePath),
+      projectRootPath,
+      schemaVersion: metadata.schemaVersion
+    });
+    expect(refreshedRecentProject?.lastOpenedAt).not.toBe(
+      "2026-08-22T00:00:00.000Z"
+    );
+  });
+
+  it("openRecentProject keeps directory-based recent entries on the legacy directory open path", async () => {
+    const legacyDatabasePath = path.join(
+      projectRootPath,
+      projectDatabaseFileName
+    );
+    const database = await openProjectDatabase(projectRootPath);
+    const metadata = await readProjectMetadata(database);
+    await database.close();
+    await fs.writeFile(path.join(projectRootPath, "known.md"), "# Known\n");
+    await writeRecentProjects(userDataPath, [
+      {
+        projectId: metadata.projectId,
+        projectName: metadata.projectName,
+        projectFilePath: legacyDatabasePath,
+        projectRootPath,
+        schemaVersion: metadata.schemaVersion,
+        lastOpenedAt: "2026-08-22T00:00:00.000Z"
+      }
+    ]);
+
+    const openRecentProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openRecentProject
+    );
+    const project = await openRecentProjectHandler(
+      { sender: {} },
+      { projectFilePath: legacyDatabasePath }
+    );
+
+    expect(project).toMatchObject({
+      rootPath: projectRootPath,
+      activeProjectFilePath: legacyDatabasePath,
+      documents: [
+        {
+          relativePath: "known.md",
+          name: "known.md"
+        }
+      ]
+    });
+  });
+
+  it("createProject does not expose raw details when recent project recording fails", async () => {
+    const logger = createLoggerMock();
+    const consoleWarnSpy = vi
+      .spyOn(console, "warn")
+      .mockImplementation(() => undefined);
+    const projectFilePath = path.join(projectRootPath, "Warn Secret.pergamum");
+    const invalidUserDataPath = path.join(projectRootPath, "known.md");
+    await fs.writeFile(invalidUserDataPath, "# Known\n");
+    electronMock.getPath.mockReturnValue(invalidUserDataPath);
+    electronMock.showSaveDialog.mockResolvedValue({
+      canceled: false,
+      filePath: projectFilePath
+    });
+
+    const createProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.createProject,
+      logger
+    );
+    const project = await createProjectHandler({ sender: {} });
+
+    expect(project).toMatchObject({
+      rootPath: projectRootPath,
+      activeProjectFilePath: path.resolve(projectFilePath),
+      name: "Warn Secret"
+    });
+    const warnings = consoleWarnSpy.mock.calls.map((call) => call.join(" "));
+    expect(warnings).toEqual(["Could not record recent project."]);
+    expect(warnings.join("\n")).not.toContain(projectRootPath);
+    expect(warnings.join("\n")).not.toContain(projectFilePath);
+    expect(warnings.join("\n")).not.toContain("Warn Secret");
+    expect(warnings.join("\n")).not.toContain("known.md");
+    expectNoUnsafeSurface(logger, [
+      projectRootPath,
+      projectFilePath,
+      "Warn Secret.pergamum",
+      "Warn Secret",
+      "known.md"
+    ]);
   });
 
   it("createProject sanitizes raw write errors in logs and console output", async () => {
@@ -591,6 +756,46 @@ function registeredHandler(
   }
 
   return registration[1] as (...args: unknown[]) => unknown;
+}
+
+function settingsJsonPath(userDataPath: string): string {
+  return path.join(userDataPath, "settings.json");
+}
+
+async function readRecentProjects(
+  userDataPath: string
+): Promise<
+  Array<Record<string, unknown>>
+> {
+  const settings = JSON.parse(
+    await fs.readFile(settingsJsonPath(userDataPath), "utf8")
+  ) as {
+    recentProjects: Array<Record<string, unknown>>;
+  };
+
+  return settings.recentProjects;
+}
+
+async function writeRecentProjects(
+  userDataPath: string,
+  recentProjects: Array<Record<string, unknown>>
+): Promise<void> {
+  await fs.writeFile(
+    settingsJsonPath(userDataPath),
+    `${JSON.stringify({
+      preview: { renderer: "markdown" },
+      recentProjects
+    })}\n`,
+    "utf8"
+  );
+}
+
+async function expectSettingsJsonMissing(userDataPath: string): Promise<void> {
+  await expect(
+    fs.access(settingsJsonPath(userDataPath))
+  ).rejects.toMatchObject({
+    code: "ENOENT"
+  });
 }
 
 async function expectSanitizedProjectRejection(
