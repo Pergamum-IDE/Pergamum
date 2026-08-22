@@ -494,7 +494,7 @@ export const knownDebugLogCommandIds = [
   "workspace.files.focus",
   "workspace.search.focus",
   "workspace.glossary.focus",
-  "workspace.settings.toggle",
+  "workspace.applicationSettings.open",
   "workbench.utilityWindow.open",
   "workbench.utilityWindow.close",
   "workbench.utilityWindow.toggle",

@@ -137,10 +137,10 @@ function activityBarButtons(
 ): React.ReactElement<ElementProps>[] {
   const element = ActivityBar({
     activeMode,
-    isProjectSettingsOpen: false,
+    isApplicationSettingsActive: false,
     translate,
     onSelectMode,
-    onToggleProjectSettings: () => undefined
+    onOpenApplicationSettings: () => undefined
   });
 
   return collectElements(
@@ -197,10 +197,10 @@ describe("workspace navigation", () => {
     const markup = renderToStaticMarkup(
       React.createElement(ActivityBar, {
         activeMode: "files",
-        isProjectSettingsOpen: false,
+        isApplicationSettingsActive: false,
         translate,
         onSelectMode: () => undefined,
-        onToggleProjectSettings: () => undefined
+        onOpenApplicationSettings: () => undefined
       })
     );
 
@@ -208,7 +208,7 @@ describe("workspace navigation", () => {
     expect(markup).toContain("activity.files");
     expect(markup).toContain("activity.searchReplace");
     expect(markup).toContain("activity.glossary");
-    expect(markup).toContain("activity.projectSettings");
+    expect(markup).toContain("activity.applicationSettings");
     expect(markup).toContain("aria-pressed=\"true\"");
     expect(markup).not.toContain("disabled");
   });
@@ -240,7 +240,7 @@ describe("workspace navigation", () => {
   it("routes Activity Bar Workspace operations through commands", async () => {
     const registry = new CommandRegistry();
     const selectedModes: SidebarMode[] = [];
-    let isProjectSettingsOpen = false;
+    let didOpenApplicationSettings = false;
 
     registerWorkspaceCommands(
       registry,
@@ -248,29 +248,29 @@ describe("workspace navigation", () => {
         focusSidebarMode: (mode) => {
           selectedModes.push(mode);
         },
-        toggleProjectSettings: () => {
-          isProjectSettingsOpen = !isProjectSettingsOpen;
+        openApplicationSettings: () => {
+          didOpenApplicationSettings = true;
         }
       },
       {
         focusFiles: "Focus Files",
         focusSearch: "Focus Search",
         focusGlossary: "Focus Glossary",
-        toggleSettings: "Toggle Settings"
+        openApplicationSettings: "Open Application Settings"
       }
     );
 
     const element = ActivityBar({
       activeMode: "files",
-      isProjectSettingsOpen,
+      isApplicationSettingsActive: didOpenApplicationSettings,
       translate,
       onSelectMode: (mode) => {
         void registry.execute(workspaceFocusCommandIdForMode(mode), {
           source: "activityBar"
         });
       },
-      onToggleProjectSettings: () => {
-        void registry.execute(workspaceCommandIds.toggleSettings, {
+      onOpenApplicationSettings: () => {
+        void registry.execute(workspaceCommandIds.openApplicationSettings, {
           source: "activityBar"
         });
       }
@@ -289,7 +289,7 @@ describe("workspace navigation", () => {
       (button) => button.props["aria-label"] === "activity.glossary"
     );
     const settingsButton = buttons.find(
-      (button) => button.props["aria-label"] === "activity.projectSettings"
+      (button) => button.props["aria-label"] === "activity.applicationSettings"
     );
 
     expect(filesButton).toBeDefined();
@@ -307,7 +307,7 @@ describe("workspace navigation", () => {
     (settingsButton?.props.onClick as () => void)();
     await Promise.resolve();
 
-    expect(isProjectSettingsOpen).toBe(true);
+    expect(didOpenApplicationSettings).toBe(true);
   });
 
   it("connects Activity Bar mode selection through Workspace focus commands", () => {
@@ -320,22 +320,24 @@ describe("workspace navigation", () => {
     expect(source).toContain("onSelectMode={handleActivityBarModeClick}");
   });
 
-  it("positions Project Settings in the secondary Activity Bar group", () => {
+  it("positions Application Settings in the secondary Activity Bar group", () => {
     const markup = renderToStaticMarkup(
       React.createElement(ActivityBar, {
         activeMode: "search",
-        isProjectSettingsOpen: true,
+        isApplicationSettingsActive: true,
         translate,
         onSelectMode: () => undefined,
-        onToggleProjectSettings: () => undefined
+        onOpenApplicationSettings: () => undefined
       })
     );
 
     const secondaryGroupIndex = markup.indexOf("activityBarSecondary");
-    const projectSettingsIndex = markup.indexOf("activity.projectSettings");
+    const applicationSettingsIndex = markup.indexOf(
+      "activity.applicationSettings"
+    );
 
     expect(secondaryGroupIndex).toBeGreaterThan(-1);
-    expect(projectSettingsIndex).toBeGreaterThan(secondaryGroupIndex);
+    expect(applicationSettingsIndex).toBeGreaterThan(secondaryGroupIndex);
   });
 
   it("renders the existing File Explorer in Files mode", () => {

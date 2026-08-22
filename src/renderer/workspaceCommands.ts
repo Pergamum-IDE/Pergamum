@@ -11,7 +11,7 @@ export const workspaceCommandIds = {
   focusFiles: defineCommandId("workspace.files.focus"),
   focusSearch: defineCommandId("workspace.search.focus"),
   focusGlossary: defineCommandId("workspace.glossary.focus"),
-  toggleSettings: defineCommandId("workspace.settings.toggle")
+  openApplicationSettings: defineCommandId("workspace.applicationSettings.open")
 } as const;
 
 export type WorkspaceFocusCommandId =
@@ -21,14 +21,14 @@ export type WorkspaceFocusCommandId =
 
 export interface WorkspaceCommandController {
   focusSidebarMode(mode: SidebarMode): void;
-  toggleProjectSettings(): void;
+  openApplicationSettings(): void;
 }
 
 export interface WorkspaceCommandTitles {
   focusFiles: string;
   focusSearch: string;
   focusGlossary: string;
-  toggleSettings: string;
+  openApplicationSettings: string;
 }
 
 type WorkspaceCommand = Command<readonly [], void>;
@@ -40,7 +40,9 @@ export function createWorkspaceCommandTitles(
     focusFiles: translate("command.workspace.files.focus"),
     focusSearch: translate("command.workspace.search.focus"),
     focusGlossary: translate("command.workspace.glossary.focus"),
-    toggleSettings: translate("command.workspace.settings.toggle")
+    openApplicationSettings: translate(
+      "command.workspace.applicationSettings.open"
+    )
   };
 }
 
@@ -84,10 +86,10 @@ export function createWorkspaceCommands(
       }
     },
     {
-      id: workspaceCommandIds.toggleSettings,
-      title: titles.toggleSettings,
+      id: workspaceCommandIds.openApplicationSettings,
+      title: titles.openApplicationSettings,
       execute: () => {
-        controller.toggleProjectSettings();
+        controller.openApplicationSettings();
       }
     }
   ];

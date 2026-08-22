@@ -524,7 +524,7 @@ describe("debug logger", () => {
     logger.log({
       level: "debug",
       event: "command.invoked",
-      details: { commandId: "workspace.settings.toggle" }
+      details: { commandId: "workspace.applicationSettings.open" }
     });
 
     const snapshot = logger.getSnapshot();

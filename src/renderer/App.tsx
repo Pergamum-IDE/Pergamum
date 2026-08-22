@@ -238,6 +238,12 @@ import {
   workspaceFocusCommandIdForMode
 } from "./workspaceCommands";
 import { WorkspaceSidebar } from "./WorkspaceSidebar";
+import {
+  documentWorkspaceTabId,
+  specialWorkspaceTabId,
+  type SpecialTabId,
+  type SpecialWorkspaceTab
+} from "./workspaceTabs";
 
 interface StatusMessage {
   key: TranslationKey;
@@ -337,7 +343,9 @@ export function App(): JSX.Element {
   const [layout, setLayout] = useState<WorkbenchLayoutState>(
     createInitialWorkbenchLayoutState
   );
-  const [isSettingsOpen, setIsSettingsOpen] = useState(false);
+  const [isSettingsTabOpen, setIsSettingsTabOpen] = useState(false);
+  const [activeSpecialTabId, setActiveSpecialTabId] =
+    useState<SpecialTabId | null>(null);
   const [isRecentProjectsOpen, setIsRecentProjectsOpen] = useState(false);
   const [isCommandPaletteOpen, setIsCommandPaletteOpen] = useState(false);
   const [status, setStatus] = useState<StatusMessage>({ key: "app.ready" });
@@ -482,6 +490,8 @@ export function App(): JSX.Element {
   const activeDocument = activeOpenDocument(openDocumentsState);
   const currentEditor = activeCurrentEditor(openDocumentsState);
   const activeMarkdownDocument = markdownDocumentForEditor(currentEditor);
+  const isSettingsTabActive =
+    isSettingsTabOpen && activeSpecialTabId === "settings";
 
   useEffect(() => {
     if (currentEditor.kind === "markdown") {
@@ -579,25 +589,28 @@ export function App(): JSX.Element {
     !isSavingGlossaryEntry &&
     currentEditor.draft.canonicalSurface.trim().length > 0;
   const canSave =
-    currentEditor.kind === "markdown"
+    !isSettingsTabActive && currentEditor.kind === "markdown"
       ? Boolean(activeMarkdownDocument)
-      : canSaveGlossaryEntry;
+      : !isSettingsTabActive && canSaveGlossaryEntry;
   const commandContext = useMemo(
     () =>
       buildCommandContextSnapshot({
         projectIsOpen: project !== null,
         editorHasDocument:
-          currentEditor.kind === "markdown"
+          !isSettingsTabActive && currentEditor.kind === "markdown"
             ? Boolean(activeMarkdownDocument)
-            : currentEditor.kind === "glossaryEntry",
-        editorIsDirty: isDirty,
-        editorKindMarkdown: currentEditor.kind === "markdown",
-        editorKindGlossary: currentEditor.kind === "glossaryEntry",
+            : !isSettingsTabActive && currentEditor.kind === "glossaryEntry",
+        editorIsDirty: !isSettingsTabActive && isDirty,
+        editorKindMarkdown:
+          !isSettingsTabActive && currentEditor.kind === "markdown",
+        editorKindGlossary:
+          !isSettingsTabActive && currentEditor.kind === "glossaryEntry",
         occurrenceTrackingActive:
           glossaryOccurrenceTrackingState.kind === "active"
       }),
     [
       project,
+      isSettingsTabActive,
       currentEditor.kind,
       activeMarkdownDocument,
       isDirty,
@@ -676,8 +689,8 @@ export function App(): JSX.Element {
             };
           });
         },
-        toggleProjectSettings: () => {
-          setIsSettingsOpen((isOpen) => !isOpen);
+        openApplicationSettings: () => {
+          openSettingsTab();
         }
       },
       createWorkspaceCommandTitles(translate)
@@ -870,7 +883,9 @@ export function App(): JSX.Element {
     [activeDocument.id, commandRegistry, translate]
   );
   const shouldShowWelcome =
-    project === null && isOnlyInitialUntitledDocument(openDocumentsState);
+    !isSettingsTabOpen &&
+    project === null &&
+    isOnlyInitialUntitledDocument(openDocumentsState);
   const activeActivityMode = resolveActiveActivityMode(
     sidebarMode,
     layout.sidebar.collapsed,
@@ -880,6 +895,22 @@ export function App(): JSX.Element {
     () => documentTabs(openDocumentsState),
     [openDocumentsState]
   );
+  const specialTabs = useMemo<SpecialWorkspaceTab[]>(
+    () =>
+      isSettingsTabOpen
+        ? [
+            {
+              kind: "special",
+              id: "settings",
+              title: translate("settings.application.title")
+            }
+          ]
+        : [],
+    [isSettingsTabOpen, translate]
+  );
+  const activeWorkspaceTabId = isSettingsTabActive
+    ? specialWorkspaceTabId("settings")
+    : documentWorkspaceTabId(openDocumentsState.activeDocumentId);
   if (!editorNavigationRef.current) {
     editorNavigationRef.current = new EditorNavigation({
       resolveEditor,
@@ -1118,15 +1149,45 @@ export function App(): JSX.Element {
 
   function activateDocument(documentId: EditorId): void {
     openEditorFromUi(documentId);
+    setActiveSpecialTabId(null);
+  }
+
+  function openSettingsTab(): void {
+    setIsSettingsTabOpen(true);
+    setActiveSpecialTabId("settings");
+  }
+
+  function activateSpecialTab(tabId: SpecialTabId): void {
+    if (tabId === "settings" && isSettingsTabOpen) {
+      setActiveSpecialTabId(tabId);
+    }
+  }
+
+  function closeSpecialTab(tabId: SpecialTabId): void {
+    if (tabId !== "settings") {
+      return;
+    }
+
+    setIsSettingsTabOpen(false);
+    setActiveSpecialTabId((current) => (current === tabId ? null : current));
   }
 
   function canCloseEditorNow(editorId?: EditorId): boolean {
+    if (!editorId && isSettingsTabActive) {
+      return true;
+    }
+
     return resolveCloseTargetEditorId(openDocumentsState, editorId) !== null;
   }
 
   async function closeEditorWithConfirmation(
     editorId?: EditorId
   ): Promise<void> {
+    if (!editorId && isSettingsTabActive) {
+      closeSpecialTab("settings");
+      return;
+    }
+
     await runEditorCloseFlow(editorId, {
       state: openDocumentsState,
       translate,
@@ -1166,6 +1227,7 @@ export function App(): JSX.Element {
   }
 
   function applyEditor(editorId: EditorId, editor: CurrentEditor): void {
+    setActiveSpecialTabId(null);
     setOpenDocumentsState((state) => {
       if (hasOpenDocument(state, editorId)) {
         return activateOpenDocument(state, editorId);
@@ -2197,6 +2259,20 @@ export function App(): JSX.Element {
   async function saveFile(): Promise<void> {
     const editorIdKind = debugEditorIdKind(activeDocument.id);
 
+    if (isSettingsTabActive) {
+      logRendererDebugEvent({
+        level: "debug",
+        event: "save.skipped",
+        details: {
+          editorIdKind,
+          operation: "save",
+          result: "ignored",
+          reason: "unsupported_editor"
+        }
+      });
+      return;
+    }
+
     logRendererDebugEvent({
       level: "debug",
       event: "save.requested",
@@ -2502,6 +2578,10 @@ export function App(): JSX.Element {
       return;
     }
 
+    if (isSettingsTabActive) {
+      return;
+    }
+
     const offset = documentLineStartOffset(
       currentDocumentContent(currentEditor.document),
       line
@@ -2520,7 +2600,7 @@ export function App(): JSX.Element {
   // lazily split (see createLineJumpEditorSnapshot), so it costs nothing on
   // renders where the Palette isn't open in line mode.
   const lineJumpEditorSnapshot =
-    currentEditor.kind === "markdown"
+    !isSettingsTabActive && currentEditor.kind === "markdown"
       ? createLineJumpEditorSnapshot(
           currentDocumentContent(currentEditor.document)
         )
@@ -2605,8 +2685,12 @@ export function App(): JSX.Element {
     >
       <header className="toolbar">
         <div className="documentTitle">
-          <span>{currentEditorTitle(currentEditor)}</span>
-          {isDirty ? (
+          <span>
+            {isSettingsTabActive
+              ? translate("settings.application.title")
+              : currentEditorTitle(currentEditor)}
+          </span>
+          {!isSettingsTabActive && isDirty ? (
             <span className="dirtyIndicator">
               {translate("document.unsaved")}
             </span>
@@ -2668,29 +2752,17 @@ export function App(): JSX.Element {
       <section className="appBody">
         <ActivityBar
           activeMode={activeActivityMode}
-          isProjectSettingsOpen={isSettingsOpen}
+          isApplicationSettingsActive={isSettingsTabActive}
           translate={translate}
           onSelectMode={handleActivityBarModeClick}
-          onToggleProjectSettings={() =>
-            executeUiCommand(workspaceCommandIds.toggleSettings, {
+          onOpenApplicationSettings={() =>
+            executeUiCommand(workspaceCommandIds.openApplicationSettings, {
               source: "activityBar"
             })
           }
         />
 
         <section className="appContent">
-          {isSettingsOpen ? (
-            <SettingsPanel
-              settings={settings}
-              isLoading={isSettingsLoading}
-              error={settingsError}
-              translate={translate}
-              onChangeSettings={(nextSettings) => {
-                void changeSettings(nextSettings);
-              }}
-            />
-          ) : null}
-
           {isRecentProjectsOpen ? (
             <RecentProjectsPanel
               recentProjects={settings.recentProjects}
@@ -2761,6 +2833,8 @@ export function App(): JSX.Element {
                 <DocumentTabBar
                   tabs={tabs}
                   activeDocumentId={openDocumentsState.activeDocumentId}
+                  activeWorkspaceTabId={activeWorkspaceTabId}
+                  specialTabs={specialTabs}
                   translate={translate}
                   onSelectDocument={activateDocument}
                   onCloseDocument={(documentId) =>
@@ -2770,6 +2844,8 @@ export function App(): JSX.Element {
                       { editorId: documentId }
                     )
                   }
+                  onSelectSpecialTab={activateSpecialTab}
+                  onCloseSpecialTab={closeSpecialTab}
                   isUtilityWindowOpen={layout.utilityWindow.open}
                   onToggleUtilityWindow={() =>
                     executeUiCommand(utilityWindowCommandIds.toggle, {
@@ -2779,149 +2855,167 @@ export function App(): JSX.Element {
                 />
 
                 <section className="editorAreaBody" ref={editorAreaBodyRef}>
-                  <EditorSurface
-                    editor={currentEditor}
-                    projectRootPath={project?.rootPath ?? null}
-                    glossaryRefreshToken={glossaryRefreshToken}
-                    translate={translate}
-                    markdownEditorPreviewRatio={
-                      layout.markdownEditorPreview.ratio
-                    }
-                    onChangeMarkdownEditorPreviewRatio={
-                      handleChangeMarkdownEditorPreviewRatio
-                    }
-                    onChangeMarkdownContent={setActiveDocumentContent}
-                    onChangeGlossaryEntryKind={setActiveGlossaryEntryKind}
-                    onChangeGlossaryEntryDescription={
-                      setActiveGlossaryEntryDescription
-                    }
-                    onChangeGlossaryEntryCanonicalSurface={
-                      setActiveGlossaryEntryCanonicalSurface
-                    }
-                    onChangeGlossaryEntryCanonicalMatchBoundaryStart={
-                      setActiveGlossaryEntryCanonicalMatchBoundaryStart
-                    }
-                    onChangeGlossaryEntryCanonicalMatchBoundaryEnd={
-                      setActiveGlossaryEntryCanonicalMatchBoundaryEnd
-                    }
-                    onAddGlossaryEntryForm={addActiveGlossaryEntryForm}
-                    onChangeGlossaryEntryFormSurface={
-                      setActiveGlossaryEntryFormSurface
-                    }
-                    onChangeGlossaryEntryFormWarningPolicy={
-                      setActiveGlossaryEntryFormWarningPolicy
-                    }
-                    onChangeGlossaryEntryFormMatchBoundaryStart={
-                      setActiveGlossaryEntryFormMatchBoundaryStart
-                    }
-                    onChangeGlossaryEntryFormMatchBoundaryEnd={
-                      setActiveGlossaryEntryFormMatchBoundaryEnd
-                    }
-                    onDeleteGlossaryEntryForm={deleteActiveGlossaryEntryForm}
-                    onDeleteGlossaryEntry={() => {
-                      void deleteActiveGlossaryEntry();
-                    }}
-                    onNavigateToPreviousGlossaryOccurrence={() => {
-                      if (currentEditor.kind === "glossaryEntry") {
-                        executeUiCommand(
-                          glossaryCommandIds.previousOccurrence,
-                          { source: "editorSurface" },
-                          currentEditor.draft.entry.id
-                        );
-                      }
-                    }}
-                    onNavigateToNextGlossaryOccurrence={() => {
-                      if (currentEditor.kind === "glossaryEntry") {
-                        executeUiCommand(
-                          glossaryCommandIds.nextOccurrence,
-                          { source: "editorSurface" },
-                          currentEditor.draft.entry.id
-                        );
-                      }
-                    }}
-                    pendingMarkdownSelection={pendingMarkdownSelection}
-                    onPendingMarkdownSelectionApplied={() => {
-                      setPendingMarkdownSelection(null);
-                    }}
-                    documentOpenId={documentOpenMeasurement?.documentOpenId ?? null}
-                    onDocumentOpenPreviewRenderStarted={
+                  {isSettingsTabActive ? (
+                    <SettingsPanel
+                      settings={settings}
+                      isLoading={isSettingsLoading}
+                      error={settingsError}
+                      translate={translate}
+                      onChangeSettings={(nextSettings) => {
+                        void changeSettings(nextSettings);
+                      }}
+                    />
+                  ) : (
+                    <>
+                      <EditorSurface
+                        editor={currentEditor}
+                        projectRootPath={project?.rootPath ?? null}
+                        glossaryRefreshToken={glossaryRefreshToken}
+                        translate={translate}
+                        markdownEditorPreviewRatio={
+                          layout.markdownEditorPreview.ratio
+                        }
+                        onChangeMarkdownEditorPreviewRatio={
+                          handleChangeMarkdownEditorPreviewRatio
+                        }
+                        onChangeMarkdownContent={setActiveDocumentContent}
+                        onChangeGlossaryEntryKind={setActiveGlossaryEntryKind}
+                        onChangeGlossaryEntryDescription={
+                          setActiveGlossaryEntryDescription
+                        }
+                        onChangeGlossaryEntryCanonicalSurface={
+                          setActiveGlossaryEntryCanonicalSurface
+                        }
+                        onChangeGlossaryEntryCanonicalMatchBoundaryStart={
+                          setActiveGlossaryEntryCanonicalMatchBoundaryStart
+                        }
+                        onChangeGlossaryEntryCanonicalMatchBoundaryEnd={
+                          setActiveGlossaryEntryCanonicalMatchBoundaryEnd
+                        }
+                        onAddGlossaryEntryForm={addActiveGlossaryEntryForm}
+                        onChangeGlossaryEntryFormSurface={
+                          setActiveGlossaryEntryFormSurface
+                        }
+                        onChangeGlossaryEntryFormWarningPolicy={
+                          setActiveGlossaryEntryFormWarningPolicy
+                        }
+                        onChangeGlossaryEntryFormMatchBoundaryStart={
+                          setActiveGlossaryEntryFormMatchBoundaryStart
+                        }
+                        onChangeGlossaryEntryFormMatchBoundaryEnd={
+                          setActiveGlossaryEntryFormMatchBoundaryEnd
+                        }
+                        onDeleteGlossaryEntryForm={deleteActiveGlossaryEntryForm}
+                        onDeleteGlossaryEntry={() => {
+                          void deleteActiveGlossaryEntry();
+                        }}
+                        onNavigateToPreviousGlossaryOccurrence={() => {
+                          if (currentEditor.kind === "glossaryEntry") {
+                            executeUiCommand(
+                              glossaryCommandIds.previousOccurrence,
+                              { source: "editorSurface" },
+                              currentEditor.draft.entry.id
+                            );
+                          }
+                        }}
+                        onNavigateToNextGlossaryOccurrence={() => {
+                          if (currentEditor.kind === "glossaryEntry") {
+                            executeUiCommand(
+                              glossaryCommandIds.nextOccurrence,
+                              { source: "editorSurface" },
+                              currentEditor.draft.entry.id
+                            );
+                          }
+                        }}
+                        pendingMarkdownSelection={pendingMarkdownSelection}
+                        onPendingMarkdownSelectionApplied={() => {
+                          setPendingMarkdownSelection(null);
+                        }}
+                        documentOpenId={documentOpenMeasurement?.documentOpenId ?? null}
+                        onDocumentOpenPreviewRenderStarted={
                       handleDocumentOpenPreviewRenderStarted
                     }
-                    onDocumentOpenPreviewRendered={handleDocumentOpenMeasured}
-                    onDocumentOpenPreviewDomCommitted={
+                        onDocumentOpenPreviewRendered={handleDocumentOpenMeasured}
+                        onDocumentOpenPreviewDomCommitted={
                       handleDocumentOpenPreviewDomCommitted
                     }
-                    onDocumentOpenPreviewDecorationCompleted={
+                        onDocumentOpenPreviewDecorationCompleted={
                       handleDocumentOpenPreviewDecorationCompleted
                     }
-                    onDocumentOpenPreviewFrameObserved={
+                        onDocumentOpenPreviewFrameObserved={
                       handleDocumentOpenPreviewFrameObserved
                     }
-                    onViewportChanged={handleViewportChanged}
-                  />
-
-                  {layout.utilityWindow.open ? (
-                    <>
-                      <div
-                        className="utilityWindowResizeHandle"
-                        role="separator"
-                        aria-orientation="horizontal"
-                        aria-label={translate(
-                          "workbench.utilityWindowResizeHandle"
-                        )}
-                        onPointerDown={utilityWindowResizeDrag.onPointerDown}
-                        onPointerMove={utilityWindowResizeDrag.onPointerMove}
-                        onPointerUp={utilityWindowResizeDrag.onPointerUp}
-                        onPointerCancel={
-                          utilityWindowResizeDrag.onPointerCancel
-                        }
+                        onViewportChanged={handleViewportChanged}
                       />
-                      <UtilityWindow
-                        activeTab={layout.utilityWindow.activeTab}
-                        height={layout.utilityWindow.height}
-                        translate={translate}
-                        onSelectTab={selectUtilityWindowTab}
-                        onClose={() =>
-                          executeUiCommand(utilityWindowCommandIds.close, {
-                            source: "utilityWindow"
-                          })
-                        }
-                      >
-                        {layout.utilityWindow.activeTab === "debugLog" ? (
-                          <DebugLogPanel translate={translate} />
-                        ) : (
-                          <GlossaryOccurrencesPanel
-                            session={glossaryOccurrenceTrackingState}
-                            translate={translate}
-                            onNavigatePrevious={() =>
-                              executeUiCommand(
-                                glossaryOccurrencesCommandIds.previous,
-                                { source: "utilityWindow" }
-                              )
+
+                      {layout.utilityWindow.open ? (
+                        <>
+                          <div
+                            className="utilityWindowResizeHandle"
+                            role="separator"
+                            aria-orientation="horizontal"
+                            aria-label={translate(
+                              "workbench.utilityWindowResizeHandle"
+                            )}
+                            onPointerDown={
+                              utilityWindowResizeDrag.onPointerDown
                             }
-                            onNavigateNext={() =>
-                              executeUiCommand(
-                                glossaryOccurrencesCommandIds.next,
-                                { source: "utilityWindow" }
-                              )
+                            onPointerMove={
+                              utilityWindowResizeDrag.onPointerMove
                             }
-                            onOpenEntry={() =>
-                              executeUiCommand(
-                                glossaryOccurrencesCommandIds.openEntry,
-                                { source: "utilityWindow" }
-                              )
-                            }
-                            onCloseTracking={() =>
-                              executeUiCommand(
-                                glossaryOccurrencesCommandIds.closeTracking,
-                                { source: "utilityWindow" }
-                              )
+                            onPointerUp={utilityWindowResizeDrag.onPointerUp}
+                            onPointerCancel={
+                              utilityWindowResizeDrag.onPointerCancel
                             }
                           />
-                        )}
-                      </UtilityWindow>
+                          <UtilityWindow
+                            activeTab={layout.utilityWindow.activeTab}
+                            height={layout.utilityWindow.height}
+                            translate={translate}
+                            onSelectTab={selectUtilityWindowTab}
+                            onClose={() =>
+                              executeUiCommand(utilityWindowCommandIds.close, {
+                                source: "utilityWindow"
+                              })
+                            }
+                          >
+                            {layout.utilityWindow.activeTab === "debugLog" ? (
+                              <DebugLogPanel translate={translate} />
+                            ) : (
+                              <GlossaryOccurrencesPanel
+                                session={glossaryOccurrenceTrackingState}
+                                translate={translate}
+                                onNavigatePrevious={() =>
+                                  executeUiCommand(
+                                    glossaryOccurrencesCommandIds.previous,
+                                    { source: "utilityWindow" }
+                                  )
+                                }
+                                onNavigateNext={() =>
+                                  executeUiCommand(
+                                    glossaryOccurrencesCommandIds.next,
+                                    { source: "utilityWindow" }
+                                  )
+                                }
+                                onOpenEntry={() =>
+                                  executeUiCommand(
+                                    glossaryOccurrencesCommandIds.openEntry,
+                                    { source: "utilityWindow" }
+                                  )
+                                }
+                                onCloseTracking={() =>
+                                  executeUiCommand(
+                                    glossaryOccurrencesCommandIds.closeTracking,
+                                    { source: "utilityWindow" }
+                                  )
+                                }
+                              />
+                            )}
+                          </UtilityWindow>
+                        </>
+                      ) : null}
                     </>
-                  ) : null}
+                  )}
                 </section>
               </section>
             </section>

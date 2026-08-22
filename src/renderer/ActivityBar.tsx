@@ -7,10 +7,10 @@ import settingsIcon from "../../assets/icons/activity-bar/settings.svg?raw";
 
 interface ActivityBarProps {
   activeMode: SidebarMode | null;
-  isProjectSettingsOpen: boolean;
+  isApplicationSettingsActive: boolean;
   translate: Translate;
   onSelectMode: (mode: SidebarMode) => void;
-  onToggleProjectSettings: () => void;
+  onOpenApplicationSettings: () => void;
 }
 
 interface ActivityBarIconProps {
@@ -34,15 +34,15 @@ function ActivityBarIcon({
 
 export function ActivityBar({
   activeMode,
-  isProjectSettingsOpen,
+  isApplicationSettingsActive,
   translate,
   onSelectMode,
-  onToggleProjectSettings
+  onOpenApplicationSettings
 }: ActivityBarProps): JSX.Element {
   const filesLabel = translate("activity.files");
   const searchLabel = translate("activity.searchReplace");
   const glossaryLabel = translate("activity.glossary");
-  const projectSettingsLabel = translate("activity.projectSettings");
+  const applicationSettingsLabel = translate("activity.applicationSettings");
 
   return (
     <nav className="activityBar" aria-label={translate("activity.label")}>
@@ -95,17 +95,17 @@ export function ActivityBar({
         <button
           type="button"
           className={
-            isProjectSettingsOpen
+            isApplicationSettingsActive
               ? "activityBarItem isActive"
               : "activityBarItem"
           }
-          aria-label={projectSettingsLabel}
-          aria-pressed={isProjectSettingsOpen}
-          title={projectSettingsLabel}
-          onClick={onToggleProjectSettings}
+          aria-label={applicationSettingsLabel}
+          aria-pressed={isApplicationSettingsActive}
+          title={applicationSettingsLabel}
+          onClick={onOpenApplicationSettings}
         >
           <ActivityBarIcon
-            label={projectSettingsLabel}
+            label={applicationSettingsLabel}
             svg={settingsIcon}
           />
         </button>
