@@ -52,6 +52,15 @@ const pergamumApi: PergamumApi = {
       ipcRenderer.invoke(FILE_CHANNELS.saveMarkdown, {
         path: filePath,
         content
+      }),
+    selectMarkdownSavePath: (defaultPath) =>
+      ipcRenderer.invoke(FILE_CHANNELS.selectMarkdownSavePath, {
+        defaultPath
+      }),
+    writeMarkdown: (filePath, content) =>
+      ipcRenderer.invoke(FILE_CHANNELS.writeMarkdown, {
+        path: filePath,
+        content
       })
   },
   projects: {

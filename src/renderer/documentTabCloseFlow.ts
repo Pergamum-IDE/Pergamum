@@ -22,9 +22,11 @@ export const dirtyCloseChoiceIds = {
 export type DirtyCloseChoiceId =
   (typeof dirtyCloseChoiceIds)[keyof typeof dirtyCloseChoiceIds];
 
-export interface DirtyCloseStatusMessage {
-  readonly key: "status.saveBeforeCloseNotImplemented";
-}
+export type DirtyCloseSaveResult =
+  | "saved"
+  | "cancelled"
+  | "failed"
+  | "ignored";
 
 /**
  * The #192 dirty-close dogfood dialog options: a temporary three-choice
@@ -82,7 +84,9 @@ export interface EditorCloseFlowDeps {
   choiceDialog: (
     options: AppChoiceDialogOptions
   ) => Promise<AppChoiceDialogResult>;
-  onStatus: (status: DirtyCloseStatusMessage) => void;
+  saveDirtyEditorBeforeClose: (
+    editorId: EditorId
+  ) => Promise<DirtyCloseSaveResult>;
   onClose: (editorId: EditorId) => void;
 }
 
@@ -126,9 +130,9 @@ export async function runEditorCloseFlow(
 
     switch (result.id) {
       case dirtyCloseChoiceIds.saveAndClose:
-        deps.onStatus({ key: "status.saveBeforeCloseNotImplemented" });
-        // TODO(save-before-close): Temporary dogfood placeholder.
-        // Replace this with real save-before-close behavior.
+        if ((await deps.saveDirtyEditorBeforeClose(targetId)) !== "saved") {
+          return;
+        }
         break;
       case dirtyCloseChoiceIds.discardAndClose:
         break;

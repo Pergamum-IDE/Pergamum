@@ -19,6 +19,7 @@ import {
 const titles = {
   openMarkdownDocument: "Open Markdown file",
   saveDocument: "Save current editor",
+  saveAs: "Save current editor as",
   closeEditor: "Close current editor",
   cutSelection: "Cut",
   copySelection: "Copy",
@@ -35,7 +36,9 @@ function registerEditorCommandSet(
   overrides: Partial<{
     openMarkdownDocument: () => void | Promise<void>;
     saveCurrentDocument: () => void | Promise<void>;
+    saveCurrentDocumentAs: () => void | Promise<void>;
     canSaveCurrentDocument: () => boolean;
+    canSaveCurrentDocumentAs: () => boolean;
     closeEditor: (editorId?: EditorId) => void | Promise<void>;
     canCloseEditor: (editorId?: EditorId) => boolean;
     delegateNativeEditCommand: (
@@ -51,7 +54,9 @@ function registerEditorCommandSet(
     {
       openMarkdownDocument: () => undefined,
       saveCurrentDocument: () => undefined,
+      saveCurrentDocumentAs: () => undefined,
       canSaveCurrentDocument: () => true,
+      canSaveCurrentDocumentAs: () => true,
       closeEditor: () => undefined,
       canCloseEditor: () => true,
       delegateNativeEditCommand: () => undefined,
@@ -66,7 +71,8 @@ function registerEditorCommandSet(
   // default the live context to permissive unless a test overrides it.
   registry.setCommandContextProvider(() => ({
     "editor.hasDocument": true,
-    "editor.isDirty": true
+    "editor.isDirty": true,
+    "editor.kind.markdown": true
   }));
 }
 
@@ -79,6 +85,7 @@ describe("editor commands", () => {
     expect(registry.list().map((command) => command.id)).toEqual([
       "editor.document.markdown.open",
       "editor.document.save",
+      "editor.saveAs",
       "editor.close",
       "editor.selection.cut",
       "editor.selection.copy",
@@ -102,10 +109,12 @@ describe("editor commands", () => {
     const registry = new CommandRegistry();
     const openMarkdownDocument = vi.fn();
     const saveCurrentDocument = vi.fn();
+    const saveCurrentDocumentAs = vi.fn();
 
     registerEditorCommandSet(registry, {
       openMarkdownDocument,
-      saveCurrentDocument
+      saveCurrentDocument,
+      saveCurrentDocumentAs
     });
 
     await registry.execute(
@@ -113,9 +122,11 @@ describe("editor commands", () => {
       executionOptions
     );
     await registry.execute(editorCommandIds.saveDocument, executionOptions);
+    await registry.execute(editorCommandIds.saveAs, executionOptions);
 
     expect(openMarkdownDocument).toHaveBeenCalledTimes(1);
     expect(saveCurrentDocument).toHaveBeenCalledTimes(1);
+    expect(saveCurrentDocumentAs).toHaveBeenCalledTimes(1);
   });
 
   it("routes Edit commands to native edit delegation through the controller", async () => {
@@ -143,6 +154,7 @@ describe("editor commands", () => {
 
     expect(registry.isEnabled(editorCommandIds.openMarkdownDocument)).toBe(true);
     expect(registry.isEnabled(editorCommandIds.saveDocument)).toBe(false);
+    expect(registry.isEnabled(editorCommandIds.saveAs)).toBe(true);
     expect(canSaveCurrentDocument).toHaveBeenCalledTimes(1);
   });
 
@@ -231,6 +243,7 @@ describe("editor commands", () => {
     expect(createEditorCommandTitles(translate)).toEqual({
       openMarkdownDocument: "translated:command.editor.document.markdown.open",
       saveDocument: "translated:command.editor.document.save",
+      saveAs: "translated:command.editor.saveAs",
       closeEditor: "translated:command.editor.document.close",
       cutSelection: "translated:command.editor.selection.cut",
       copySelection: "translated:command.editor.selection.copy",

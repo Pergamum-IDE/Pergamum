@@ -77,6 +77,7 @@ describe("application menu", () => {
       applicationCommandIds.openProject,
       editorCommandIds.openMarkdownDocument,
       editorCommandIds.saveDocument,
+      editorCommandIds.saveAs,
       applicationCommandIds.toggleRecentProjects,
       editorCommandIds.close
     ]);
@@ -87,6 +88,7 @@ describe("application menu", () => {
       applicationCommandIds.openProject,
       editorCommandIds.openMarkdownDocument,
       editorCommandIds.saveDocument,
+      editorCommandIds.saveAs,
       applicationCommandIds.toggleRecentProjects,
       editorCommandIds.close
     ]) {
@@ -231,6 +233,9 @@ describe("application menu", () => {
     expect(fileItemByLabel(fileItems, "Save").accelerator).toBe(
       "CommandOrControl+S"
     );
+    expect(fileItemByLabel(fileItems, "Save As...").accelerator).toBe(
+      "CommandOrControl+Shift+S"
+    );
   });
 
   it("does not add an accelerator to Recent Projects", () => {
@@ -253,6 +258,9 @@ describe("application menu", () => {
       );
       expect(fileItemByLabel(fileItems, "Save").accelerator).toBe(
         "CommandOrControl+S"
+      );
+      expect(fileItemByLabel(fileItems, "Save As...").accelerator).toBe(
+        "CommandOrControl+Shift+S"
       );
     }
   });

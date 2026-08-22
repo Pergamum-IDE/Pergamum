@@ -135,7 +135,7 @@ describe("buildDirtyCloseChoiceDialogOptions (#192 dogfood)", () => {
     expect(source).not.toContain("AppConfirmDialogResult");
   });
 
-  it("documents saveAndClose as a temporary dogfood placeholder, not real save-before-close", () => {
+  it("wires saveAndClose through the save-before-close callback, not the old placeholder", () => {
     const source = readFileSync("src/renderer/documentTabCloseFlow.ts", "utf8");
     const saveBranchStart = source.indexOf(
       "case dirtyCloseChoiceIds.saveAndClose:"
@@ -150,10 +150,10 @@ describe("buildDirtyCloseChoiceDialogOptions (#192 dogfood)", () => {
     const saveBranchSource = source.slice(saveBranchStart, discardBranchStart);
 
     expect(saveBranchSource).toContain(
-      "TODO(save-before-close): Temporary dogfood placeholder."
+      "deps.saveDirtyEditorBeforeClose(targetId)"
     );
-    expect(saveBranchSource).toContain(
-      "Replace this with real save-before-close behavior."
+    expect(saveBranchSource).not.toContain(
+      "TODO(save-before-close): Temporary dogfood placeholder."
     );
     expect(saveBranchSource).not.toContain("saveFile");
     expect(saveBranchSource).not.toContain("saveCurrentDocument");
@@ -188,46 +188,71 @@ describe("runEditorCloseFlow (#184/#192)", () => {
   it("closes a clean editor without opening a choice dialog", async () => {
     const state = cleanState();
     const choiceDialog = vi.fn();
-    const onStatus = vi.fn();
+    const saveDirtyEditorBeforeClose = vi.fn();
     const onClose = vi.fn();
 
     await runEditorCloseFlow(undefined, {
       state,
       translate: translateEn,
       choiceDialog,
-      onStatus,
+      saveDirtyEditorBeforeClose,
       onClose
     });
 
     expect(choiceDialog).not.toHaveBeenCalled();
-    expect(onStatus).not.toHaveBeenCalled();
+    expect(saveDirtyEditorBeforeClose).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledWith(state.activeDocumentId);
   });
 
-  it("shows a temporary save-not-implemented status and closes without saving on saveAndClose", async () => {
+  it("saves then closes a dirty editor on saveAndClose when saving succeeds", async () => {
     const state = dirtyState();
     const choiceDialog = vi.fn().mockResolvedValue({
       kind: "chosen",
       id: dirtyCloseChoiceIds.saveAndClose
     });
-    const onStatus = vi.fn();
+    const saveDirtyEditorBeforeClose = vi.fn().mockResolvedValue("saved");
     const onClose = vi.fn();
 
     await runEditorCloseFlow(undefined, {
       state,
       translate: translateJa,
       choiceDialog,
-      onStatus,
+      saveDirtyEditorBeforeClose,
       onClose
     });
 
     expect(choiceDialog).toHaveBeenCalledTimes(1);
-    expect(onStatus).toHaveBeenCalledWith({
-      key: "status.saveBeforeCloseNotImplemented"
-    });
-    expect(t("ja", "status.saveBeforeCloseNotImplemented")).toBe("保存未実装");
+    expect(saveDirtyEditorBeforeClose).toHaveBeenCalledWith(
+      state.activeDocumentId
+    );
     expect(onClose).toHaveBeenCalledWith(state.activeDocumentId);
   });
+
+  it.each(["cancelled", "failed", "ignored"] as const)(
+    "keeps a dirty editor open when saveAndClose returns %s",
+    async (saveResult) => {
+      const state = dirtyState();
+      const choiceDialog = vi.fn().mockResolvedValue({
+        kind: "chosen",
+        id: dirtyCloseChoiceIds.saveAndClose
+      });
+      const saveDirtyEditorBeforeClose = vi.fn().mockResolvedValue(saveResult);
+      const onClose = vi.fn();
+
+      await runEditorCloseFlow(undefined, {
+        state,
+        translate: translateJa,
+        choiceDialog,
+        saveDirtyEditorBeforeClose,
+        onClose
+      });
+
+      expect(saveDirtyEditorBeforeClose).toHaveBeenCalledWith(
+        state.activeDocumentId
+      );
+      expect(onClose).not.toHaveBeenCalled();
+    }
+  );
 
   it("closes a dirty editor on discardAndClose", async () => {
     const state = dirtyState();
@@ -235,18 +260,18 @@ describe("runEditorCloseFlow (#184/#192)", () => {
       kind: "chosen",
       id: dirtyCloseChoiceIds.discardAndClose
     });
-    const onStatus = vi.fn();
+    const saveDirtyEditorBeforeClose = vi.fn();
     const onClose = vi.fn();
 
     await runEditorCloseFlow(undefined, {
       state,
       translate: translateEn,
       choiceDialog,
-      onStatus,
+      saveDirtyEditorBeforeClose,
       onClose
     });
 
-    expect(onStatus).not.toHaveBeenCalled();
+    expect(saveDirtyEditorBeforeClose).not.toHaveBeenCalled();
     expect(onClose).toHaveBeenCalledWith(state.activeDocumentId);
   });
 
@@ -256,36 +281,36 @@ describe("runEditorCloseFlow (#184/#192)", () => {
       kind: "chosen",
       id: dirtyCloseChoiceIds.cancel
     });
-    const onStatus = vi.fn();
+    const saveDirtyEditorBeforeClose = vi.fn();
     const onClose = vi.fn();
 
     await runEditorCloseFlow(undefined, {
       state,
       translate: translateEn,
       choiceDialog,
-      onStatus,
+      saveDirtyEditorBeforeClose,
       onClose
     });
 
-    expect(onStatus).not.toHaveBeenCalled();
+    expect(saveDirtyEditorBeforeClose).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
 
   it("keeps a dirty editor open on dismissed", async () => {
     const state = dirtyState();
     const choiceDialog = vi.fn().mockResolvedValue({ kind: "dismissed" });
-    const onStatus = vi.fn();
+    const saveDirtyEditorBeforeClose = vi.fn();
     const onClose = vi.fn();
 
     await runEditorCloseFlow(undefined, {
       state,
       translate: translateEn,
       choiceDialog,
-      onStatus,
+      saveDirtyEditorBeforeClose,
       onClose
     });
 
-    expect(onStatus).not.toHaveBeenCalled();
+    expect(saveDirtyEditorBeforeClose).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
 
@@ -294,7 +319,7 @@ describe("runEditorCloseFlow (#184/#192)", () => {
     const choiceDialog = vi
       .fn()
       .mockRejectedValue(new AppDialogError("dialogAlreadyOpen"));
-    const onStatus = vi.fn();
+    const saveDirtyEditorBeforeClose = vi.fn();
     const onClose = vi.fn();
 
     await expect(
@@ -302,18 +327,18 @@ describe("runEditorCloseFlow (#184/#192)", () => {
         state,
         translate: translateEn,
         choiceDialog,
-        onStatus,
+        saveDirtyEditorBeforeClose,
         onClose
       })
     ).resolves.toBeUndefined();
-    expect(onStatus).not.toHaveBeenCalled();
+    expect(saveDirtyEditorBeforeClose).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
 
   it("rethrows an unrelated error from choiceDialog", async () => {
     const state = dirtyState();
     const choiceDialog = vi.fn().mockRejectedValue(new Error("boom"));
-    const onStatus = vi.fn();
+    const saveDirtyEditorBeforeClose = vi.fn();
     const onClose = vi.fn();
 
     await expect(
@@ -321,18 +346,18 @@ describe("runEditorCloseFlow (#184/#192)", () => {
         state,
         translate: translateEn,
         choiceDialog,
-        onStatus,
+        saveDirtyEditorBeforeClose,
         onClose
       })
     ).rejects.toThrow("boom");
-    expect(onStatus).not.toHaveBeenCalled();
+    expect(saveDirtyEditorBeforeClose).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
 
   it("does nothing for an explicit editorId that is not open — never closes an unrelated editor", async () => {
     const state = cleanState();
     const choiceDialog = vi.fn();
-    const onStatus = vi.fn();
+    const saveDirtyEditorBeforeClose = vi.fn();
     const onClose = vi.fn();
     const unrelatedEditorId = createProjectDocumentEditorId("not-open.md", {
       rootPath: "C:\\Novel"
@@ -342,12 +367,12 @@ describe("runEditorCloseFlow (#184/#192)", () => {
       state,
       translate: translateEn,
       choiceDialog,
-      onStatus,
+      saveDirtyEditorBeforeClose,
       onClose
     });
 
     expect(choiceDialog).not.toHaveBeenCalled();
-    expect(onStatus).not.toHaveBeenCalled();
+    expect(saveDirtyEditorBeforeClose).not.toHaveBeenCalled();
     expect(onClose).not.toHaveBeenCalled();
   });
 });

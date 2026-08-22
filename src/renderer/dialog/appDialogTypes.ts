@@ -148,7 +148,7 @@ type AppConfirmDialogBaseOptions = {
   message: AppDialogMessage;
   icon: AppDialogIcon;
   clipboardText: string | null;
-  cancelLabel?: string;
+  cancelLabel?: string | null;
   /**
    * Whether clicking the backdrop resolves `"cancel"` (#184 follow-up).
    * Defaults to `true` when omitted, preserving every existing call site's

@@ -55,8 +55,8 @@ describe("application menu command wiring", () => {
   it("keeps save in-flight guarding in the save function", () => {
     const source = readFileSync("src/renderer/App.tsx", "utf8");
 
-    expect(source).toContain("async function saveFile()");
-    expect(source).toContain("saveInFlightGuard.run(");
+    expect(source).toContain("async function saveFile(");
+    expect(source).toContain("saveInFlightGuard.run<SaveFileOutcome>(");
     expect(source).toContain('event: "save.requested"');
     expect(source).toContain('event: "save.in_flight.ignored"');
     expect(source).toContain('event: "save.started"');

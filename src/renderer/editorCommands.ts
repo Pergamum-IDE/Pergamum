@@ -12,12 +12,18 @@ export const saveDocumentCommandWhen: CommandEnablementExpression = {
   allOf: [{ key: "editor.hasDocument" }, { key: "editor.isDirty" }]
 };
 
+export const saveAsCommandWhen: CommandEnablementExpression = {
+  allOf: [{ key: "editor.hasDocument" }, { key: "editor.kind.markdown" }]
+};
+
 export { editorCommandIds };
 
 export interface EditorCommandController {
   openMarkdownDocument(): void | Promise<void>;
   saveCurrentDocument(): void | Promise<void>;
+  saveCurrentDocumentAs(): void | Promise<void>;
   canSaveCurrentDocument(): boolean;
+  canSaveCurrentDocumentAs(): boolean;
   closeEditor(editorId?: EditorId): void | Promise<void>;
   canCloseEditor(editorId?: EditorId): boolean;
   delegateNativeEditCommand(commandId: EditCommandId): void | Promise<void>;
@@ -27,6 +33,7 @@ export interface EditorCommandController {
 export interface EditorCommandTitles {
   openMarkdownDocument: string;
   saveDocument: string;
+  saveAs: string;
   closeEditor: string;
   cutSelection: string;
   copySelection: string;
@@ -42,6 +49,7 @@ export function createEditorCommandTitles(
   return {
     openMarkdownDocument: translate("command.editor.document.markdown.open"),
     saveDocument: translate("command.editor.document.save"),
+    saveAs: translate("command.editor.saveAs"),
     closeEditor: translate("command.editor.document.close"),
     cutSelection: translate("command.editor.selection.cut"),
     copySelection: translate("command.editor.selection.copy"),
@@ -85,6 +93,19 @@ export function createEditorCommands(
       },
       isEnabled: () => controller.canSaveCurrentDocument(),
       when: saveDocumentCommandWhen
+    },
+    {
+      id: editorCommandIds.saveAs,
+      title: titles.saveAs,
+      execute: () => {
+        if (!controller.canSaveCurrentDocumentAs()) {
+          return;
+        }
+
+        return controller.saveCurrentDocumentAs();
+      },
+      isEnabled: () => controller.canSaveCurrentDocumentAs(),
+      when: saveAsCommandWhen
     },
     {
       id: editorCommandIds.close,

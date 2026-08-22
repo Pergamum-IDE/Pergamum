@@ -147,6 +147,13 @@ function fileMenu(
       "CommandOrControl+S"
     ),
     commandMenuItem(
+      editorCommandIds.saveAs,
+      language,
+      "menu.saveAs",
+      options,
+      "CommandOrControl+Shift+S"
+    ),
+    commandMenuItem(
       applicationCommandIds.toggleRecentProjects,
       language,
       "menu.recentProjects",

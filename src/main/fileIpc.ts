@@ -12,7 +12,11 @@ import {
   FILE_CHANNELS,
   type MarkdownFile,
   type SaveMarkdownRequest,
-  type SaveMarkdownResult
+  type SaveMarkdownResult,
+  type SelectMarkdownSavePathRequest,
+  type SelectMarkdownSavePathResult,
+  type WriteMarkdownRequest,
+  type WriteMarkdownResult
 } from "../shared/api";
 import { createEditorIdForPath } from "../shared/editorId";
 import { getDebugLogger, type DebugLogger } from "./debugLogger";
@@ -23,6 +27,12 @@ import {
   debugLogPathDepth,
   debugLogSizeBucket
 } from "./debugLogSanitizer";
+import {
+  decodeMarkdownBytes,
+  fileIoFailureReason,
+  markdownWriteMetadata,
+  sanitizedFileIoError
+} from "./markdownFileIo";
 import { currentProjectRootPath } from "./projectIpc";
 
 const markdownFilters = [
@@ -71,6 +81,41 @@ function parseSaveRequest(value: unknown): SaveMarkdownRequest {
   };
 }
 
+function parseSelectMarkdownSavePathRequest(
+  value: unknown
+): SelectMarkdownSavePathRequest {
+  if (typeof value !== "object" || value === null) {
+    throw new Error("Invalid save path selection request.");
+  }
+
+  const maybeDefaultPath = "defaultPath" in value ? value.defaultPath : null;
+  if (maybeDefaultPath !== null && typeof maybeDefaultPath !== "string") {
+    throw new Error("Invalid default save path.");
+  }
+
+  return {
+    defaultPath: maybeDefaultPath
+  };
+}
+
+function parseWriteMarkdownRequest(value: unknown): WriteMarkdownRequest {
+  if (
+    typeof value !== "object" ||
+    value === null ||
+    !("path" in value) ||
+    typeof value.path !== "string" ||
+    !("content" in value) ||
+    typeof value.content !== "string"
+  ) {
+    throw new Error("Invalid markdown write request.");
+  }
+
+  return {
+    path: value.path,
+    content: value.content
+  };
+}
+
 function ensureMarkdownExtension(filePath: string): string {
   if (path.extname(filePath)) {
     return filePath;
@@ -92,10 +137,82 @@ function assertStandaloneSaveTargetAllowed(
   });
 
   if (editorId.kind === "projectDocument") {
-    throw new Error(
+    const error = new Error(
       "Standalone save inside the active project is not supported."
-    );
+    ) as Error & { code: string };
+    error.code = "ERR_UNSUPPORTED_SAVE_TARGET";
+
+    throw error;
   }
+}
+
+async function selectMarkdownSavePath(
+  event: IpcMainInvokeEvent,
+  request: SelectMarkdownSavePathRequest
+): Promise<SelectMarkdownSavePathResult | null> {
+  const owner = parentWindow(event);
+  const options: SaveDialogOptions = {
+    title: "Save Markdown File",
+    defaultPath: request.defaultPath ?? "Untitled.md",
+    filters: markdownFilters
+  };
+  const result = owner
+    ? await dialog.showSaveDialog(owner, options)
+    : await dialog.showSaveDialog(options);
+
+  if (result.canceled || !result.filePath) {
+    return null;
+  }
+
+  const filePath = ensureMarkdownExtension(result.filePath);
+  assertStandaloneSaveTargetAllowed(filePath, currentProjectRootPath());
+
+  return {
+    path: filePath
+  };
+}
+
+async function writeStandaloneMarkdown(
+  filePath: string,
+  content: string,
+  logger: DebugLogger,
+  startedAt: number
+): Promise<WriteMarkdownResult> {
+  const normalizedPath = ensureMarkdownExtension(filePath);
+  assertStandaloneSaveTargetAllowed(normalizedPath, currentProjectRootPath());
+  const metadata = markdownWriteMetadata(content);
+
+  await fs.writeFile(normalizedPath, content, "utf8");
+
+  logger.log({
+    level: "debug",
+    event: "save.succeeded",
+    details: {
+      documentRef: logger.documentRefForKey(normalizedPath),
+      editorIdKind: "file",
+      saveTargetKind: "standaloneMarkdown",
+      pathKind: "unknown",
+      extension: debugLogExtensionForPath(normalizedPath),
+      pathDepth: debugLogPathDepth(normalizedPath),
+      lineCount: debugLogLineCount(content),
+      lineEndingKind: metadata.lineEnding,
+      sizeBucket: debugLogSizeBucket(metadata.byteLength),
+      byteLength: metadata.byteLength,
+      characterLength: metadata.characterLength,
+      encodingAssumption: metadata.encoding,
+      operation: "write",
+      result: "succeeded",
+      durationMs: durationSince(startedAt)
+    }
+  });
+
+  return {
+    path: normalizedPath,
+    encoding: metadata.encoding,
+    lineEnding: metadata.lineEnding,
+    byteLength: metadata.byteLength,
+    characterLength: metadata.characterLength
+  };
 }
 
 export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
@@ -131,7 +248,8 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
         filePath = result.filePaths[0];
 
         const readStartedAt = Date.now();
-        const content = await fs.readFile(filePath, "utf8");
+        const bytes = await fs.readFile(filePath);
+        const decoded = decodeMarkdownBytes(bytes);
         const readDurationMs = durationSince(readStartedAt);
 
         // Isolates pure file-read + UTF-8 decode cost (#152), excluding the
@@ -144,11 +262,15 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
             documentRef: logger.documentRefForKey(filePath),
             extension: debugLogExtensionForPath(filePath),
             pathDepth: debugLogPathDepth(filePath),
-            lineCount: debugLogLineCount(content),
-            sizeBucket: debugLogSizeBucket(Buffer.byteLength(content, "utf8")),
-            fileSizeBytes: Buffer.byteLength(content, "utf8"),
-            encodingAssumption: "utf8",
-            operation: "open",
+            lineCount: debugLogLineCount(decoded.content),
+            lineEndingKind: decoded.lineEnding,
+            sizeBucket: debugLogSizeBucket(decoded.byteLength),
+            fileSizeBytes: decoded.byteLength,
+            byteLength: decoded.byteLength,
+            characterLength: decoded.characterLength,
+            hadBom: decoded.hadBom,
+            encodingAssumption: decoded.encoding,
+            operation: "read",
             result: "succeeded",
             durationMs: readDurationMs
           }
@@ -156,7 +278,14 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
 
         return {
           path: filePath,
-          content
+          content: decoded.content,
+          metadata: {
+            encoding: decoded.encoding,
+            lineEnding: decoded.lineEnding,
+            byteLength: decoded.byteLength,
+            characterLength: decoded.characterLength,
+            hadBom: decoded.hadBom
+          }
         };
       } catch (error) {
         const documentRef = filePath
@@ -170,17 +299,19 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
             ...(documentOpenId ? { documentOpenId } : {}),
             ...(documentRef ? { documentRef } : {}),
             editorIdKind: "file",
+            saveTargetKind: "standaloneMarkdown",
             pathKind: "unknown",
             extension: filePath ? debugLogExtensionForPath(filePath) : "unknown",
             pathDepth: filePath ? debugLogPathDepth(filePath) : undefined,
-            operation: "open",
+            operation: "read",
             result: "failed",
+            reason: fileIoFailureReason(error),
             durationMs: durationSince(startedAt),
             error
           }
         });
 
-        throw error;
+        throw sanitizedFileIoError(error);
       }
     }
   );
@@ -197,29 +328,26 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
         filePath = request.path;
 
         if (!filePath) {
-          const owner = parentWindow(event);
-          const options: SaveDialogOptions = {
-            title: "Save Markdown File",
-            defaultPath: "Untitled.md",
-            filters: markdownFilters
-          };
-          const result = owner
-            ? await dialog.showSaveDialog(owner, options)
-            : await dialog.showSaveDialog(options);
+          const selectedPath = await selectMarkdownSavePath(event, {
+            defaultPath: null
+          });
 
-          if (result.canceled || !result.filePath) {
+          if (!selectedPath) {
             return null;
           }
 
-          filePath = result.filePath;
+          filePath = selectedPath.path;
         }
 
-        filePath = ensureMarkdownExtension(filePath);
-        assertStandaloneSaveTargetAllowed(filePath, currentProjectRootPath());
-        await fs.writeFile(filePath, request.content, "utf8");
+        const result = await writeStandaloneMarkdown(
+          filePath,
+          request.content,
+          logger,
+          startedAt
+        );
 
         return {
-          path: filePath
+          path: result.path
         };
       } catch (error) {
         const documentRef = filePath
@@ -233,6 +361,7 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
           details: {
             ...(documentRef ? { documentRef } : {}),
             editorIdKind: "file",
+            saveTargetKind: "standaloneMarkdown",
             pathKind: "unknown",
             extension: filePath ? debugLogExtensionForPath(filePath) : "unknown",
             pathDepth: filePath ? debugLogPathDepth(filePath) : undefined,
@@ -243,15 +372,95 @@ export function registerFileIpc(logger: DebugLogger = getDebugLogger()): void {
             sizeBucket: request
               ? debugLogSizeBucket(Buffer.byteLength(content, "utf8"))
               : undefined,
+            byteLength: request
+              ? Buffer.byteLength(content, "utf8")
+              : undefined,
+            characterLength: request ? content.length : undefined,
             encodingAssumption: request ? "utf8" : undefined,
-            operation: "save",
+            operation: "write",
             result: "failed",
+            reason: fileIoFailureReason(error),
             durationMs: durationSince(startedAt),
             error
           }
         });
 
-        throw error;
+        throw sanitizedFileIoError(error);
+      }
+    }
+  );
+
+  ipcMain.handle(
+    FILE_CHANNELS.selectMarkdownSavePath,
+    async (
+      event,
+      rawRequest: unknown
+    ): Promise<SelectMarkdownSavePathResult | null> => {
+      try {
+        return await selectMarkdownSavePath(
+          event,
+          parseSelectMarkdownSavePathRequest(rawRequest)
+        );
+      } catch (error) {
+        throw sanitizedFileIoError(error);
+      }
+    }
+  );
+
+  ipcMain.handle(
+    FILE_CHANNELS.writeMarkdown,
+    async (_event, rawRequest: unknown): Promise<WriteMarkdownResult> => {
+      const startedAt = Date.now();
+      let request: WriteMarkdownRequest | null = null;
+      let filePath: string | null = null;
+
+      try {
+        request = parseWriteMarkdownRequest(rawRequest);
+        filePath = request.path;
+
+        return await writeStandaloneMarkdown(
+          filePath,
+          request.content,
+          logger,
+          startedAt
+        );
+      } catch (error) {
+        const documentRef = filePath
+          ? logger.documentRefForKey(filePath)
+          : undefined;
+        const content = request?.content ?? "";
+
+        logger.log({
+          level: "error",
+          event: "document.save.failed",
+          details: {
+            ...(documentRef ? { documentRef } : {}),
+            editorIdKind: "file",
+            saveTargetKind: "standaloneMarkdown",
+            pathKind: "unknown",
+            extension: filePath ? debugLogExtensionForPath(filePath) : "unknown",
+            pathDepth: filePath ? debugLogPathDepth(filePath) : undefined,
+            lineCount: request ? debugLogLineCount(content) : undefined,
+            lineEndingKind: request
+              ? debugLogLineEndingKind(content)
+              : undefined,
+            sizeBucket: request
+              ? debugLogSizeBucket(Buffer.byteLength(content, "utf8"))
+              : undefined,
+            byteLength: request
+              ? Buffer.byteLength(content, "utf8")
+              : undefined,
+            characterLength: request ? content.length : undefined,
+            encodingAssumption: request ? "utf8" : undefined,
+            operation: "write",
+            result: "failed",
+            reason: fileIoFailureReason(error),
+            durationMs: durationSince(startedAt),
+            error
+          }
+        });
+
+        throw sanitizedFileIoError(error);
       }
     }
   );

@@ -81,7 +81,10 @@ export function ConfirmDialog({
   const [isCopying, setIsCopying] = useState(false);
 
   const confirmLabel = options.confirmLabel ?? translate("common.ok");
-  const cancelLabel = options.cancelLabel ?? translate("common.cancel");
+  const cancelLabel =
+    options.cancelLabel === null
+      ? null
+      : options.cancelLabel ?? translate("common.cancel");
   const clipboardText = options.clipboardText;
   const hasCopyButton = Boolean(clipboardText);
 
@@ -157,17 +160,18 @@ export function ConfirmDialog({
     </button>
   );
 
-  const cancelButton = (
-    <button
-      key="cancel"
-      type="button"
-      className="appDialogButton appDialogButton-cancel"
-      autoFocus={isDestructive}
-      onClick={() => onResult("cancel")}
-    >
-      {cancelLabel}
-    </button>
-  );
+  const cancelButton =
+    cancelLabel === null ? null : (
+      <button
+        key="cancel"
+        type="button"
+        className="appDialogButton appDialogButton-cancel"
+        autoFocus={isDestructive}
+        onClick={() => onResult("cancel")}
+      >
+        {cancelLabel}
+      </button>
+    );
 
   // D-11 / D-15 / #187: DOM order follows the platform action order. Visual
   // order is resolved by CSS and the effective writing direction; in LTR
@@ -176,8 +180,8 @@ export function ConfirmDialog({
   // button always resolves "cancel" regardless of placement.
   const actionButtons =
     actionOrder === "confirmCancel"
-      ? [confirmButton, cancelButton]
-      : [cancelButton, confirmButton];
+      ? [confirmButton, cancelButton].filter(Boolean)
+      : [cancelButton, confirmButton].filter(Boolean);
 
   const titleId = "appDialogTitle";
   const messageId = "appDialogMessage";
