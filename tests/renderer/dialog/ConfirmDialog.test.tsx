@@ -146,6 +146,19 @@ describe("ConfirmDialog button labels (#182 D-10)", () => {
 
     expect(markup).toContain(">やめる<");
   });
+
+  it("allows the caller to render a one-button dialog with cancelLabel: null", () => {
+    const markup = renderDialog({
+      options: baseOptions({
+        confirmLabel: "OK",
+        cancelLabel: null
+      })
+    });
+
+    expect(markup).toContain("appDialogButton-confirm");
+    expect(markup).not.toContain("appDialogButton-cancel");
+    expect(markup).not.toContain(">キャンセル<");
+  });
 });
 
 describe("ConfirmDialog icons (#182 D-3 / D-4 / D-5 / D-6)", () => {

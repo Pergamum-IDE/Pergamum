@@ -511,6 +511,30 @@ export function sanitizeDebugLogDetails(
         }
         break;
       }
+      case "byteLength": {
+        const byteLength = sanitizeNonNegativeInteger(value);
+
+        if (byteLength !== undefined) {
+          sanitized.byteLength = byteLength;
+        }
+        break;
+      }
+      case "characterLength": {
+        const characterLength = sanitizeNonNegativeInteger(value);
+
+        if (characterLength !== undefined) {
+          sanitized.characterLength = characterLength;
+        }
+        break;
+      }
+      case "hadBom": {
+        const hadBom = sanitizeBoolean(value);
+
+        if (hadBom !== undefined) {
+          sanitized.hadBom = hadBom;
+        }
+        break;
+      }
       case "documentKind":
         sanitized.documentKind = enumOrUnknown<DebugLogDocumentKind>(
           debugLogDocumentKinds,
@@ -743,7 +767,7 @@ export function debugLogLineEndingKind(
     return "cr";
   }
 
-  return "unknown";
+  return "none";
 }
 
 export function debugLogLineCount(content: string): number {

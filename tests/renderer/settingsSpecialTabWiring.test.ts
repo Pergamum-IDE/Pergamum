@@ -138,7 +138,7 @@ describe("Settings special tab wiring (#181)", () => {
 
   it("does not let Settings-active save commands target the last active document", () => {
     const source = appSource();
-    const saveFunctionIndex = source.indexOf("async function saveFile()");
+    const saveFunctionIndex = source.indexOf("async function saveFile(");
     const saveRequestLogIndex = source.indexOf(
       'event: "save.requested"',
       saveFunctionIndex
@@ -149,7 +149,9 @@ describe("Settings special tab wiring (#181)", () => {
 
     const savePrefix = source.slice(saveFunctionIndex, saveRequestLogIndex);
 
-    expect(savePrefix).toContain("if (isSettingsTabActive)");
+    expect(savePrefix).toContain(
+      "if (!targetOpenDocument || (!options.editorId && isSettingsTabActive))"
+    );
     expect(source).toContain(
       "editorIsDirty: !isSettingsTabActive && isDirty"
     );

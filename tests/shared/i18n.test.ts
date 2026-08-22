@@ -67,15 +67,6 @@ describe("dirty close choice dogfood translations (#192)", () => {
     expect(t("en", "dialog.dirtyClose.saveAndClose")).toBe("Save and Close");
   });
 
-  it("defines the temporary save-before-close status message", () => {
-    expect(t("ja", "status.saveBeforeCloseNotImplemented")).toBe(
-      "保存未実装"
-    );
-    expect(t("en", "status.saveBeforeCloseNotImplemented")).toBe(
-      "Save before close is not implemented"
-    );
-  });
-
   it("defines the non-blocking sound playback warning status message", () => {
     expect(t("ja", "status.soundPlaybackFailed")).toBe(
       "警告: 音声を再生できません"
@@ -84,6 +75,39 @@ describe("dirty close choice dogfood translations (#192)", () => {
       "Warning: Could not play sound"
     );
   });
+});
+
+describe("file I/O workflow translations (#202)", () => {
+  it("defines Save As command and menu labels for ja and en", () => {
+    expect(t("ja", "command.editor.saveAs")).toBe("名前を付けて保存...");
+    expect(t("en", "command.editor.saveAs")).toBe("Save As...");
+    expect(t("ja", "menu.saveAs")).toBe("名前を付けて保存...");
+    expect(t("en", "menu.saveAs")).toBe("Save As...");
+  });
+
+  it("defines one-button file read/save failure dialog strings", () => {
+    expect(t("ja", "dialog.fileOpenFailed.title")).toBe(
+      "ファイルを読み込めませんでした"
+    );
+    expect(t("en", "dialog.fileOpenFailed.title")).toBe("Could not read file");
+    expect(t("ja", "dialog.fileOpenFailed.message")).toBe(
+      "ファイルを開けませんでした。ファイルの場所、読み込み権限、文字コードを確認してください。"
+    );
+    expect(t("en", "dialog.fileOpenFailed.message")).toBe(
+      "Pergamum could not open the file. Check the file location, permissions, and encoding."
+    );
+    expect(t("ja", "dialog.fileSaveFailed.title")).toBe(
+      "ファイルを保存できませんでした"
+    );
+    expect(t("en", "dialog.fileSaveFailed.title")).toBe("Could not save file");
+    expect(t("ja", "dialog.fileSaveFailed.message")).toBe(
+      "ファイルを保存できませんでした。\n\n編集中の本文はこのタブに保持されています。\n保存先、ファイル名、書き込み権限、空き容量などを確認してください。"
+    );
+    expect(t("en", "dialog.fileSaveFailed.message")).toBe(
+      "Pergamum could not save the file. Your text is still kept in the editor. Check the save location and permissions."
+    );
+  });
+
 });
 
 describe("application settings translations (#181)", () => {

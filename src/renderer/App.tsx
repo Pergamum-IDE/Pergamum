@@ -260,6 +260,23 @@ interface StatusMessage {
   values?: TranslationValues;
 }
 
+type SaveFileOutcome = "saved" | "cancelled" | "failed" | "ignored";
+
+interface SaveFileOptions {
+  readonly editorId?: EditorId;
+  readonly forceSaveAs?: boolean;
+}
+
+type StandaloneSaveTargetSelection =
+  | {
+      readonly kind: "selected";
+      readonly path: string;
+    }
+  | {
+      readonly kind: "cancelled";
+      readonly reason: "standalone_save_canceled";
+    };
+
 function errorMessage(error: unknown, translate: Translate): string {
   return error instanceof Error ? error.message : translate("error.unknown");
 }
@@ -463,6 +480,9 @@ export function App(): JSX.Element {
   const saveCurrentDocumentCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
+  const saveCurrentDocumentAsCommandRef = useRef<() => Promise<void>>(() =>
+    Promise.resolve()
+  );
   const closeEditorCommandRef = useRef<
     (editorId?: EditorId) => Promise<void>
   >(() => Promise.resolve());
@@ -473,6 +493,9 @@ export function App(): JSX.Element {
     useRef<NativeEditCommandContext | null>(null);
   const toggleRecentProjectsCommandRef = useRef<() => void>(() => undefined);
   const canSaveCurrentDocumentCommandRef = useRef<() => boolean>(() => false);
+  const canSaveCurrentDocumentAsCommandRef = useRef<() => boolean>(
+    () => false
+  );
   const goToLineCommandRef = useRef<(line: number) => void>(() => undefined);
   /**
    * Holds the current live command context. Read lazily by the
@@ -659,6 +682,10 @@ export function App(): JSX.Element {
     !isSettingsTabActive && currentEditor.kind === "markdown"
       ? Boolean(activeMarkdownDocument)
       : !isSettingsTabActive && canSaveGlossaryEntry;
+  const canSaveAs =
+    !isSettingsTabActive &&
+    currentEditor.kind === "markdown" &&
+    Boolean(activeMarkdownDocument);
   const commandContext = useMemo(
     () =>
       buildCommandContextSnapshot({
@@ -706,7 +733,11 @@ export function App(): JSX.Element {
       {
         openMarkdownDocument: () => openMarkdownDocumentCommandRef.current(),
         saveCurrentDocument: () => saveCurrentDocumentCommandRef.current(),
+        saveCurrentDocumentAs: () =>
+          saveCurrentDocumentAsCommandRef.current(),
         canSaveCurrentDocument: () => canSaveCurrentDocumentCommandRef.current(),
+        canSaveCurrentDocumentAs: () =>
+          canSaveCurrentDocumentAsCommandRef.current(),
         closeEditor: (editorId) => closeEditorCommandRef.current(editorId),
         canCloseEditor: (editorId) =>
           canCloseEditorCommandRef.current(editorId),
@@ -1259,7 +1290,8 @@ export function App(): JSX.Element {
       state: openDocumentsState,
       translate,
       choiceDialog,
-      onStatus: (status) => setStatus(status),
+      saveDirtyEditorBeforeClose: (targetId) =>
+        saveFile({ editorId: targetId }),
       onClose: (targetId) => {
         editorNavigation.invalidateEditor(targetId);
         setOpenDocumentsState((state) => closeOpenEditor(state, targetId));
@@ -1580,6 +1612,7 @@ export function App(): JSX.Element {
         key: "status.documentOpenFailed",
         values: { message: errorMessage(error, translate) }
       });
+      await showFileOpenFailedDialog();
       return;
     }
 
@@ -1854,6 +1887,56 @@ export function App(): JSX.Element {
     setOpenDocumentsState(replacement.state);
 
     return replacement.didCollide;
+  }
+
+  async function showFileOpenFailedDialog(): Promise<void> {
+    await confirmDialog({
+      title: translate("dialog.fileOpenFailed.title"),
+      message: {
+        kind: "plainText",
+        text: translate("dialog.fileOpenFailed.message")
+      },
+      icon: {
+        kind: "error",
+        tooltip: translate("dialog.icon.error")
+      },
+      clipboardText: null,
+      dismissOnBackdropClick: false,
+      confirmLabel: translate("common.ok"),
+      cancelLabel: null
+    });
+  }
+
+  async function showFileSaveFailedDialog(): Promise<void> {
+    await confirmDialog({
+      title: translate("dialog.fileSaveFailed.title"),
+      message: {
+        kind: "plainText",
+        text: translate("dialog.fileSaveFailed.message")
+      },
+      icon: {
+        kind: "error",
+        tooltip: translate("dialog.icon.error")
+      },
+      clipboardText: null,
+      dismissOnBackdropClick: false,
+      confirmLabel: translate("common.ok"),
+      cancelLabel: null
+    });
+  }
+
+  async function selectStandaloneSaveTarget(
+    documentToSave: CurrentDocument
+  ): Promise<StandaloneSaveTargetSelection> {
+    const selected = await window.pergamum.files.selectMarkdownSavePath(
+      standaloneSavePath(documentToSave) ?? documentToSave.name
+    );
+
+    if (!selected) {
+      return { kind: "cancelled", reason: "standalone_save_canceled" };
+    }
+
+    return { kind: "selected", path: selected.path };
   }
 
   async function saveGlossaryEntry(): Promise<void> {
@@ -2323,10 +2406,17 @@ export function App(): JSX.Element {
 
   closeGlossaryOccurrenceTrackingRef.current = closeGlossaryOccurrenceTracking;
 
-  async function saveFile(): Promise<void> {
-    const editorIdKind = debugEditorIdKind(activeDocument.id);
+  async function saveFile(
+    options: SaveFileOptions = {}
+  ): Promise<SaveFileOutcome> {
+    const targetOpenDocument = options.editorId
+      ? findOpenDocument(openDocumentsState, options.editorId)
+      : activeDocument;
+    const editorIdKind = debugEditorIdKind(
+      targetOpenDocument?.id ?? options.editorId ?? activeDocument.id
+    );
 
-    if (isSettingsTabActive) {
+    if (!targetOpenDocument || (!options.editorId && isSettingsTabActive)) {
       logRendererDebugEvent({
         level: "debug",
         event: "save.skipped",
@@ -2337,8 +2427,17 @@ export function App(): JSX.Element {
           reason: "unsupported_editor"
         }
       });
-      return;
+      return "ignored";
     }
+
+    const targetEditor = targetOpenDocument.editor;
+    const targetIsDirty = isCurrentEditorDirty(targetEditor);
+    const targetCanSave =
+      targetEditor.kind === "markdown"
+        ? true
+        : targetEditor.kind === "glossaryEntry" &&
+          targetEditor.draft.saveState !== "saving" &&
+          targetEditor.draft.canonicalSurface.trim().length > 0;
 
     logRendererDebugEvent({
       level: "debug",
@@ -2346,14 +2445,21 @@ export function App(): JSX.Element {
       details: {
         editorIdKind,
         operation: "save",
-        isDirty,
-        canSave
+        isDirty: targetIsDirty,
+        canSave: options.forceSaveAs
+          ? targetEditor.kind === "markdown"
+          : targetCanSave
       }
     });
 
-    await saveInFlightGuard.run(
+    const result = await saveInFlightGuard.run<SaveFileOutcome>(
       async () => {
-        const saveTargetKind = debugSaveTargetKind(activeDocument.editor);
+        const saveTargetKind: DebugLogSaveTargetKind =
+          targetEditor.kind === "markdown" &&
+          (options.forceSaveAs ||
+            !isProjectCurrentDocument(targetEditor.document))
+            ? "standaloneMarkdown"
+            : debugSaveTargetKind(targetEditor);
 
         logRendererDebugEvent({
           level: "debug",
@@ -2365,13 +2471,8 @@ export function App(): JSX.Element {
           }
         });
 
-        if (activeDocument.editor.kind === "glossaryEntry") {
-          await saveGlossaryEntry();
-          return;
-        }
-
-        try {
-          if (activeDocument.editor.kind !== "markdown") {
+        if (targetEditor.kind === "glossaryEntry") {
+          if (options.forceSaveAs) {
             logRendererDebugEvent({
               level: "debug",
               event: "save.skipped",
@@ -2382,17 +2483,40 @@ export function App(): JSX.Element {
                 reason: "unsupported_editor"
               }
             });
-            return;
+            return "ignored";
           }
 
-          const documentToSave = activeDocument.editor.document;
-          const documentIdToSave = activeDocument.id;
+          await saveGlossaryEntry();
+          return "saved";
+        }
 
-          if (isProjectCurrentDocument(documentToSave)) {
-            const result = await window.pergamum.projects.saveProjectDocument(
-              documentToSave.relativePath,
-              documentToSave.content
-            );
+        try {
+          if (targetEditor.kind !== "markdown") {
+            logRendererDebugEvent({
+              level: "debug",
+              event: "save.skipped",
+              details: {
+                editorIdKind,
+                operation: "save",
+                result: "ignored",
+                reason: "unsupported_editor"
+              }
+            });
+            return "ignored";
+          }
+
+          const documentToSave = targetEditor.document;
+          const documentIdToSave = targetOpenDocument.id;
+
+          if (
+            isProjectCurrentDocument(documentToSave) &&
+            options.forceSaveAs !== true
+          ) {
+            const savedProjectDocument =
+              await window.pergamum.projects.saveProjectDocument(
+                documentToSave.relativePath,
+                documentToSave.content
+              );
 
             replaceSavedDocument(
               documentIdToSave,
@@ -2400,7 +2524,7 @@ export function App(): JSX.Element {
             );
             setStatus({
               key: "status.savedPath",
-              values: { path: result.relativePath }
+              values: { path: savedProjectDocument.relativePath }
             });
             logRendererDebugEvent({
               level: "debug",
@@ -2412,32 +2536,50 @@ export function App(): JSX.Element {
                 saveTargetKind: "projectDocument"
               }
             });
-            return;
+            return "saved";
           }
 
-          const result = await window.pergamum.files.saveMarkdown(
-            standaloneSavePath(documentToSave),
-            documentToSave.content
-          );
+          const existingSavePath =
+            options.forceSaveAs === true
+              ? null
+              : standaloneSavePath(documentToSave);
+          const savedStandaloneDocument = existingSavePath
+            ? await window.pergamum.files.writeMarkdown(
+                existingSavePath,
+                documentToSave.content
+              )
+            : await (async () => {
+                const selectedTarget =
+                  await selectStandaloneSaveTarget(documentToSave);
 
-          if (!result) {
-            setStatus({ key: "status.saveCanceled" });
-            logRendererDebugEvent({
-              level: "debug",
-              event: "save.skipped",
-              details: {
-                editorIdKind,
-                operation: "save",
-                result: "cancelled",
-                reason: "standalone_save_canceled"
-              }
-            });
-            return;
+                if (selectedTarget.kind === "cancelled") {
+                  setStatus({ key: "status.saveCanceled" });
+                  logRendererDebugEvent({
+                    level: "debug",
+                    event: "save.skipped",
+                    details: {
+                      editorIdKind,
+                      operation: "save",
+                      result: "cancelled",
+                      reason: selectedTarget.reason
+                    }
+                  });
+                  return null;
+                }
+
+                return window.pergamum.files.writeMarkdown(
+                  selectedTarget.path,
+                  documentToSave.content
+                );
+              })();
+
+          if (!savedStandaloneDocument) {
+            return "cancelled";
           }
 
           const savedDocument = applyStandaloneSaveResult(
             documentToSave,
-            result
+            savedStandaloneDocument
           );
           const didCollide = replaceSavedDocument(
             documentIdToSave,
@@ -2448,12 +2590,12 @@ export function App(): JSX.Element {
             didCollide
               ? {
                   key: "status.saveAsTargetAlreadyOpen",
-                  values: { path: result.path }
+                  values: { path: savedStandaloneDocument.path }
                 }
               : {
                   key: "status.savedPath",
-                values: { path: savedDocument.name }
-              }
+                  values: { path: savedDocument.name }
+                }
           );
           logRendererDebugEvent({
             level: "debug",
@@ -2465,6 +2607,7 @@ export function App(): JSX.Element {
               saveTargetKind: "standaloneMarkdown"
             }
           });
+          return "saved";
         } catch (error) {
           logRendererDebugEvent({
             level: "error",
@@ -2480,6 +2623,8 @@ export function App(): JSX.Element {
             key: "status.saveFailed",
             values: { message: errorMessage(error, translate) }
           });
+          await showFileSaveFailedDialog();
+          return "failed";
         }
       },
       () => {
@@ -2487,13 +2632,15 @@ export function App(): JSX.Element {
           level: "debug",
           event: "save.in_flight.ignored",
           details: {
-            editorIdKind: debugEditorIdKind(activeDocument.id),
+            editorIdKind,
             operation: "save",
             result: "ignored"
           }
         });
       }
     );
+
+    return result ?? "ignored";
   }
 
   async function readProjectDocument(
@@ -2633,13 +2780,19 @@ export function App(): JSX.Element {
 
   openProjectCommandRef.current = openProject;
   openMarkdownDocumentCommandRef.current = openFile;
-  saveCurrentDocumentCommandRef.current = saveFile;
+  saveCurrentDocumentCommandRef.current = async () => {
+    await saveFile();
+  };
+  saveCurrentDocumentAsCommandRef.current = async () => {
+    await saveFile({ forceSaveAs: true });
+  };
   closeEditorCommandRef.current = closeEditorWithConfirmation;
   canCloseEditorCommandRef.current = canCloseEditorNow;
   toggleRecentProjectsCommandRef.current = () => {
     setIsRecentProjectsOpen((isOpen) => !isOpen);
   };
   canSaveCurrentDocumentCommandRef.current = () => canSave;
+  canSaveCurrentDocumentAsCommandRef.current = () => canSaveAs;
   goToLineCommandRef.current = (line) => {
     if (currentEditor.kind !== "markdown") {
       return;

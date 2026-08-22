@@ -67,6 +67,32 @@ function registeredHandler(
   return registration[1] as (...args: unknown[]) => unknown;
 }
 
+async function expectSanitizedFileIoRejection(
+  promise: Promise<unknown>,
+  reason: string,
+  disallowedText: readonly string[]
+): Promise<void> {
+  const rejection = await promise.then(
+    () => {
+      throw new Error("Expected promise to reject.");
+    },
+    (error: unknown) => error
+  );
+
+  expect(rejection).toMatchObject({
+    name: "PergamumFileIoError",
+    message: `File I/O failed: ${reason}`,
+    code: "PERGAMUM_FILE_IO_FAILED",
+    reason
+  });
+
+  const safeErrorSurface = `${String(rejection)}\n${JSON.stringify(rejection)}`;
+
+  for (const text of disallowedText) {
+    expect(safeErrorSurface).not.toContain(text);
+  }
+}
+
 describe("file IPC", () => {
   beforeEach(() => {
     electronMock.handle.mockClear();
@@ -86,7 +112,7 @@ describe("file IPC", () => {
 
     const saveMarkdown = registeredHandler(FILE_CHANNELS.saveMarkdown);
 
-    await expect(
+    await expectSanitizedFileIoRejection(
       saveMarkdown(
         {
           sender: {}
@@ -95,12 +121,39 @@ describe("file IPC", () => {
           path: null,
           content: "content"
         }
-      )
-    ).rejects.toThrow(
-      "Standalone save inside the active project is not supported."
+      ) as Promise<unknown>,
+      "invalidPath",
+      ["C:\\Novel\\new-document.md"]
     );
 
     expect(fsMock.writeFile).not.toHaveBeenCalled();
+  });
+
+  it("sanitizes selectMarkdownSavePath rejection inside the active project", async () => {
+    const rawPath = "C:\\Novel\\new-document.md";
+
+    projectIpcMock.currentProjectRootPath.mockReturnValue("C:\\Novel");
+    electronMock.showSaveDialog.mockResolvedValue({
+      canceled: false,
+      filePath: rawPath
+    });
+
+    const selectMarkdownSavePath = registeredHandler(
+      FILE_CHANNELS.selectMarkdownSavePath
+    );
+
+    await expectSanitizedFileIoRejection(
+      selectMarkdownSavePath(
+        {
+          sender: {}
+        },
+        {
+          defaultPath: null
+        }
+      ) as Promise<unknown>,
+      "invalidPath",
+      [rawPath]
+    );
   });
 
   it("allows standalone Save As outside the active project", async () => {
@@ -134,6 +187,150 @@ describe("file IPC", () => {
     );
   });
 
+  it("throws a sanitized legacy saveMarkdown write failure without exposing the raw path", async () => {
+    const logger = buildLoggerMock();
+    const rawPath = "D:\\Outside\\secret-save.md";
+    const manuscriptMarker = "SECRET_MANUSCRIPT_TEXT_MARKER";
+    const writeError = Object.assign(
+      new Error(`EPERM: operation not permitted, open '${rawPath}'`),
+      { code: "EPERM", path: rawPath }
+    );
+
+    projectIpcMock.currentProjectRootPath.mockReturnValue(null);
+    fsMock.writeFile.mockRejectedValue(writeError);
+
+    const saveMarkdown = registeredHandler(
+      FILE_CHANNELS.saveMarkdown,
+      logger as unknown as DebugLogger
+    );
+
+    await expectSanitizedFileIoRejection(
+      saveMarkdown(
+        {
+          sender: {}
+        },
+        {
+          path: rawPath,
+          content: manuscriptMarker
+        }
+      ) as Promise<unknown>,
+      "permissionDenied",
+      [rawPath, manuscriptMarker]
+    );
+
+    const call = logger.log.mock.calls.find(
+      ([entry]) => entry.event === "document.save.failed"
+    );
+
+    expect(call?.[0].details).toMatchObject({
+      documentRef: "document:session:001",
+      editorIdKind: "file",
+      saveTargetKind: "standaloneMarkdown",
+      operation: "write",
+      result: "failed",
+      reason: "permissionDenied"
+    });
+  });
+
+  it("writes standalone Markdown with UTF-8 metadata and safe debug logging", async () => {
+    const logger = buildLoggerMock();
+    const rawPath = "D:\\Outside\\secret-draft";
+    const manuscriptMarker = "alpha\r\nSECRET_MANUSCRIPT_TEXT_MARKER";
+    const writeMarkdown = registeredHandler(
+      FILE_CHANNELS.writeMarkdown,
+      logger as unknown as DebugLogger
+    );
+
+    fsMock.writeFile.mockResolvedValue(undefined);
+
+    await expect(
+      writeMarkdown(
+        { sender: {} },
+        {
+          path: rawPath,
+          content: manuscriptMarker
+        }
+      )
+    ).resolves.toEqual({
+      path: "D:\\Outside\\secret-draft.md",
+      encoding: "utf8",
+      lineEnding: "crlf",
+      byteLength: Buffer.byteLength(manuscriptMarker, "utf8"),
+      characterLength: manuscriptMarker.length
+    });
+
+    expect(fsMock.writeFile).toHaveBeenCalledWith(
+      "D:\\Outside\\secret-draft.md",
+      manuscriptMarker,
+      "utf8"
+    );
+
+    const call = logger.log.mock.calls.find(
+      ([entry]) => entry.event === "save.succeeded"
+    );
+
+    expect(call?.[0].details).toMatchObject({
+      documentRef: "document:session:001",
+      editorIdKind: "file",
+      saveTargetKind: "standaloneMarkdown",
+      lineEndingKind: "crlf",
+      byteLength: Buffer.byteLength(manuscriptMarker, "utf8"),
+      characterLength: manuscriptMarker.length,
+      encodingAssumption: "utf8",
+      operation: "write",
+      result: "succeeded"
+    });
+    for (const [entry] of logger.log.mock.calls) {
+      expect(JSON.stringify(entry)).not.toContain(rawPath);
+      expect(JSON.stringify(entry)).not.toContain(manuscriptMarker);
+    }
+  });
+
+  it("logs standalone Markdown write failure as a non-cleaning file I/O failure", async () => {
+    const logger = buildLoggerMock();
+    const rawPath = "D:\\Outside\\secret-draft.md";
+    const manuscriptMarker = "SECRET_MANUSCRIPT_TEXT_MARKER";
+    const writeError = Object.assign(
+      new Error(`EACCES: permission denied, open '${rawPath}'`),
+      { code: "EACCES", path: rawPath }
+    );
+    const writeMarkdown = registeredHandler(
+      FILE_CHANNELS.writeMarkdown,
+      logger as unknown as DebugLogger
+    );
+
+    fsMock.writeFile.mockRejectedValue(writeError);
+
+    await expectSanitizedFileIoRejection(
+      writeMarkdown(
+        { sender: {} },
+        {
+          path: rawPath,
+          content: manuscriptMarker
+        }
+      ) as Promise<unknown>,
+      "permissionDenied",
+      [rawPath, manuscriptMarker]
+    );
+
+    const call = logger.log.mock.calls.find(
+      ([entry]) => entry.event === "document.save.failed"
+    );
+
+    expect(call?.[0].details).toMatchObject({
+      documentRef: "document:session:001",
+      editorIdKind: "file",
+      saveTargetKind: "standaloneMarkdown",
+      operation: "write",
+      result: "failed",
+      reason: "permissionDenied"
+    });
+    for (const [entry] of logger.log.mock.calls) {
+      expect(JSON.stringify(entry)).not.toContain(rawPath);
+      expect(JSON.stringify(entry)).not.toContain(manuscriptMarker);
+    }
+  });
+
   describe("document.open timing (#152)", () => {
     const manuscriptMarker = "SECRET_MANUSCRIPT_TEXT_MARKER_吾輩は猫である";
 
@@ -144,7 +341,7 @@ describe("file IPC", () => {
         canceled: false,
         filePaths: ["C:\\Novel\\catfood.md"]
       });
-      fsMock.readFile.mockResolvedValue(manuscriptMarker);
+      fsMock.readFile.mockResolvedValue(Buffer.from(manuscriptMarker, "utf8"));
 
       const openMarkdown = registeredHandler(
         FILE_CHANNELS.openMarkdown,
@@ -168,6 +365,13 @@ describe("file IPC", () => {
       expect(details.fileSizeBytes).toBe(
         Buffer.byteLength(manuscriptMarker, "utf8")
       );
+      expect(details.byteLength).toBe(
+        Buffer.byteLength(manuscriptMarker, "utf8")
+      );
+      expect(details.characterLength).toBe(manuscriptMarker.length);
+      expect(details.encodingAssumption).toBe("utf8");
+      expect(details.lineEndingKind).toBe("none");
+      expect(details.hadBom).toBe(false);
       expect(details.result).toBe("succeeded");
     });
 
@@ -178,7 +382,7 @@ describe("file IPC", () => {
         canceled: false,
         filePaths: ["C:\\Novel\\catfood.md"]
       });
-      fsMock.readFile.mockResolvedValue(manuscriptMarker);
+      fsMock.readFile.mockResolvedValue(Buffer.from(manuscriptMarker, "utf8"));
 
       const openMarkdown = registeredHandler(
         FILE_CHANNELS.openMarkdown,
@@ -203,7 +407,7 @@ describe("file IPC", () => {
         canceled: false,
         filePaths: [rawPath]
       });
-      fsMock.readFile.mockResolvedValue("content");
+      fsMock.readFile.mockResolvedValue(Buffer.from("content", "utf8"));
 
       const openMarkdown = registeredHandler(
         FILE_CHANNELS.openMarkdown,
@@ -228,7 +432,7 @@ describe("file IPC", () => {
         canceled: false,
         filePaths: ["C:\\Novel\\catfood.md"]
       });
-      fsMock.readFile.mockResolvedValue("content");
+      fsMock.readFile.mockResolvedValue(Buffer.from("content", "utf8"));
 
       const openMarkdown = registeredHandler(
         FILE_CHANNELS.openMarkdown,
@@ -237,7 +441,14 @@ describe("file IPC", () => {
 
       await expect(openMarkdown({ sender: {} }, undefined)).resolves.toEqual({
         path: "C:\\Novel\\catfood.md",
-        content: "content"
+        content: "content",
+        metadata: {
+          encoding: "utf8",
+          lineEnding: "none",
+          byteLength: Buffer.byteLength("content", "utf8"),
+          characterLength: "content".length,
+          hadBom: false
+        }
       });
 
       const call = logger.log.mock.calls.find(
@@ -247,13 +458,73 @@ describe("file IPC", () => {
       expect(call?.[0].details.documentOpenId).toBeUndefined();
     });
 
+    it.each([
+      ["LF", "alpha\nbeta", "alpha\nbeta", "lf", false],
+      ["CRLF", "alpha\r\nbeta", "alpha\r\nbeta", "crlf", false],
+      ["CR", "alpha\rbeta", "alpha\rbeta", "cr", false],
+      ["mixed", "alpha\r\nbeta\ngamma", "alpha\r\nbeta\ngamma", "mixed", false],
+      ["none", "alpha beta", "alpha beta", "none", false],
+      [
+        "UTF-8 BOM",
+        "\ufeffalpha\r\nbeta",
+        "alpha\r\nbeta",
+        "crlf",
+        true
+      ]
+    ] as const)(
+      "decodes UTF-8 and reports %s line ending metadata",
+      async (_label, diskContent, expectedContent, expectedLineEnding, hadBom) => {
+        const logger = buildLoggerMock();
+
+        electronMock.showOpenDialog.mockResolvedValue({
+          canceled: false,
+          filePaths: ["C:\\Novel\\catfood.md"]
+        });
+        fsMock.readFile.mockResolvedValue(Buffer.from(diskContent, "utf8"));
+
+        const openMarkdown = registeredHandler(
+          FILE_CHANNELS.openMarkdown,
+          logger as unknown as DebugLogger
+        );
+
+        await expect(
+          openMarkdown({ sender: {} }, { documentOpenId: "documentOpen.2" })
+        ).resolves.toEqual({
+          path: "C:\\Novel\\catfood.md",
+          content: expectedContent,
+          metadata: {
+            encoding: "utf8",
+            lineEnding: expectedLineEnding,
+            byteLength: Buffer.byteLength(diskContent, "utf8"),
+            characterLength: expectedContent.length,
+            hadBom
+          }
+        });
+
+        const call = logger.log.mock.calls.find(
+          ([entry]) => entry.event === "document.open.fileRead.completed"
+        );
+
+        expect(call?.[0].details).toMatchObject({
+          lineEndingKind: expectedLineEnding,
+          byteLength: Buffer.byteLength(diskContent, "utf8"),
+          characterLength: expectedContent.length,
+          hadBom
+        });
+      }
+    );
+
     it("includes documentOpenId on the existing document.open.failed event when the read fails", async () => {
       const logger = buildLoggerMock();
-      const readError = Object.assign(new Error("boom"), { code: "EIO" });
+      const rawPath = "C:\\Novel\\catfood.md";
+      const readError = Object.assign(
+        new Error(`EPERM: operation not permitted, open '${rawPath}'`),
+        { code: "EPERM", path: rawPath }
+      );
 
       electronMock.showOpenDialog.mockResolvedValue({
         canceled: false,
-        filePaths: ["C:\\Novel\\catfood.md"]
+        filePaths: [rawPath]
       });
       fsMock.readFile.mockRejectedValue(readError);
 
@@ -262,9 +533,14 @@ describe("file IPC", () => {
         logger as unknown as DebugLogger
       );
 
-      await expect(
-        openMarkdown({ sender: {} }, { documentOpenId: "documentOpen.7" })
-      ).rejects.toThrow("boom");
+      await expectSanitizedFileIoRejection(
+        openMarkdown(
+          { sender: {} },
+          { documentOpenId: "documentOpen.7" }
+        ) as Promise<unknown>,
+        "permissionDenied",
+        [rawPath]
+      );
 
       const call = logger.log.mock.calls.find(
         ([entry]) => entry.event === "document.open.failed"
@@ -373,7 +649,7 @@ describe("file IPC", () => {
         canceled: false,
         filePaths: [selectedPath]
       });
-      fsMock.readFile.mockResolvedValue("content");
+      fsMock.readFile.mockResolvedValue(Buffer.from("content", "utf8"));
 
       const openMarkdown = registeredHandler(
         FILE_CHANNELS.openMarkdown,

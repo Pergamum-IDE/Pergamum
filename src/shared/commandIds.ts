@@ -13,6 +13,7 @@ export const commandPaletteCommandIds = {
 export const editorCommandIds = {
   openMarkdownDocument: defineCommandId("editor.document.markdown.open"),
   saveDocument: defineCommandId("editor.document.save"),
+  saveAs: defineCommandId("editor.saveAs"),
   close: defineCommandId<readonly [{ editorId?: EditorId }?], void>(
     "editor.close"
   ),
@@ -45,6 +46,7 @@ export const applicationMenuCommandIds = [
   applicationCommandIds.openProject,
   editorCommandIds.openMarkdownDocument,
   editorCommandIds.saveDocument,
+  editorCommandIds.saveAs,
   editorCommandIds.close,
   applicationCommandIds.toggleRecentProjects,
   commandPaletteCommandIds.open

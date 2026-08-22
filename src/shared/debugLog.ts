@@ -95,7 +95,9 @@ export type DebugLogArch = (typeof debugLogArchitectures)[number];
 
 export const debugLogOperations = [
   "open",
+  "read",
   "save",
+  "write",
   "close",
   "scan",
   "create",
@@ -196,6 +198,11 @@ export const debugLogReasons = [
   "glossary_already_saving",
   "standalone_save_canceled",
   "no_save_target",
+  "permissionDenied",
+  "notFound",
+  "invalidPath",
+  "invalidEncoding",
+  "locked",
   "unknown"
 ] as const;
 
@@ -277,6 +284,7 @@ export const debugLogLineEndingKinds = [
   "crlf",
   "cr",
   "mixed",
+  "none",
   "unknown"
 ] as const;
 
@@ -368,6 +376,9 @@ export interface DebugLogDetails {
   /** Per-open correlation id for document-open timing events (#152). Not a persistent id. */
   documentOpenId?: string;
   fileSizeBytes?: number;
+  byteLength?: number;
+  characterLength?: number;
+  hadBom?: boolean;
   documentKind?: DebugLogDocumentKind;
   editorKind?: DebugLogEditorKind;
 
@@ -487,6 +498,7 @@ export const knownDebugLogCommandIds = [
   applicationCommandIds.openProject,
   editorCommandIds.openMarkdownDocument,
   editorCommandIds.saveDocument,
+  editorCommandIds.saveAs,
   editorCommandIds.close,
   applicationCommandIds.toggleRecentProjects,
   commandPaletteCommandIds.open,
@@ -526,7 +538,6 @@ export const knownDebugLogStatusKeys = [
   "status.projectOpenFailed",
   "status.recentProjectOpenFailed",
   "status.saveAsTargetAlreadyOpen",
-  "status.saveBeforeCloseNotImplemented",
   "status.saveCanceled",
   "status.saveFailed",
   "status.savedPath",

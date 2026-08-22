@@ -21,8 +21,16 @@ import {
 import { getDebugLogger, type DebugLogger } from "./debugLogger";
 import {
   debugLogExtensionForPath,
-  debugLogPathDepth
+  debugLogLineCount,
+  debugLogLineEndingKind,
+  debugLogPathDepth,
+  debugLogSizeBucket
 } from "./debugLogSanitizer";
+import {
+  decodeMarkdownBytes,
+  markdownWriteMetadata,
+  sanitizedFileIoError
+} from "./markdownFileIo";
 import { readProjectConfig } from "./projectConfigStore";
 import { isRecentProjectPath, recordRecentProject } from "./settingsStore";
 
@@ -241,6 +249,7 @@ async function openProjectRoot(
 
     return project;
   } catch (error) {
+    const safeError = sanitizedFileIoError(error);
     logger.log({
       level: "error",
       event: "project.open.failed",
@@ -249,11 +258,11 @@ async function openProjectRoot(
         operation: "open",
         result: "failed",
         durationMs: durationSince(startedAt),
-        error
+        error: safeError
       }
     });
 
-    throw error;
+    throw safeError;
   }
 }
 
@@ -282,6 +291,7 @@ export function registerProjectIpc(
 
         rootPath = result.filePaths[0];
       } catch (error) {
+        const safeError = sanitizedFileIoError(error);
         logger.log({
           level: "error",
           event: "project.open.failed",
@@ -289,11 +299,11 @@ export function registerProjectIpc(
             operation: "open",
             result: "failed",
             durationMs: durationSince(startedAt),
-            error
+            error: safeError
           }
         });
 
-        throw error;
+        throw safeError;
       }
 
       return openProjectRoot(rootPath, logger);
@@ -321,6 +331,7 @@ export function registerProjectIpc(
 
         return openProjectRoot(request.path, logger);
       } catch (error) {
+        const safeError = sanitizedFileIoError(error);
         logger.log({
           level: "error",
           event: "project.open.failed",
@@ -328,11 +339,11 @@ export function registerProjectIpc(
             operation: "open",
             result: "failed",
             durationMs: durationSince(startedAt),
-            error
+            error: safeError
           }
         });
 
-        throw error;
+        throw safeError;
       }
 
       return openProjectRoot(request.path, logger);
@@ -351,13 +362,50 @@ export function registerProjectIpc(
       try {
         request = parseReadProjectDocumentRequest(rawRequest);
         const documentPath = resolveProjectDocumentPath(request.relativePath);
-        const content = await fs.readFile(documentPath, "utf8");
+        const bytes = await fs.readFile(documentPath);
+        const decoded = decodeMarkdownBytes(bytes);
+        const rootPath = requireCurrentProjectRootPath();
+        const documentRef = logger.documentRefForKey(
+          projectDocumentRefKey(rootPath, request.relativePath)
+        );
+        const projectRef = logger.projectRefForKey(rootPath);
+
+        logger.log({
+          level: "debug",
+          event: "document.open.fileRead.completed",
+          details: {
+            projectRef,
+            documentRef,
+            pathKind: "projectFile",
+            extension: debugLogExtensionForPath(request.relativePath),
+            pathDepth: debugLogPathDepth(request.relativePath),
+            lineCount: debugLogLineCount(decoded.content),
+            lineEndingKind: decoded.lineEnding,
+            sizeBucket: debugLogSizeBucket(decoded.byteLength),
+            fileSizeBytes: decoded.byteLength,
+            byteLength: decoded.byteLength,
+            characterLength: decoded.characterLength,
+            hadBom: decoded.hadBom,
+            encodingAssumption: decoded.encoding,
+            operation: "read",
+            result: "succeeded",
+            durationMs: durationSince(startedAt)
+          }
+        });
 
         return {
           relativePath: request.relativePath,
-          content
+          content: decoded.content,
+          metadata: {
+            encoding: decoded.encoding,
+            lineEnding: decoded.lineEnding,
+            byteLength: decoded.byteLength,
+            characterLength: decoded.characterLength,
+            hadBom: decoded.hadBom
+          }
         };
       } catch (error) {
+        const safeError = sanitizedFileIoError(error);
         const rootPath = currentProjectState?.rootPath;
         const documentRef =
           rootPath && request
@@ -382,14 +430,15 @@ export function registerProjectIpc(
             pathDepth: request
               ? debugLogPathDepth(request.relativePath)
               : undefined,
-            operation: "open",
+            operation: "read",
             result: "failed",
+            reason: safeError.reason,
             durationMs: durationSince(startedAt),
-            error
+            error: safeError
           }
         });
 
-        throw error;
+        throw safeError;
       }
     }
   );
@@ -406,12 +455,42 @@ export function registerProjectIpc(
       try {
         request = parseSaveProjectDocumentRequest(rawRequest);
         const documentPath = resolveProjectDocumentPath(request.relativePath);
+        const metadata = markdownWriteMetadata(request.content);
         await fs.writeFile(documentPath, request.content, "utf8");
+        const rootPath = requireCurrentProjectRootPath();
+        const documentRef = logger.documentRefForKey(
+          projectDocumentRefKey(rootPath, request.relativePath)
+        );
+        const projectRef = logger.projectRefForKey(rootPath);
+
+        logger.log({
+          level: "debug",
+          event: "save.succeeded",
+          details: {
+            projectRef,
+            documentRef,
+            editorIdKind: "projectDocument",
+            saveTargetKind: "projectDocument",
+            pathKind: "projectFile",
+            extension: debugLogExtensionForPath(request.relativePath),
+            pathDepth: debugLogPathDepth(request.relativePath),
+            lineCount: debugLogLineCount(request.content),
+            lineEndingKind: metadata.lineEnding,
+            sizeBucket: debugLogSizeBucket(metadata.byteLength),
+            byteLength: metadata.byteLength,
+            characterLength: metadata.characterLength,
+            encodingAssumption: metadata.encoding,
+            operation: "write",
+            result: "succeeded",
+            durationMs: durationSince(startedAt)
+          }
+        });
 
         return {
           relativePath: request.relativePath
         };
       } catch (error) {
+        const safeError = sanitizedFileIoError(error);
         const rootPath = currentProjectState?.rootPath;
         const documentRef =
           rootPath && request
@@ -429,6 +508,8 @@ export function registerProjectIpc(
           details: {
             ...(projectRef ? { projectRef } : {}),
             ...(documentRef ? { documentRef } : {}),
+            editorIdKind: "projectDocument",
+            saveTargetKind: "projectDocument",
             pathKind: "projectFile",
             extension: request
               ? debugLogExtensionForPath(request.relativePath)
@@ -436,14 +517,29 @@ export function registerProjectIpc(
             pathDepth: request
               ? debugLogPathDepth(request.relativePath)
               : undefined,
-            operation: "save",
+            lineCount: request
+              ? debugLogLineCount(request.content)
+              : undefined,
+            lineEndingKind: request
+              ? debugLogLineEndingKind(request.content)
+              : undefined,
+            sizeBucket: request
+              ? debugLogSizeBucket(Buffer.byteLength(request.content, "utf8"))
+              : undefined,
+            byteLength: request
+              ? Buffer.byteLength(request.content, "utf8")
+              : undefined,
+            characterLength: request ? request.content.length : undefined,
+            encodingAssumption: request ? "utf8" : undefined,
+            operation: "write",
             result: "failed",
+            reason: safeError.reason,
             durationMs: durationSince(startedAt),
-            error
+            error: safeError
           }
         });
 
-        throw error;
+        throw safeError;
       }
     }
   );

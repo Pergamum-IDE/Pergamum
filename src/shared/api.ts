@@ -51,7 +51,9 @@ export type {
 
 export const FILE_CHANNELS = {
   openMarkdown: "files:openMarkdown",
-  saveMarkdown: "files:saveMarkdown"
+  saveMarkdown: "files:saveMarkdown",
+  selectMarkdownSavePath: "files:selectMarkdownSavePath",
+  writeMarkdown: "files:writeMarkdown"
 } as const;
 
 export const PROJECT_CHANNELS = {
@@ -96,9 +98,26 @@ export const EDIT_CHANNELS = {
   delegateNativeEdit: "edit:delegateNativeEdit"
 } as const;
 
+export type MarkdownLineEnding =
+  | "lf"
+  | "crlf"
+  | "cr"
+  | "mixed"
+  | "none"
+  | "unknown";
+
+export interface MarkdownFileReadMetadata {
+  encoding: "utf8";
+  lineEnding: MarkdownLineEnding;
+  byteLength: number;
+  characterLength: number;
+  hadBom: boolean;
+}
+
 export interface MarkdownFile {
   path: string;
   content: string;
+  metadata: MarkdownFileReadMetadata;
 }
 
 export interface SaveMarkdownRequest {
@@ -108,6 +127,27 @@ export interface SaveMarkdownRequest {
 
 export interface SaveMarkdownResult {
   path: string;
+}
+
+export interface SelectMarkdownSavePathRequest {
+  defaultPath: string | null;
+}
+
+export interface SelectMarkdownSavePathResult {
+  path: string;
+}
+
+export interface WriteMarkdownRequest {
+  path: string;
+  content: string;
+}
+
+export interface WriteMarkdownResult {
+  path: string;
+  encoding: "utf8";
+  lineEnding: MarkdownLineEnding;
+  byteLength: number;
+  characterLength: number;
 }
 
 export interface PergamumProjectConfig {
@@ -127,6 +167,7 @@ export interface ReadProjectDocumentRequest {
 export interface ProjectDocumentContent {
   relativePath: string;
   content: string;
+  metadata: MarkdownFileReadMetadata;
 }
 
 export interface SaveProjectDocumentRequest {
@@ -184,6 +225,13 @@ export interface PergamumApi {
       path: string | null,
       content: string
     ) => Promise<SaveMarkdownResult | null>;
+    selectMarkdownSavePath: (
+      defaultPath: string | null
+    ) => Promise<SelectMarkdownSavePathResult | null>;
+    writeMarkdown: (
+      path: string,
+      content: string
+    ) => Promise<WriteMarkdownResult>;
   };
   projects: {
     openProject: () => Promise<PergamumProject | null>;
