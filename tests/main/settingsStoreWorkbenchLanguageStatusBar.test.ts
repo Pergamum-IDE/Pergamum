@@ -32,6 +32,12 @@ const languageDefault = getCatalogDefaultValue("workbench.language");
 const statusBarVisibleDefault = getCatalogDefaultValue(
   "workbench.statusBar.visible"
 );
+const defaultSoundSettings = {
+  enabled: true,
+  dialog: { enabled: true },
+  newline: { enabled: false },
+  keypress: { enabled: false }
+};
 
 function onDiskSettings(overrides: Record<string, unknown>): string {
   return JSON.stringify({
@@ -47,6 +53,7 @@ function saveRequest(
   return {
     workbench: {
       advancedSettings: { enabled: false },
+      sound: defaultSoundSettings,
       ...workbench
     },
     editor: {},
@@ -280,12 +287,18 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
     expect(written.recentProjects).toEqual([{ path: "C:\\proj", name: "proj" }]);
     expect(written.preview).toEqual({ renderer: "markdown" });
     expect(written.workbench.fontFamily).toBe("Fira Code");
+    expect(written.workbench.sound).toEqual(defaultSoundSettings);
     expect(written.workbench.statusBar.visible).toBe(false);
   });
 
   it("does not introduce unknown-key preservation: an unrecognized top-level key in the save request is rejected, same as before #174 (unknown-key preservation did not exist pre-#174 — see implementation report)", () => {
     const invalidSaveRequest = {
-      workbench: { language: "ja", statusBar: { visible: true } },
+      workbench: {
+        language: "ja",
+        statusBar: { visible: true },
+        advancedSettings: { enabled: false },
+        sound: defaultSoundSettings
+      },
       editor: {},
       files: {
         newFile: { lineEnding: "lf", encoding: "utf8" }
@@ -305,6 +318,7 @@ describe("settingsStore workbench.language / workbench.statusBar.visible write p
         language: "ja",
         statusBar: { visible: true },
         advancedSettings: { enabled: false },
+        sound: defaultSoundSettings,
         somethingUnknown: true
       },
       editor: {},

@@ -533,6 +533,7 @@ export const knownDebugLogStatusKeys = [
   "status.settingsReloadFailed",
   "status.settingsSaveFailed",
   "status.settingsSaved",
+  "status.soundPlaybackFailed",
   "status.withDetail"
 ] as const;
 

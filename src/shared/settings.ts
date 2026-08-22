@@ -31,6 +31,17 @@ export interface WorkbenchAdvancedSettings {
   enabled: boolean;
 }
 
+export interface WorkbenchSoundToggleSettings {
+  enabled: boolean;
+}
+
+export interface WorkbenchSoundSettings {
+  enabled: boolean;
+  dialog: WorkbenchSoundToggleSettings;
+  newline: WorkbenchSoundToggleSettings;
+  keypress: WorkbenchSoundToggleSettings;
+}
+
 export type NewFileLineEnding = SettingValueOf<"files.newFile.lineEnding">;
 export type NewFileEncoding = SettingValueOf<"files.newFile.encoding">;
 
@@ -58,6 +69,7 @@ export interface ApplicationWorkbenchSettings {
   language: Language;
   statusBar: WorkbenchStatusBarSettings;
   advancedSettings: WorkbenchAdvancedSettings;
+  sound: WorkbenchSoundSettings;
   fontFamily?: string;
 }
 
@@ -95,6 +107,7 @@ export interface EffectiveWorkbenchSettings {
   language: Language;
   statusBar: WorkbenchStatusBarSettings;
   advancedSettings: WorkbenchAdvancedSettings;
+  sound: WorkbenchSoundSettings;
   fontFamily: string;
 }
 
@@ -137,6 +150,18 @@ export const builtInDefaultSettings: EffectiveSettings = {
     advancedSettings: {
       enabled: getCatalogDefaultValue("workbench.advancedSettings.enabled")
     },
+    sound: {
+      enabled: getCatalogDefaultValue("workbench.sound.enabled"),
+      dialog: {
+        enabled: getCatalogDefaultValue("workbench.sound.dialog.enabled")
+      },
+      newline: {
+        enabled: getCatalogDefaultValue("workbench.sound.newline.enabled")
+      },
+      keypress: {
+        enabled: getCatalogDefaultValue("workbench.sound.keypress.enabled")
+      }
+    },
     fontFamily: getCatalogDefaultValue("workbench.fontFamily")
   },
   editor: {
@@ -168,6 +193,18 @@ export const defaultApplicationSettings: ApplicationSettings = {
     },
     advancedSettings: {
       enabled: builtInDefaultSettings.workbench.advancedSettings.enabled
+    },
+    sound: {
+      enabled: builtInDefaultSettings.workbench.sound.enabled,
+      dialog: {
+        enabled: builtInDefaultSettings.workbench.sound.dialog.enabled
+      },
+      newline: {
+        enabled: builtInDefaultSettings.workbench.sound.newline.enabled
+      },
+      keypress: {
+        enabled: builtInDefaultSettings.workbench.sound.keypress.enabled
+      }
     }
   },
   editor: {},
@@ -193,6 +230,18 @@ export function createDefaultApplicationSettings(): ApplicationSettings {
       advancedSettings: {
         enabled:
           defaultApplicationSettings.workbench.advancedSettings.enabled
+      },
+      sound: {
+        enabled: defaultApplicationSettings.workbench.sound.enabled,
+        dialog: {
+          enabled: defaultApplicationSettings.workbench.sound.dialog.enabled
+        },
+        newline: {
+          enabled: defaultApplicationSettings.workbench.sound.newline.enabled
+        },
+        keypress: {
+          enabled: defaultApplicationSettings.workbench.sound.keypress.enabled
+        }
       }
     },
     editor: {},
@@ -236,6 +285,18 @@ export function resolveEffectiveSettings(
       },
       advancedSettings: {
         enabled: applicationSettings.workbench.advancedSettings.enabled
+      },
+      sound: {
+        enabled: applicationSettings.workbench.sound.enabled,
+        dialog: {
+          enabled: applicationSettings.workbench.sound.dialog.enabled
+        },
+        newline: {
+          enabled: applicationSettings.workbench.sound.newline.enabled
+        },
+        keypress: {
+          enabled: applicationSettings.workbench.sound.keypress.enabled
+        }
       },
       fontFamily:
         applicationSettings.workbench.fontFamily ??

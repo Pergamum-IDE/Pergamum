@@ -28,13 +28,21 @@ import {
 import type { SaveApplicationSettingsRequest } from "../../src/shared/settings";
 import { getCatalogDefaultValue } from "../../src/shared/settingsCatalog";
 
+const defaultSoundSettings = {
+  enabled: true,
+  dialog: { enabled: true },
+  newline: { enabled: false },
+  keypress: { enabled: false }
+};
+
 function onDiskSettings(overrides: Record<string, unknown>): string {
   return JSON.stringify({
     preview: { renderer: "markdown" },
     workbench: {
       language: "ja",
       statusBar: { visible: true },
-      advancedSettings: { enabled: false }
+      advancedSettings: { enabled: false },
+      sound: defaultSoundSettings
     },
     editor: {},
     files: {
@@ -55,7 +63,8 @@ function validSaveRequest(
     workbench: {
       language: "ja",
       statusBar: { visible: true },
-      advancedSettings: { enabled: false }
+      advancedSettings: { enabled: false },
+      sound: defaultSoundSettings
     },
     editor: {},
     files: {
@@ -98,7 +107,13 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
         workbench: {
           language: "ja",
           statusBar: { visible: true },
-          advancedSettings: { enabled: true }
+          advancedSettings: { enabled: true },
+          sound: {
+            enabled: false,
+            dialog: { enabled: true },
+            newline: { enabled: true },
+            keypress: { enabled: false }
+          }
         },
         editor: { fontFamily: "Fira Code" },
         files: {
@@ -113,6 +128,12 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     const settings = await loadSettings();
 
     expect(settings.workbench.advancedSettings.enabled).toBe(true);
+    expect(settings.workbench.sound).toEqual({
+      enabled: false,
+      dialog: { enabled: true },
+      newline: { enabled: true },
+      keypress: { enabled: false }
+    });
     expect(settings.editor.fontFamily).toBe("Fira Code");
     expect(settings.files.newFile).toEqual({
       lineEnding: "crlf",
@@ -126,7 +147,13 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
         workbench: {
           language: "ja",
           statusBar: { visible: true },
-          advancedSettings: { enabled: "yes" }
+          advancedSettings: { enabled: "yes" },
+          sound: {
+            enabled: "yes",
+            dialog: { enabled: "yes" },
+            newline: { enabled: "yes" },
+            keypress: { enabled: "yes" }
+          }
         },
         editor: { fontFamily: 'Fira Code"; color: red' },
         files: {
@@ -141,6 +168,7 @@ describe("settingsStore Application Settings core controls read path (#195)", ()
     const settings = await loadSettings();
 
     expect(settings.workbench.advancedSettings.enabled).toBe(false);
+    expect(settings.workbench.sound).toEqual(defaultSoundSettings);
     expect(settings.editor.fontFamily).toBeUndefined();
     expect(settings.files.newFile).toEqual({
       lineEnding: "lf",
@@ -171,6 +199,12 @@ describe("settingsStore Application Settings core controls write path (#195)", (
           language: "en",
           statusBar: { visible: false },
           advancedSettings: { enabled: true },
+          sound: {
+            enabled: false,
+            dialog: { enabled: false },
+            newline: { enabled: true },
+            keypress: { enabled: true }
+          },
           fontFamily: "Inter"
         },
         editor: { fontFamily: "Fira Code" },
@@ -195,6 +229,12 @@ describe("settingsStore Application Settings core controls write path (#195)", (
       language: "en",
       statusBar: { visible: false },
       advancedSettings: { enabled: true },
+      sound: {
+        enabled: false,
+        dialog: { enabled: false },
+        newline: { enabled: true },
+        keypress: { enabled: true }
+      },
       fontFamily: "Inter"
     });
     expect(written.editor).toEqual({ fontFamily: "Fira Code" });
@@ -212,7 +252,34 @@ describe("settingsStore Application Settings core controls write path (#195)", (
         workbench: {
           language: "ja",
           statusBar: { visible: true },
-          advancedSettings: { enabled: "yes" as unknown as boolean }
+          advancedSettings: { enabled: "yes" as unknown as boolean },
+          sound: defaultSoundSettings
+        }
+      }),
+      validSaveRequest({
+        workbench: {
+          language: "ja",
+          statusBar: { visible: true },
+          advancedSettings: { enabled: false },
+          sound: {
+            enabled: "yes" as unknown as boolean,
+            dialog: { enabled: true },
+            newline: { enabled: false },
+            keypress: { enabled: false }
+          }
+        }
+      }),
+      validSaveRequest({
+        workbench: {
+          language: "ja",
+          statusBar: { visible: true },
+          advancedSettings: { enabled: false },
+          sound: {
+            enabled: true,
+            dialog: { enabled: "yes" as unknown as boolean },
+            newline: { enabled: false },
+            keypress: { enabled: false }
+          }
         }
       }),
       validSaveRequest({

@@ -47,4 +47,12 @@ describe("DialogProvider (#182)", () => {
     expect(source).toContain('pending?.kind === "choice"');
     expect(source).toContain("<ChoiceDialog");
   });
+
+  it("plays optional dialog display sound from both confirm and choice request boundaries (#200)", () => {
+    const source = readFileSync("src/renderer/dialog/DialogProvider.tsx", "utf8");
+
+    expect(source).toContain("soundFeedback?: SoundFeedbackPlayer");
+    expect(source).toContain("soundSettings?: WorkbenchSoundSettings");
+    expect(source.match(/playDialogShownSound\(soundFeedback, soundSettings\)/g)).toHaveLength(2);
+  });
 });

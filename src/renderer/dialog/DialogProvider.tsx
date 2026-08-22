@@ -9,6 +9,11 @@ import {
 } from "react";
 import type { AppPlatform } from "../../shared/platform";
 import type { Translate } from "../../shared/i18n";
+import type { WorkbenchSoundSettings } from "../../shared/settings";
+import {
+  playDialogShownSound,
+  type SoundFeedbackPlayer
+} from "../soundFeedback";
 import {
   type AppChoiceDialogOptions,
   type AppChoiceDialogResult,
@@ -44,6 +49,8 @@ export interface DialogProviderProps {
   platform?: AppPlatform;
   translate: Translate;
   clipboardAdapter?: ClipboardAdapter;
+  soundFeedback?: SoundFeedbackPlayer;
+  soundSettings?: WorkbenchSoundSettings;
   children: ReactNode;
 }
 
@@ -52,6 +59,8 @@ export function DialogProvider({
   platform = "other",
   translate,
   clipboardAdapter = navigatorClipboardAdapter,
+  soundFeedback,
+  soundSettings,
   children
 }: DialogProviderProps): JSX.Element {
   const controllerRef = useRef<DialogController | null>(null);
@@ -83,17 +92,43 @@ export function DialogProvider({
           openerRef.current = document.activeElement;
         }
 
-        return controller.confirm(options);
+        const result = controller.confirm(options);
+
+        const pendingRequest = controller.getPendingRequest();
+
+        if (
+          pendingRequest?.kind === "confirm" &&
+          pendingRequest.options === options &&
+          soundFeedback &&
+          soundSettings
+        ) {
+          playDialogShownSound(soundFeedback, soundSettings);
+        }
+
+        return result;
       },
       choice: (options) => {
         if (typeof document !== "undefined") {
           openerRef.current = document.activeElement;
         }
 
-        return controller.choice(options);
+        const result = controller.choice(options);
+
+        const pendingRequest = controller.getPendingRequest();
+
+        if (
+          pendingRequest?.kind === "choice" &&
+          pendingRequest.options === options &&
+          soundFeedback &&
+          soundSettings
+        ) {
+          playDialogShownSound(soundFeedback, soundSettings);
+        }
+
+        return result;
       }
     }),
-    [controller]
+    [controller, soundFeedback, soundSettings]
   );
 
   return (
