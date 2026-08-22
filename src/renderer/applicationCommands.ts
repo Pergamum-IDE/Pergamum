@@ -5,11 +5,13 @@ import type { Translate } from "../shared/i18n";
 export { applicationCommandIds };
 
 export interface ApplicationCommandController {
+  createProject(): void | Promise<void>;
   openProject(): void | Promise<void>;
   toggleRecentProjects(): void;
 }
 
 export interface ApplicationCommandTitles {
+  createProject: string;
   openProject: string;
   toggleRecentProjects: string;
 }
@@ -20,6 +22,7 @@ export function createApplicationCommandTitles(
   translate: Translate
 ): ApplicationCommandTitles {
   return {
+    createProject: translate("command.workspace.project.create"),
     openProject: translate("command.workspace.project.open"),
     toggleRecentProjects: translate("command.workspace.recentProjects.toggle")
   };
@@ -30,6 +33,11 @@ export function createApplicationCommands(
   titles: ApplicationCommandTitles
 ): readonly ApplicationCommand[] {
   return [
+    {
+      id: applicationCommandIds.createProject,
+      title: titles.createProject,
+      execute: () => controller.createProject()
+    },
     {
       id: applicationCommandIds.openProject,
       title: titles.openProject,

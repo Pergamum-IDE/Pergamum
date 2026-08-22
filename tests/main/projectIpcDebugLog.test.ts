@@ -4,7 +4,7 @@ import path from "node:path";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PROJECT_CHANNELS } from "../../src/shared/api";
 import type { DebugLogger } from "../../src/main/debugLogger";
-import { projectDatabaseFileName } from "../../src/main/projectDatabase";
+import { createProjectDatabase } from "../../src/main/projectDatabase";
 
 const electronMock = vi.hoisted(() => ({
   handle: vi.fn(),
@@ -38,6 +38,7 @@ import {
 
 describe("project IPC debug logging", () => {
   let projectRootPath: string;
+  let projectFilePath: string;
   let userDataPath: string;
 
   beforeEach(async () => {
@@ -52,7 +53,13 @@ describe("project IPC debug logging", () => {
       path.join(os.tmpdir(), "pergamum-project-ipc-user-data-")
     );
     electronMock.getPath.mockReturnValue(userDataPath);
+    projectFilePath = path.join(projectRootPath, "Debug Project.pergamum");
     await fs.writeFile(path.join(projectRootPath, "known.md"), "# Known\n");
+    const database = await createProjectDatabase({
+      projectFilePath,
+      projectName: "Debug Project"
+    });
+    await database.close();
   });
 
   afterEach(async () => {
@@ -71,7 +78,7 @@ describe("project IPC debug logging", () => {
     registerProjectIpc(logger);
     electronMock.showOpenDialog.mockResolvedValue({
       canceled: false,
-      filePaths: [projectRootPath]
+      filePaths: [projectFilePath]
     });
 
     const openProject = registeredHandler(PROJECT_CHANNELS.openProject);
@@ -114,29 +121,25 @@ describe("project IPC debug logging", () => {
     );
   });
 
-  it("sets active project file state when opening a directory-based project", async () => {
+  it("sets active project file state when opening a .pergamum project", async () => {
     const logger = createLoggerMock();
     registerProjectIpc(logger);
     electronMock.showOpenDialog.mockResolvedValue({
       canceled: false,
-      filePaths: [projectRootPath]
+      filePaths: [projectFilePath]
     });
 
     const openProject = registeredHandler(PROJECT_CHANNELS.openProject);
     const project = await openProject({ sender: {} });
-    const activeProjectFilePath = path.join(
-      projectRootPath,
-      projectDatabaseFileName
-    );
 
     expect(project).toMatchObject({
       rootPath: projectRootPath,
-      activeProjectFilePath
+      activeProjectFilePath: projectFilePath
     });
     expect(currentProjectRootPath()).toBe(projectRootPath);
     expect(requireCurrentProjectRootPath()).toBe(projectRootPath);
-    expect(currentActiveProjectFilePath()).toBe(activeProjectFilePath);
-    expect(requireCurrentActiveProjectFilePath()).toBe(activeProjectFilePath);
+    expect(currentActiveProjectFilePath()).toBe(projectFilePath);
+    expect(requireCurrentActiveProjectFilePath()).toBe(projectFilePath);
   });
 
   it("does not write raw project details to console when recent project recording fails", async () => {
@@ -150,7 +153,7 @@ describe("project IPC debug logging", () => {
     electronMock.getPath.mockReturnValue(invalidUserDataPath);
     electronMock.showOpenDialog.mockResolvedValue({
       canceled: false,
-      filePaths: [projectRootPath]
+      filePaths: [projectFilePath]
     });
 
     let warnings: string[] = [];
@@ -164,6 +167,8 @@ describe("project IPC debug logging", () => {
 
     expect(warnings).toEqual(["Could not record recent project."]);
     expect(warnings.join("\n")).not.toContain(projectRootPath);
+    expect(warnings.join("\n")).not.toContain(projectFilePath);
+    expect(warnings.join("\n")).not.toContain("Debug Project");
     expect(warnings.join("\n")).not.toContain(invalidUserDataPath);
     expect(warnings.join("\n")).not.toContain("known.md");
   });
@@ -173,7 +178,7 @@ describe("project IPC debug logging", () => {
     registerProjectIpc(logger);
     electronMock.showOpenDialog.mockResolvedValue({
       canceled: false,
-      filePaths: [projectRootPath]
+      filePaths: [projectFilePath]
     });
 
     const openProject = registeredHandler(PROJECT_CHANNELS.openProject);
@@ -232,7 +237,7 @@ describe("project IPC debug logging", () => {
     registerProjectIpc(logger);
     electronMock.showOpenDialog.mockResolvedValue({
       canceled: false,
-      filePaths: [projectRootPath]
+      filePaths: [projectFilePath]
     });
 
     const openProject = registeredHandler(PROJECT_CHANNELS.openProject);

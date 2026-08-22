@@ -60,7 +60,6 @@ export const FILE_CHANNELS = {
 export const PROJECT_CHANNELS = {
   createProject: "projects:createProject",
   openProject: "projects:openProject",
-  openProjectFile: "projects:openProjectFile",
   openRecentProject: "projects:openRecentProject",
   readProjectDocument: "projects:readProjectDocument",
   saveProjectDocument: "projects:saveProjectDocument"
@@ -240,7 +239,6 @@ export interface PergamumApi {
   projects: {
     createProject: () => Promise<PergamumProject | null>;
     openProject: () => Promise<PergamumProject | null>;
-    openProjectFile: () => Promise<PergamumProject | null>;
     openRecentProject: (projectFilePath: string) => Promise<PergamumProject>;
     readProjectDocument: (
       relativePath: string

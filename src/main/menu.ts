@@ -126,6 +126,12 @@ function fileMenu(
   const appName = applicationName;
   const commandItems: MenuItemConstructorOptions[] = [
     commandMenuItem(
+      applicationCommandIds.createProject,
+      language,
+      "menu.createProject",
+      options
+    ),
+    commandMenuItem(
       applicationCommandIds.openProject,
       language,
       "menu.openProject",

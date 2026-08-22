@@ -4,6 +4,7 @@ import type { Translate } from "../shared/i18n";
 interface WelcomeScreenProps {
   recentProjects: RecentProject[];
   translate: Translate;
+  onCreateProject: () => void;
   onOpenProject: () => void;
   onOpenRecentProject: (projectFilePath: string) => void;
 }
@@ -11,6 +12,7 @@ interface WelcomeScreenProps {
 export function WelcomeScreen({
   recentProjects,
   translate,
+  onCreateProject,
   onOpenProject,
   onOpenRecentProject
 }: WelcomeScreenProps): JSX.Element {
@@ -22,13 +24,22 @@ export function WelcomeScreen({
             <h1>{translate("welcome.title")}</h1>
             <p>{translate("welcome.description")}</p>
           </div>
-          <button
-            type="button"
-            className="welcomeOpenProject"
-            onClick={onOpenProject}
-          >
-            {translate("welcome.openProject")}
-          </button>
+          <div className="welcomeProjectActions">
+            <button
+              type="button"
+              className="welcomeCreateProject"
+              onClick={onCreateProject}
+            >
+              {translate("welcome.createProject")}
+            </button>
+            <button
+              type="button"
+              className="welcomeOpenProject"
+              onClick={onOpenProject}
+            >
+              {translate("welcome.openProject")}
+            </button>
+          </div>
         </section>
 
         <section className="welcomeRecent" aria-label={translate("welcome.recentProjects")}>

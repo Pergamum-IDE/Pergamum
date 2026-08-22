@@ -48,12 +48,15 @@ describe("glossary preload API", () => {
     }
 
     await api.projects.createProject();
-    await api.projects.openProjectFile();
+    await api.projects.openProject();
     await api.projects.openRecentProject("C:\\Novel\\Novel.pergamum");
 
+    expect(api.projects as Record<string, unknown>).not.toHaveProperty(
+      "openProjectFile"
+    );
     expect(electronMock.invoke.mock.calls).toEqual([
       [PROJECT_CHANNELS.createProject],
-      [PROJECT_CHANNELS.openProjectFile],
+      [PROJECT_CHANNELS.openProject],
       [
         PROJECT_CHANNELS.openRecentProject,
         {
@@ -61,6 +64,10 @@ describe("glossary preload API", () => {
         }
       ]
     ]);
+    expect(JSON.stringify(PROJECT_CHANNELS)).not.toContain("openProjectFile");
+    expect(JSON.stringify(PROJECT_CHANNELS)).not.toContain(
+      "projects:openProjectFile"
+    );
   });
 
   it("exposes glossary operations through the Pergamum API", () => {

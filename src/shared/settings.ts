@@ -15,11 +15,32 @@ export type SettingsCategory =
 export type PreviewRendererId = "markdown";
 
 export interface RecentProject {
+  /**
+   * Stable project identity from metadata.project_id.
+   */
   projectId: string;
+  /**
+   * Display name from metadata.project_name.
+   * This is not derived from the folder name or .pergamum filename after creation.
+   */
   projectName: string;
+  /**
+   * Absolute path to the .pergamum project file.
+   * This is the open target for Recent Projects.
+   */
   projectFilePath: string;
+  /**
+   * Absolute path to the project root directory.
+   * This is normally the parent directory of projectFilePath.
+   */
   projectRootPath: string;
+  /**
+   * Project database schema version from metadata.schema_version.
+   */
   schemaVersion: number;
+  /**
+   * ISO timestamp updated when the project is successfully opened.
+   */
   lastOpenedAt: string;
 }
 

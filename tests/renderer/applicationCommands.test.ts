@@ -8,6 +8,7 @@ import {
 } from "../../src/renderer/applicationCommands";
 
 const titles = {
+  createProject: "Create Project",
   openProject: "Open Project",
   toggleRecentProjects: "Toggle Recent Projects"
 };
@@ -20,6 +21,7 @@ describe("application commands", () => {
     registerApplicationCommands(
       registry,
       {
+        createProject: () => undefined,
         openProject: () => undefined,
         toggleRecentProjects: () => undefined
       },
@@ -27,6 +29,7 @@ describe("application commands", () => {
     );
 
     expect(registry.list().map((command) => command.id)).toEqual([
+      "workspace.project.create",
       "workspace.project.open",
       "workspace.recentProjects.toggle"
     ]);
@@ -34,24 +37,31 @@ describe("application commands", () => {
 
   it("routes app commands to their controller methods", async () => {
     const registry = new CommandRegistry();
+    const createProject = vi.fn();
     const openProject = vi.fn();
     const toggleRecentProjects = vi.fn();
 
     registerApplicationCommands(
       registry,
       {
+        createProject,
         openProject,
         toggleRecentProjects
       },
       titles
     );
 
+    await registry.execute(
+      applicationCommandIds.createProject,
+      executionOptions
+    );
     await registry.execute(applicationCommandIds.openProject, executionOptions);
     await registry.execute(
       applicationCommandIds.toggleRecentProjects,
       executionOptions
     );
 
+    expect(createProject).toHaveBeenCalledTimes(1);
     expect(openProject).toHaveBeenCalledTimes(1);
     expect(toggleRecentProjects).toHaveBeenCalledTimes(1);
   });
@@ -60,6 +70,7 @@ describe("application commands", () => {
     const translate = vi.fn((key: string) => `translated:${key}`);
 
     expect(createApplicationCommandTitles(translate)).toEqual({
+      createProject: "translated:command.workspace.project.create",
       openProject: "translated:command.workspace.project.open",
       toggleRecentProjects: "translated:command.workspace.recentProjects.toggle"
     });

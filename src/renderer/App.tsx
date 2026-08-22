@@ -471,6 +471,9 @@ export function App(): JSX.Element {
   const closeGlossaryOccurrenceTrackingRef = useRef<() => boolean>(
     () => false
   );
+  const createProjectCommandRef = useRef<() => Promise<void>>(() =>
+    Promise.resolve()
+  );
   const openProjectCommandRef = useRef<() => Promise<void>>(() =>
     Promise.resolve()
   );
@@ -723,6 +726,7 @@ export function App(): JSX.Element {
     registerApplicationCommands(
       registry,
       {
+        createProject: () => createProjectCommandRef.current(),
         openProject: () => openProjectCommandRef.current(),
         toggleRecentProjects: () => toggleRecentProjectsCommandRef.current()
       },
@@ -2721,6 +2725,36 @@ export function App(): JSX.Element {
     }
   }
 
+  async function createProject(): Promise<void> {
+    if (!confirmProjectSwitch()) {
+      setStatus({ key: "status.openProjectCanceled" });
+      return;
+    }
+
+    try {
+      const createdProject = await window.pergamum.projects.createProject();
+
+      if (!createdProject) {
+        setStatus({ key: "status.openProjectCanceled" });
+        return;
+      }
+
+      const settingsReloadError = await reloadSettingsAfterProjectOpen();
+      const openedStatus = await activateProject(createdProject);
+
+      if (!openedStatus) {
+        return;
+      }
+
+      setStatus(projectOpenStatus(openedStatus, settingsReloadError, translate));
+    } catch (error) {
+      setStatus({
+        key: "status.projectOpenFailed",
+        values: { message: errorMessage(error, translate) }
+      });
+    }
+  }
+
   async function openProject(): Promise<void> {
     if (!confirmProjectSwitch()) {
       setStatus({ key: "status.openProjectCanceled" });
@@ -2778,6 +2812,7 @@ export function App(): JSX.Element {
     }
   }
 
+  createProjectCommandRef.current = createProject;
   openProjectCommandRef.current = openProject;
   openMarkdownDocumentCommandRef.current = openFile;
   saveCurrentDocumentCommandRef.current = async () => {
@@ -3020,6 +3055,9 @@ export function App(): JSX.Element {
             <WelcomeScreen
               recentProjects={settings.recentProjects}
               translate={translate}
+              onCreateProject={() => {
+                void createProject();
+              }}
               onOpenProject={() => {
                 void openProject();
               }}

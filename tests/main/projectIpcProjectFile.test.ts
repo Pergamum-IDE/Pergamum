@@ -1,4 +1,4 @@
-import { promises as fs } from "node:fs";
+import { promises as fs, readFileSync } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import Database from "better-sqlite3";
@@ -10,7 +10,6 @@ import {
   createProjectDatabase,
   currentProjectDatabaseSchemaVersion,
   openProjectDatabase,
-  projectDatabaseFileName,
   readProjectMetadata
 } from "../../src/main/projectDatabase";
 import type { Mock } from "vitest";
@@ -90,16 +89,27 @@ describe("project file IPC foundation", () => {
     });
   });
 
-  it("registers Create Project and Open Project File IPC channels", () => {
+  it("registers Create Project and .pergamum Open Project IPC channels", () => {
     registerProjectIpc(createLoggerMock());
 
     expect(electronMock.handle.mock.calls.map(([channel]) => channel)).toEqual(
       expect.arrayContaining([
         PROJECT_CHANNELS.createProject,
-        PROJECT_CHANNELS.openProjectFile,
         PROJECT_CHANNELS.openProject
       ])
     );
+    expect(electronMock.handle.mock.calls.map(([channel]) => channel)).not.toContain(
+      "projects:openProjectFile"
+    );
+  });
+
+  it("does not keep user-facing folder open or openProjectFile IPC routes", () => {
+    const source = readFileSync("src/main/projectIpc.ts", "utf8");
+
+    expect(source).not.toContain("openDirectory");
+    expect(source).not.toContain("openProjectRoot");
+    expect(source).not.toContain("PROJECT_CHANNELS.openProjectFile");
+    expect(source).not.toContain("isLegacyProjectDatabaseRecentProject");
   });
 
   it("createProject returns null when the save dialog is canceled", async () => {
@@ -353,19 +363,23 @@ describe("project file IPC foundation", () => {
     ).resolves.toBe('{\n  "name": "Confirmed"\n}\n');
   });
 
-  it("openProjectFile returns null when the open dialog is canceled", async () => {
-    const openProjectFileHandler = registeredHandler(
-      PROJECT_CHANNELS.openProjectFile
-    );
+  it("openProject returns null when the .pergamum open dialog is canceled", async () => {
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
     electronMock.showOpenDialog.mockResolvedValue({
       canceled: true,
       filePaths: []
     });
 
-    await expect(openProjectFileHandler({ sender: {} })).resolves.toBeNull();
+    await expect(openProjectHandler({ sender: {} })).resolves.toBeNull();
+    expect(electronMock.showOpenDialog).toHaveBeenCalledWith(
+      expect.objectContaining({
+        properties: ["openFile"],
+        filters: [{ name: "Pergamum Project", extensions: ["pergamum"] }]
+      })
+    );
   });
 
-  it("openProjectFile safely rejects a selected path without the .pergamum extension", async () => {
+  it("openProject safely rejects a selected path without the .pergamum extension", async () => {
     const projectFilePath = path.join(projectRootPath, "Wrong Open Secret.txt");
     await fs.writeFile(projectFilePath, "not a project", "utf8");
     electronMock.showOpenDialog.mockResolvedValue({
@@ -373,11 +387,9 @@ describe("project file IPC foundation", () => {
       filePaths: [projectFilePath]
     });
 
-    const openProjectFileHandler = registeredHandler(
-      PROJECT_CHANNELS.openProjectFile
-    );
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
 
-    await expect(openProjectFileHandler({ sender: {} })).resolves.toBeNull();
+    await expect(openProjectHandler({ sender: {} })).resolves.toBeNull();
 
     await expectSettingsJsonMissing(userDataPath);
     expectDialogHasNoUnsafeSurface([
@@ -388,7 +400,7 @@ describe("project file IPC foundation", () => {
     ]);
   });
 
-  it("openProjectFile opens a valid .pergamum file and uses DB metadata as the project name", async () => {
+  it("openProject opens a valid .pergamum file and uses DB metadata as the project name", async () => {
     const projectFilePath = path.join(
       projectRootPath,
       "Filename Label.pergamum"
@@ -410,10 +422,8 @@ describe("project file IPC foundation", () => {
       filePaths: [projectFilePath]
     });
 
-    const openProjectFileHandler = registeredHandler(
-      PROJECT_CHANNELS.openProjectFile
-    );
-    const project = await openProjectFileHandler({ sender: {} });
+    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
+    const project = await openProjectHandler({ sender: {} });
 
     expect(project).toMatchObject({
       rootPath: projectRootPath,
@@ -442,7 +452,7 @@ describe("project file IPC foundation", () => {
     ]);
   });
 
-  it("openProjectFile rejects invalid .pergamum without migration or repair", async () => {
+  it("openProject rejects invalid .pergamum without migration or repair", async () => {
     const logger = createLoggerMock();
     const consoleWarnSpy = vi
       .spyOn(console, "warn")
@@ -461,13 +471,13 @@ describe("project file IPC foundation", () => {
       filePaths: [projectFilePath]
     });
 
-    const openProjectFileHandler = registeredHandler(
-      PROJECT_CHANNELS.openProjectFile,
+    const openProjectHandler = registeredHandler(
+      PROJECT_CHANNELS.openProject,
       logger
     );
 
     await expectSanitizedProjectRejection(
-      openProjectFileHandler({ sender: {} }) as Promise<unknown>,
+      openProjectHandler({ sender: {} }) as Promise<unknown>,
       "unknown",
       [projectRootPath, projectFilePath, "Invalid Secret.pergamum"]
     );
@@ -491,41 +501,6 @@ describe("project file IPC foundation", () => {
     ]);
     expect(consoleWarnSpy).not.toHaveBeenCalled();
     expect(consoleErrorSpy).not.toHaveBeenCalled();
-  });
-
-  it("directory-based openProject remains compatible and keeps pergamum.db as the active project file", async () => {
-    const projectRootName = path.basename(projectRootPath);
-    await fs.writeFile(path.join(projectRootPath, "known.md"), "# Known\n");
-    electronMock.showOpenDialog.mockResolvedValue({
-      canceled: false,
-      filePaths: [projectRootPath]
-    });
-
-    const openProjectHandler = registeredHandler(PROJECT_CHANNELS.openProject);
-    const project = await openProjectHandler({ sender: {} });
-
-    expect(project).toMatchObject({
-      rootPath: projectRootPath,
-      activeProjectFilePath: path.join(
-        projectRootPath,
-        projectDatabaseFileName
-      ),
-      name: projectRootName,
-      documents: [
-        {
-          relativePath: "known.md",
-          name: "known.md"
-        }
-      ]
-    });
-    await expect(readRecentProjects(userDataPath)).resolves.toMatchObject([
-      {
-        projectName: "Untitled Project",
-        projectFilePath: path.join(projectRootPath, projectDatabaseFileName),
-        projectRootPath,
-        schemaVersion: currentProjectDatabaseSchemaVersion
-      }
-    ]);
   });
 
   it("openRecentProject opens a registered .pergamum entry by projectFilePath and refreshes recent projects", async () => {
@@ -583,22 +558,15 @@ describe("project file IPC foundation", () => {
     );
   });
 
-  it("openRecentProject keeps directory-based recent entries on the legacy directory open path", async () => {
-    const legacyDatabasePath = path.join(
-      projectRootPath,
-      projectDatabaseFileName
-    );
-    const database = await openProjectDatabase(projectRootPath);
-    const metadata = await readProjectMetadata(database);
-    await database.close();
-    await fs.writeFile(path.join(projectRootPath, "known.md"), "# Known\n");
+  it("openRecentProject rejects legacy database recent targets without opening or refreshing them", async () => {
+    const legacyDatabasePath = path.join(projectRootPath, "pergamum.db");
     await writeRecentProjects(userDataPath, [
       {
-        projectId: metadata.projectId,
-        projectName: metadata.projectName,
+        projectId: "legacy-project",
+        projectName: "Legacy Secret",
         projectFilePath: legacyDatabasePath,
         projectRootPath,
-        schemaVersion: metadata.schemaVersion,
+        schemaVersion: currentProjectDatabaseSchemaVersion,
         lastOpenedAt: "2026-08-22T00:00:00.000Z"
       }
     ]);
@@ -606,21 +574,24 @@ describe("project file IPC foundation", () => {
     const openRecentProjectHandler = registeredHandler(
       PROJECT_CHANNELS.openRecentProject
     );
-    const project = await openRecentProjectHandler(
-      { sender: {} },
-      { projectFilePath: legacyDatabasePath }
-    );
 
-    expect(project).toMatchObject({
-      rootPath: projectRootPath,
-      activeProjectFilePath: legacyDatabasePath,
-      documents: [
-        {
-          relativePath: "known.md",
-          name: "known.md"
-        }
-      ]
+    await expectSanitizedProjectRejection(
+      openRecentProjectHandler(
+        { sender: {} },
+        { projectFilePath: legacyDatabasePath }
+      ) as Promise<unknown>,
+      "unknown",
+      [projectRootPath, legacyDatabasePath, "pergamum.db", "Legacy Secret"]
+    );
+    await expect(fs.access(legacyDatabasePath)).rejects.toMatchObject({
+      code: "ENOENT"
     });
+    await expect(readRecentProjects(userDataPath)).resolves.toMatchObject([
+      {
+        projectFilePath: legacyDatabasePath,
+        lastOpenedAt: "2026-08-22T00:00:00.000Z"
+      }
+    ]);
   });
 
   it("createProject does not expose raw details when recent project recording fails", async () => {
