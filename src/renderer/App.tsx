@@ -2878,6 +2878,7 @@ export function App(): JSX.Element {
         key: "status.documentOpenFailed",
         values: { message: errorMessage(error, translate) }
       });
+      await showFileOpenFailedDialog();
     }
   }
 

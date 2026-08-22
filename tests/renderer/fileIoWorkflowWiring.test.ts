@@ -40,6 +40,62 @@ describe("file I/O workflow wiring (#202)", () => {
     expect(dialogBlock).toContain("cancelLabel: null");
   });
 
+  it("shows project document read failures through the same one-button app confirm dialog", () => {
+    const source = appSource();
+    const projectDocumentOpenBlock = sourceBlock(
+      source,
+      "async function activateProjectDocument",
+      "async function changeSettings"
+    );
+    const catchBlock = projectDocumentOpenBlock.slice(
+      projectDocumentOpenBlock.indexOf("} catch (error) {")
+    );
+
+    expect(catchBlock).toContain("status.documentOpenFailed");
+    expect(catchBlock).toContain("await showFileOpenFailedDialog();");
+  });
+
+  it("does not leave project document read failures as status-bar-only notifications", () => {
+    const source = appSource();
+    const projectDocumentOpenBlock = sourceBlock(
+      source,
+      "async function activateProjectDocument",
+      "async function changeSettings"
+    );
+    const catchBlock = projectDocumentOpenBlock.slice(
+      projectDocumentOpenBlock.indexOf("} catch (error) {")
+    );
+
+    expect(catchBlock.indexOf("status.documentOpenFailed")).toBeGreaterThan(-1);
+    expect(
+      catchBlock.indexOf("await showFileOpenFailedDialog();")
+    ).toBeGreaterThan(catchBlock.indexOf("status.documentOpenFailed"));
+  });
+
+  it("does not add a target project document tab after project document read failure", () => {
+    const source = appSource();
+    const projectDocumentOpenBlock = sourceBlock(
+      source,
+      "async function activateProjectDocument",
+      "async function changeSettings"
+    );
+    const catchBlock = projectDocumentOpenBlock.slice(
+      projectDocumentOpenBlock.indexOf("} catch (error) {")
+    );
+
+    expect(projectDocumentOpenBlock).toContain(
+      "const didOpen = await completeInstrumentedDocumentOpen("
+    );
+    expect(projectDocumentOpenBlock).toContain(
+      "() => openEditorFromExplicitActivation(documentId)"
+    );
+    expect(catchBlock).not.toContain("setOpenDocumentsState");
+    expect(catchBlock).not.toContain("openOrActivateEditor");
+    expect(catchBlock).not.toContain(
+      "openFirstProjectDocumentAfterContextSwitch"
+    );
+  });
+
   it("shows save failures through a one-button app confirm dialog without marking clean first", () => {
     const source = appSource();
     const saveFileBlock = sourceBlock(
